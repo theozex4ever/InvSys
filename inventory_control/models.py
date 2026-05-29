@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -24,6 +24,13 @@ class Transaction:
 
 
 @dataclass
+class ComponentConsumption:
+    part_number: str
+    quantity: int
+    location: str
+
+
+@dataclass
 class Shipment:
     shipment_number: str
     timestamp: str
@@ -32,4 +39,30 @@ class Shipment:
     recipient: str
     carrier: str = ""
     tracking_number: str = ""
+    consumed_components: list[ComponentConsumption] = field(default_factory=list)
 
+
+@dataclass
+class BOMComponent:
+    parent_part_number: str
+    component_part_number: str
+    quantity_per: int
+
+
+@dataclass
+class BOMRequirement:
+    part_number: str
+    description: str
+    quantity_required: int
+    stock_available: int
+    shortage: int
+
+
+@dataclass
+class BOMTreeNode:
+    part_number: str
+    description: str
+    quantity_required: int
+    quantity_per_parent: int
+    stock_available: int
+    children: list["BOMTreeNode"] = field(default_factory=list)

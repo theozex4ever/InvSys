@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QTreeWidget,
+    QTreeWidgetItem,
 )
 
 from inventory_control.store import STORE
@@ -152,6 +154,171 @@ class PartsView(BaseView):
                 self.table.setItem(r, c, item)
 
 
+class BOMView(BaseView):
+    def __init__(self, toast: Callable[[str, str], None]) -> None:
+        super().__init__("BOM", "Build nested part structures and verify component availability before shipping.")
+        self.toast = toast
+        row = QHBoxLayout()
+        row.setSpacing(16)
+        self.root.addLayout(row)
+
+        builder = Card("BOM Builder", "Add direct components. Nested levels appear automatically in the visualizer.")
+        self.parent_part = PartCombo()
+        self.component_part = PartCombo()
+        self.quantity_per = QLineEdit("1")
+        self.quantity_per.setValidator(QIntValidator(1, 999999))
+        add_btn = QPushButton("Add / Update Component")
+        add_btn.setMinimumHeight(50)
+        add_btn.clicked.connect(self.add_component)
+        self.component_table = QTableWidget(0, 3)
+        self.component_table.setHorizontalHeaderLabels(["Component", "Description", "Qty per"])
+        self.component_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.component_table.verticalHeader().setVisible(False)
+        self.component_table.setSelectionBehavior(QTableWidget.SelectRows)
+        remove_btn = QPushButton("Remove Selected")
+        remove_btn.setObjectName("SecondaryButton")
+        remove_btn.clicked.connect(self.remove_component)
+        add_field(builder.layout, "Parent assembly / kit", self.parent_part, required=True)
+        add_field(builder.layout, "Component part", self.component_part, required=True)
+        add_field(builder.layout, "Quantity per parent", self.quantity_per, required=True)
+        builder.layout.addWidget(add_btn)
+        builder.layout.addWidget(self.component_table)
+        builder.layout.addWidget(remove_btn)
+        row.addWidget(builder, 1)
+
+        visual = Card("BOM Trace", "Tree shows nesting. Requirements show the exact leaf parts consumed by shipping.")
+        self.visual_part = PartCombo()
+        self.build_qty = QLineEdit("1")
+        self.build_qty.setValidator(QIntValidator(1, 999999))
+        self.location = QComboBox()
+        self.location.addItems(STORE.locations)
+        self.location.setCurrentText("Stock")
+        self.summary = QLabel()
+        self.summary.setObjectName("HelpText")
+        self.tree = QTreeWidget()
+        self.tree.setColumnCount(4)
+        self.tree.setHeaderLabels(["Part", "Required", "Stock", "Status"])
+        self.requirements = QTableWidget(0, 5)
+        self.requirements.setHorizontalHeaderLabels(["Component", "Description", "Required", "Available", "Shortage"])
+        self.requirements.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.requirements.verticalHeader().setVisible(False)
+        add_field(visual.layout, "Visualize part", self.visual_part, required=True)
+        add_field(visual.layout, "Ship quantity", self.build_qty, required=True)
+        add_field(visual.layout, "Consume from location", self.location, required=True)
+        visual.layout.addWidget(self.summary)
+        visual.layout.addWidget(self.tree)
+        visual.layout.addWidget(self.requirements)
+        row.addWidget(visual, 2)
+
+        self.parent_part.currentTextChanged.connect(self.refresh_direct_components)
+        self.visual_part.currentTextChanged.connect(self.update_visual)
+        self.build_qty.textChanged.connect(self.update_visual)
+        self.location.currentTextChanged.connect(self.update_visual)
+        STORE.subscribe(self.refresh)
+        self.refresh()
+
+    def refresh(self) -> None:
+        self.parent_part.refresh()
+        self.component_part.refresh()
+        self.visual_part.refresh()
+        self.refresh_direct_components()
+        self.update_visual()
+
+    def add_component(self) -> None:
+        try:
+            STORE.add_bom_component(
+                self.parent_part.part_number(),
+                self.component_part.part_number(),
+                int(self.quantity_per.text() or 0),
+            )
+            self.toast("BOM component saved.", "success")
+        except ValueError as e:
+            self.toast(str(e), "error")
+
+    def remove_component(self) -> None:
+        row = self.component_table.currentRow()
+        if row < 0:
+            self.toast("Select a BOM component first.", "error")
+            return
+        component = self.component_table.item(row, 0).text()
+        try:
+            STORE.remove_bom_component(self.parent_part.part_number(), component)
+            self.toast("BOM component removed.", "success")
+        except ValueError as e:
+            self.toast(str(e), "error")
+
+    def refresh_direct_components(self) -> None:
+        parent = self.parent_part.part_number()
+        children = STORE.bom_children(parent) if parent in STORE.parts else []
+        self.component_table.setRowCount(len(children))
+        for r, child in enumerate(children):
+            part = STORE.parts[child.component_part_number]
+            values = [child.component_part_number, part.description, str(child.quantity_per)]
+            for c, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                self.component_table.setItem(r, c, item)
+
+    def update_visual(self) -> None:
+        part_number = self.visual_part.part_number()
+        qty = int(self.build_qty.text() or 0)
+        location = self.location.currentText()
+        self.tree.clear()
+        self.requirements.setRowCount(0)
+        if part_number not in STORE.parts or qty <= 0:
+            self.summary.setText("Choose a part and quantity.")
+            return
+        try:
+            root = STORE.bom_tree(part_number, qty, location)
+            root_item = self._tree_item(root)
+            self.tree.addTopLevelItem(root_item)
+            root_item.setExpanded(True)
+            self.tree.expandAll()
+            requirements = STORE.bom_requirements(part_number, qty, location)
+        except ValueError as e:
+            self.summary.setText(str(e))
+            return
+
+        if not requirements:
+            self.summary.setText("This part has no BOM. Shipping deducts the part itself.")
+            return
+
+        self.requirements.setRowCount(len(requirements))
+        total_shortage = 0
+        for r, req in enumerate(requirements):
+            total_shortage += req.shortage
+            values = [
+                req.part_number,
+                req.description,
+                str(req.quantity_required),
+                str(req.stock_available),
+                str(req.shortage),
+            ]
+            for c, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                self.requirements.setItem(r, c, item)
+        if total_shortage:
+            self.summary.setText(f"Blocked: component shortage totals {total_shortage} units.")
+        else:
+            self.summary.setText("Ready: all required BOM components are available.")
+
+    def _tree_item(self, node) -> QTreeWidgetItem:
+        shortage = max(node.quantity_required - node.stock_available, 0) if not node.children else 0
+        status = "Assembly" if node.children else ("OK" if shortage == 0 else f"Short {shortage}")
+        item = QTreeWidgetItem(
+            [
+                f"{node.part_number} - {node.description}",
+                str(node.quantity_required),
+                str(node.stock_available),
+                status,
+            ]
+        )
+        for child in node.children:
+            item.addChild(self._tree_item(child))
+        return item
+
+
 class ReceiveView(BaseView):
     def __init__(self, toast: Callable[[str, str], None], operator_getter: Callable[[], str]) -> None:
         super().__init__("Receive Stock", "Add inventory. Confirmation shows the new quantity.")
@@ -257,6 +424,17 @@ class ShipView(BaseView):
         loc = self.location.currentText()
         stock = STORE.stock_at(pn, loc) if pn in STORE.parts else 0
         qty = int(self.qty.text() or 0)
+        if pn in STORE.parts and qty > 0 and STORE.has_bom(pn):
+            requirements = STORE.bom_requirements(pn, qty, loc)
+            shortages = [req for req in requirements if req.shortage > 0]
+            if shortages:
+                detail = "; ".join(f"{req.part_number} short {req.shortage}" for req in shortages[:3])
+                self.preview.setText(f"Blocked: BOM component shortage. {detail}")
+            else:
+                count = len(requirements)
+                total = sum(req.quantity_required for req in requirements)
+                self.preview.setText(f"OK: BOM shipment will consume {total} units across {count} component parts.")
+            return
         after = stock - qty
         marker = "OK" if after >= 0 else "Blocked"
         self.preview.setText(f"{marker}: available at {loc}: {stock}  ->  after ship: {after}")
@@ -275,7 +453,8 @@ class ShipView(BaseView):
                 self.carrier.text(),
                 self.tracking.text(),
             )
-            self.toast(f"Shipped {qty} of {pn}. Shipment: {sn}.", "success")
+            suffix = " BOM components deducted." if STORE.shipments and STORE.shipments[0].consumed_components else ""
+            self.toast(f"Shipped {qty} of {pn}. Shipment: {sn}.{suffix}", "success")
             self.qty.clear()
             self.recipient.clear()
             self.carrier.clear()
@@ -401,4 +580,3 @@ class HistoryView(BaseView):
                 item = QTableWidgetItem(value)
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable)
                 self.table.setItem(r, c, item)
-

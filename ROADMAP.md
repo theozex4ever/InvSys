@@ -2,14 +2,15 @@
 
 ## TL;DR
 
-Build a **simple local desktop inventory control application** using **Python + SQLite + PySide6 + SQLAlchemy**. This is not a full production ERP yet. The MVP should replace scattered Excel sheets for **parts, inventory quantities, stock movement, and basic shipping records** while staying intuitive for non-technical operators.
+Build a **simple local desktop inventory control application** using **Python + SQLite + PySide6 + SQLAlchemy**. This is not a full production ERP yet. The MVP should replace scattered Excel sheets for **parts, nested BOMs, inventory quantities, stock movement, component usage, and basic shipping records** while staying intuitive for non-technical operators.
 
-The app should focus on four core workflows:
+The app should focus on five core workflows:
 
 1. **Find or create a part**
-2. **Receive stock**
-3. **Ship stock**
-4. **Move or correct stock**
+2. **Define and visualize a nested BOM**
+3. **Receive stock**
+4. **Ship stock or a BOM parent**
+5. **Move or correct stock**
 
 Core principles:
 
@@ -17,6 +18,8 @@ Core principles:
 - Avoid overengineering.
 - Use a simple SQLite database file.
 - Record every inventory change as a transaction.
+- Treat BOM shipment consumption as traceable inventory transactions linked to the shipment.
+- Make BOM structure and shortages visible before shipping.
 - Make the UI task-based, not database-table-based.
 - Prioritize low-friction, ADHD-friendly operation.
 - Make mistakes hard, visible, and recoverable.
@@ -30,6 +33,10 @@ The MVP must include:
 - Current inventory balances by part/location
 - Inventory transaction history
 - Lot tracking
+- Nested BOM definitions
+- Recursive BOM visualization
+- BOM shipment explosion and component consumption
+- BOM component shortage checks
 - Receive stock
 - Ship stock
 - Move stock
@@ -75,9 +82,11 @@ The current process relies on multiple Excel sheets. This creates common issues:
 The MVP should provide one local application where users can:
 
 - Look up parts quickly
+- Define which components are used by assemblies, kits, and shipped products
+- Visualize nested BOM relationships and component shortages
 - See available stock
 - Receive new inventory
-- Ship inventory
+- Ship inventory and automatically consume BOM components
 - Move stock between locations
 - Correct stock counts
 - Review recent activity
@@ -93,10 +102,12 @@ The MVP is complete when the following can be done end-to-end:
 
 ```text
 Create part
+→ Define nested BOM
 → Receive stock
 → View updated stock
-→ Ship stock
+→ Ship BOM parent
 → View shipment record
+→ View component consumption trace
 → View transaction history
 → Export current inventory
 → Recover from backup if needed
@@ -126,6 +137,7 @@ Use screens named after tasks:
 
 - Dashboard
 - Parts
+- BOM
 - Receive Stock
 - Ship Stock
 - Move / Adjust
@@ -421,6 +433,11 @@ The MVP must include:
 - Add/edit parts
 - Mark parts active/inactive
 - Search parts
+- Add/edit nested BOM component links
+- Detect and block circular BOMs
+- Visualize BOM trees and flattened component requirements
+- Consume BOM leaf components automatically when shipping a BOM parent
+- Link BOM consumption transactions to the shipment record
 - Add/edit simple locations
 - View current inventory by part and location
 - Receive stock
@@ -484,9 +501,11 @@ The MVP database should contain these tables:
 ```text
 parts
 locations
+bom_components
 inventory_balances
 inventory_transactions
 shipments
+shipment_components
 settings
 ```
 
@@ -512,6 +531,8 @@ Recommended models:
 - `InventoryBalance`
 - `InventoryTransaction`
 - `Shipment`
+- `BOMComponent`
+- `ShipmentComponent`
 - `Setting`
 
 ## 6.3 Table: parts
@@ -543,6 +564,31 @@ Rules:
 - `minimum_quantity` cannot be negative.
 - Parts with transaction history should not be hard-deleted.
 - Use `active = false` instead of deleting old parts.
+
+## 6.3A Table: bom_components
+
+Purpose: Stores parent/component links for nested bill-of-material definitions.
+
+Fields:
+
+```text
+id                    integer primary key
+parent_part_id        integer, required FK to parts.id
+component_part_id     integer, required FK to parts.id
+quantity_per_parent   integer, required
+notes                 text, optional
+created_at            datetime
+updated_at            datetime
+```
+
+Rules:
+
+- A parent part can have many component parts.
+- A component can itself be a parent of another BOM.
+- `quantity_per_parent` must be greater than zero.
+- Circular BOMs are blocked.
+- Parent/component duplicates should update quantity rather than creating duplicate rows.
+- In the current MVP model, BOM parents are treated as phantom assemblies for shipping: shipping the parent creates a shipment for the parent and deducts nested leaf components.
 
 ## 6.4 Table: locations
 
@@ -620,6 +666,8 @@ Allowed transaction types:
 ```text
 RECEIVE
 SHIP
+SHIP_BOM
+BOM_CONSUME
 MOVE_OUT
 MOVE_IN
 ADJUST
@@ -632,6 +680,8 @@ Rules:
 
 - Receive transactions use positive quantity.
 - Ship, scrap, and negative adjustments use negative quantity.
+- `SHIP_BOM` records the parent part shipped.
+- `BOM_CONSUME` records each leaf component quantity deducted for a linked shipment.
 - Moves should create two transaction rows:
   - `MOVE_OUT` from the source location
   - `MOVE_IN` to the destination location
@@ -665,8 +715,31 @@ Rules:
 - Shipping stock must create an inventory transaction.
 - Shipping stock must reduce inventory balance.
 - Cannot ship more than available stock.
+- If the shipped part has a BOM, shipping must validate and consume required leaf components instead of silently relying on a spreadsheet.
 
 For MVP, one shipment record can represent one part. Do not build multi-line shipments unless needed immediately.
+
+## 6.8A Table: shipment_components
+
+Purpose: Stores the exact BOM component consumption snapshot for a shipment.
+
+Fields:
+
+```text
+id              integer primary key
+shipment_id     integer, required FK to shipments.id
+part_id         integer, required FK to parts.id
+quantity        integer, required
+location_id     integer, required FK to locations.id
+created_at      datetime
+```
+
+Rules:
+
+- Created only for BOM shipments.
+- Stores leaf component quantities actually deducted.
+- Must match linked `BOM_CONSUME` inventory transactions.
+- Preserves traceability even if the BOM definition changes later.
 
 ## 6.8 Table: settings
 
@@ -752,9 +825,32 @@ Rules:
 - Do not allow negative inventory by default.
 - Adjustment reason is required.
 - Shipping should call `ShipmentService` or coordinate shipment creation in a single database transaction.
+- If the shipped part has a BOM, shipping should explode nested requirements, validate component stock, create shipment component snapshots, and create linked `BOM_CONSUME` transactions.
 - Database commit should happen only after all related updates succeed.
 
-## 7.3 ShipmentService Responsibilities
+## 7.3 BOMService Responsibilities
+
+Methods to implement:
+
+```text
+add_component(parent_part_id, component_part_id, quantity_per_parent, notes=None)
+update_component(parent_part_id, component_part_id, quantity_per_parent, notes=None)
+remove_component(parent_part_id, component_part_id)
+get_bom_tree(parent_part_id, quantity=1, location_id=None)
+get_flat_requirements(parent_part_id, quantity=1, location_id=None)
+validate_no_cycle(parent_part_id, component_part_id)
+get_can_ship_quantity(parent_part_id, location_id)
+```
+
+Rules:
+
+- Quantity per parent must be greater than zero.
+- A part cannot contain itself.
+- Circular BOMs are blocked.
+- Nested BOM visualization must show intermediate assemblies and leaf component shortages.
+- Flattened requirements must aggregate duplicate leaf components used through different branches.
+
+## 7.4 ShipmentService Responsibilities
 
 Methods to implement:
 
@@ -784,7 +880,7 @@ Rules:
 - Quantity must be positive.
 - Shipment creation should happen as part of the shipping workflow.
 
-## 7.4 BackupService Responsibilities
+## 7.5 BackupService Responsibilities
 
 Methods to implement:
 
@@ -817,7 +913,7 @@ Rules:
 - Keep the latest 20 backups by default.
 - Never overwrite an existing backup file.
 
-## 7.5 ImportExportService Responsibilities
+## 7.6 ImportExportService Responsibilities
 
 Methods to implement:
 
@@ -957,6 +1053,42 @@ Acceptance criteria:
 - Searching `bearing` finds descriptions containing bearing.
 - Barcode scanner input can populate the search field.
 
+## 8.3A Workflow: Define and Visualize a Nested BOM
+
+User story:
+
+```text
+As an operator, I want to define the components used by a shipped assembly so that shipping can automatically deduct the correct parts.
+```
+
+Required fields:
+
+```text
+Parent part
+Component part
+Quantity per parent
+```
+
+Steps:
+
+1. User opens BOM screen.
+2. User selects parent assembly/kit part.
+3. User selects component part.
+4. User enters quantity required per parent.
+5. App validates that both parts exist, quantity is positive, and the link will not create a circular BOM.
+6. App saves or updates the component link.
+7. App shows the nested BOM tree.
+8. App shows flattened leaf component requirements for a selected ship quantity/location.
+9. App highlights shortages before the user ships.
+
+Acceptance criteria:
+
+- Nested BOMs can be multiple levels deep.
+- Circular BOMs are blocked.
+- Duplicate leaf components are aggregated in flattened requirements.
+- Tree visualization shows intermediate assemblies.
+- Requirement preview shows required, available, and shortage quantities.
+
 ## 8.4 Workflow: Receive Stock
 
 User story:
@@ -1014,7 +1146,7 @@ Acceptance criteria:
 User story:
 
 ```text
-As an operator, I want to ship stock so that inventory decreases and shipment details are recorded.
+As an operator, I want to ship stock or a BOM parent so that inventory decreases, component usage is recorded, and shipment details are traceable.
 ```
 
 Required fields:
@@ -1040,17 +1172,18 @@ Steps:
 
 1. User opens Ship Stock screen.
 2. User searches/selects part.
-3. App shows available stock at selected location.
+3. App shows available stock at selected location, or BOM component availability if the part has a BOM.
 4. User enters quantity.
 5. User enters recipient/project/reference.
 6. User enters carrier/tracking if available.
-7. App previews remaining stock.
+7. App previews remaining stock or BOM component shortages.
 8. User clicks `Ship Stock`.
-9. App validates enough stock exists.
+9. App validates enough stock exists for a normal part, or enough leaf component stock exists for a BOM parent.
 10. App creates shipment record.
-11. App reduces inventory balance.
-12. App creates `SHIP` transaction linked to shipment.
-13. App shows confirmation.
+11. For a normal part, app reduces that part's inventory balance and creates a linked `SHIP` transaction.
+12. For a BOM parent, app deducts required leaf components, creates linked `BOM_CONSUME` transactions, and creates a `SHIP_BOM` parent trace transaction.
+13. App stores shipment component snapshots for BOM shipments.
+14. App shows confirmation.
 
 Preview text:
 
@@ -1073,14 +1206,17 @@ Validation messages:
 Quantity must be greater than zero.
 Recipient is required.
 Not enough stock in Stock. Available: 3, requested: 5.
+Not enough BOM component stock for ABC-123. BRG-6205: available 3, required 5.
 ```
 
 Acceptance criteria:
 
 - Cannot ship more than available stock.
+- Cannot ship a BOM parent when any required leaf component is short.
 - Shipment record is created.
-- Inventory balance decreases.
-- Transaction history shows a linked `SHIP` transaction.
+- Inventory balance decreases for the shipped normal part or the required BOM leaf components.
+- Transaction history shows a linked `SHIP`, or `SHIP_BOM` plus linked `BOM_CONSUME` rows.
+- Shipment details preserve the exact BOM component quantities consumed.
 
 ## 8.6 Workflow: Move Stock
 
@@ -1239,6 +1375,7 @@ Use a clean desktop layout:
 │               │                              │
 │ Dashboard     │                              │
 │ Parts         │                              │
+│ BOM           │                              │
 │ Receive       │                              │
 │ Ship          │                              │
 │ Move/Adjust   │                              │
@@ -1273,6 +1410,7 @@ Show:
   - Receive Stock
   - Ship Stock
   - Find Part
+  - BOM Trace
 - Low-stock card
 - Recent activity card
 - Recent shipments card
@@ -1309,7 +1447,29 @@ Suggested visible result fields:
 Part Number | Description | Total Stock | Status
 ```
 
-## 9.4 Receive Stock View
+## 9.4 BOM View
+
+Purpose:
+
+```text
+Define and trace nested assemblies, kits, and component usage.
+```
+
+Must include:
+
+- Parent part selector
+- Component part selector
+- Quantity per parent field
+- Add/update component action
+- Direct component list
+- Remove component action
+- Nested BOM tree visualization
+- Ship quantity input for requirement preview
+- Location selector for availability checks
+- Flattened component requirements table
+- Shortage status before shipping
+
+## 9.5 Receive Stock View
 
 Purpose:
 
@@ -1327,7 +1487,7 @@ Must include:
 - Current stock display
 - Primary button: `Receive Stock`
 
-## 9.5 Ship Stock View
+## 9.6 Ship Stock View
 
 Purpose:
 
@@ -1346,10 +1506,11 @@ Must include:
 - Reference field
 - Notes field
 - Available stock display
-- Remaining stock preview
+- Remaining stock preview for normal parts
+- BOM component availability and shortage preview for BOM parents
 - Primary button: `Ship Stock`
 
-## 9.6 Move / Adjust View
+## 9.7 Move / Adjust View
 
 Purpose:
 
@@ -1385,7 +1546,7 @@ Reason
 Notes
 ```
 
-## 9.7 History View
+## 9.8 History View
 
 Purpose:
 
@@ -1412,7 +1573,7 @@ Must include:
 - Clear filters button
 - Export visible history button
 
-## 9.8 Settings View
+## 9.9 Settings View
 
 Purpose:
 
@@ -1619,6 +1780,7 @@ Test files:
 tests/test_part_service.py
 tests/test_inventory_service.py
 tests/test_shipment_service.py
+tests/test_bom_service.py
 tests/test_import_export_service.py
 ```
 
@@ -1647,6 +1809,19 @@ Inventory tests:
 - Adjust stock records difference
 - Reject negative adjustment count
 
+BOM tests:
+
+- Add direct BOM component
+- Reject circular BOM
+- Reject non-positive component quantity
+- Expand nested BOM to leaf component requirements
+- Aggregate duplicate leaf components
+- Report component availability and shortages
+- Ship BOM parent deducts leaf components
+- Ship BOM parent creates shipment component snapshots
+- Ship BOM parent creates linked `SHIP_BOM` and `BOM_CONSUME` transactions
+- BOM shipment shortage does not change balances or create shipment records
+
 Backup tests:
 
 - Backup file is created
@@ -1672,9 +1847,16 @@ Before calling MVP complete, manually verify:
 [ ] Duplicate part number is blocked.
 [ ] Search finds part by part number.
 [ ] Search finds part by description.
+[ ] BOM screen adds a component to a parent.
+[ ] BOM screen blocks circular relationships.
+[ ] BOM tree shows nested components.
+[ ] BOM requirements preview shows shortages.
 [ ] Receive stock updates quantity.
 [ ] Receive stock shows success message.
 [ ] Ship stock blocks insufficient stock.
+[ ] Ship BOM parent blocks insufficient component stock.
+[ ] Ship BOM parent deducts required leaf components.
+[ ] Ship BOM parent creates linked component trace rows.
 [ ] Ship stock creates shipment number.
 [ ] Move stock changes both locations.
 [ ] Adjust stock requires reason.
@@ -1781,6 +1963,31 @@ Done when:
 Inventory can be received, shipped, moved, and adjusted through service methods with tests passing.
 ```
 
+## Phase 3B — Nested BOM Core
+
+Goal: Make component usage traceable when assemblies or kits are shipped.
+
+Tasks:
+
+```text
+[x] Add in-memory BOM component model.
+[x] Implement add/remove BOM component links.
+[x] Block circular BOMs.
+[x] Implement recursive BOM tree and flattened leaf requirements.
+[x] Validate component shortages before BOM shipment.
+[x] Deduct BOM leaf components on shipment.
+[x] Create `SHIP_BOM` and linked `BOM_CONSUME` transaction rows.
+[x] Store shipment component consumption snapshots.
+[x] Add BOM service/store tests.
+[ ] Migrate BOM tables to SQLAlchemy persistence.
+```
+
+Done when:
+
+```text
+Shipping a BOM parent deducts the correct nested leaf components and leaves a readable shipment/transaction trace.
+```
+
 ## Phase 4 — Receive and Ship UI
 
 Goal: Operators can perform core stock tasks in the app.
@@ -1795,6 +2002,7 @@ Tasks:
 [ ] Show success confirmation.
 [ ] Build Ship Stock screen.
 [ ] Show available and remaining stock preview.
+[x] Show BOM component availability and shortages for BOM parents in the in-memory UI.
 [ ] Add recipient/carrier/tracking/reference fields.
 [ ] Create shipment record during shipping.
 [ ] Show shipment number after success.
@@ -1910,13 +2118,18 @@ The MVP is complete when all of these are true:
 [ ] App creates startup backups.
 [ ] User can create and edit parts.
 [ ] User can search parts.
+[ ] User can define nested BOMs.
+[ ] User can visualize BOM trees and flattened component requirements.
 [ ] User can receive stock.
 [ ] User can ship stock.
+[ ] User can ship a BOM parent and automatically consume required components.
 [ ] User can move stock.
 [ ] User can adjust stock count.
 [ ] Every inventory change creates transaction history.
 [ ] Shipping creates shipment records.
+[ ] BOM shipments create component consumption snapshots.
 [ ] Negative inventory is blocked.
+[ ] BOM component shortages are blocked before any stock changes.
 [ ] Low-stock alerts work.
 [ ] Dashboard shows recent activity.
 [ ] History screen supports filtering.
@@ -2018,6 +2231,8 @@ Example:
 ```text
 RECEIVE
 SHIP
+SHIP_BOM
+BOM_CONSUME
 MOVE_OUT
 MOVE_IN
 COUNT_CORRECTION

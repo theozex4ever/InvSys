@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from inventory_control.config import APP_NAME
-from inventory_control.ui.views import DashboardView, HistoryView, MoveAdjustView, PartsView, ReceiveView, ShipView
+from inventory_control.ui.views import BOMView, DashboardView, HistoryView, MoveAdjustView, PartsView, ReceiveView, ShipView
 from inventory_control.ui.widgets import ToastManager
 
 
@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
         self.views = {
             "dashboard": DashboardView(self.navigate),
             "parts": PartsView(self.toast),
+            "bom": BOMView(self.toast),
             "receive": ReceiveView(self.toast, self.operator_name),
             "ship": ShipView(self.toast, self.operator_name),
             "move": MoveAdjustView(self.toast, self.operator_name),
@@ -58,6 +59,7 @@ class MainWindow(QMainWindow):
         nav = [
             ("dashboard", "Dashboard"),
             ("parts", "Parts"),
+            ("bom", "BOM"),
             ("receive", "Receive"),
             ("ship", "Ship"),
             ("move", "Move / Adjust"),
@@ -127,4 +129,3 @@ class MainWindow(QMainWindow):
             btn.setProperty("active", name == key)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
-
