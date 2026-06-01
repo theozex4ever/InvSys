@@ -159,7 +159,7 @@ class TestStockQueries:
     def test_stock_at_returns_quantity_for_known_location(self, blank_store):
         # Arrange
         blank_store.add_part("ABC-1", "Widget A")
-        blank_store.receive("ABC-1", 7, "Stock", "tester")
+        blank_store.receive("ABC-1", 7, "Stock", "LOT-1", "tester")
 
         # Act + Assert
         assert blank_store.stock_at("ABC-1", "Stock") == 7
@@ -176,8 +176,8 @@ class TestStockQueries:
     def test_total_stock_sums_all_locations(self, blank_store):
         # Arrange: spread stock across two locations
         blank_store.add_part("ABC-1", "Widget A")
-        blank_store.receive("ABC-1", 5, "Stock", "tester")
-        blank_store.receive("ABC-1", 3, "Receiving", "tester")
+        blank_store.receive("ABC-1", 5, "Stock", "LOT-1", "tester")
+        blank_store.receive("ABC-1", 3, "Receiving", "LOT-1", "tester")
 
         # Act + Assert: 5 + 3 = 8
         assert blank_store.total_stock("ABC-1") == 8
@@ -205,7 +205,7 @@ class TestLowStock:
 
     def test_part_below_minimum_is_returned(self, blank_store):
         blank_store.add_part("ABC-1", "Widget A", minimum_quantity=5)
-        blank_store.receive("ABC-1", 3, "Stock", "tester")  # 3 < 5 → low
+        blank_store.receive("ABC-1", 3, "Stock", "LOT-1", "tester")  # 3 < 5 → low
 
         low = blank_store.low_stock()
 
@@ -214,7 +214,7 @@ class TestLowStock:
     def test_part_exactly_at_minimum_is_returned(self, blank_store):
         # At minimum is still considered low — it needs restocking
         blank_store.add_part("ABC-1", "Widget A", minimum_quantity=5)
-        blank_store.receive("ABC-1", 5, "Stock", "tester")  # 5 == 5 → low
+        blank_store.receive("ABC-1", 5, "Stock", "LOT-1", "tester")  # 5 == 5 → low
 
         low = blank_store.low_stock()
 
@@ -222,7 +222,7 @@ class TestLowStock:
 
     def test_part_above_minimum_is_not_returned(self, blank_store):
         blank_store.add_part("ABC-1", "Widget A", minimum_quantity=5)
-        blank_store.receive("ABC-1", 10, "Stock", "tester")  # 10 > 5 → ok
+        blank_store.receive("ABC-1", 10, "Stock", "LOT-1", "tester")  # 10 > 5 → ok
 
         low = blank_store.low_stock()
 
@@ -239,17 +239,17 @@ class TestLowStock:
 
     def test_low_stock_returns_empty_list_when_all_ok(self, blank_store):
         blank_store.add_part("ABC-1", "Widget A", minimum_quantity=2)
-        blank_store.receive("ABC-1", 10, "Stock", "tester")
+        blank_store.receive("ABC-1", 10, "Stock", "LOT-1", "tester")
 
         assert blank_store.low_stock() == []
 
     def test_only_low_parts_appear_when_mixed(self, blank_store):
         # Two parts: one below minimum, one above
         blank_store.add_part("LOW-1", "Low Part", minimum_quantity=5)
-        blank_store.receive("LOW-1", 2, "Stock", "tester")    # low
+        blank_store.receive("LOW-1", 2, "Stock", "LOT-1", "tester")    # low
 
         blank_store.add_part("OK-1", "OK Part", minimum_quantity=5)
-        blank_store.receive("OK-1", 10, "Stock", "tester")    # fine
+        blank_store.receive("OK-1", 10, "Stock", "LOT-1", "tester")    # fine
 
         low_numbers = {p.part_number for p in blank_store.low_stock()}
 

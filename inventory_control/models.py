@@ -21,6 +21,30 @@ class Transaction:
     operator: str = "Operator"
     reference: str = ""
     notes: str = ""
+    lot_number: str = ""
+
+
+@dataclass
+class Lot:
+    part_number: str
+    lot_number: str
+    active: bool = True
+
+
+@dataclass
+class LotBalance:
+    part_number: str
+    lot_number: str
+    location: str
+    quantity: int
+
+
+@dataclass
+class LotAllocation:
+    part_number: str
+    lot_number: str
+    location: str
+    quantity: int
 
 
 @dataclass
@@ -28,6 +52,7 @@ class ComponentConsumption:
     part_number: str
     quantity: int
     location: str
+    lot_number: str = ""
 
 
 @dataclass

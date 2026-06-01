@@ -28,13 +28,12 @@ The design philosophy is: **make the correct action obvious, make mistakes hard,
 |---|---|
 | Language | Python 3.12+ |
 | UI | PySide6 (Qt6) |
-| Data (current) | In-memory store (`dict` / `list`) |
-| Data (planned) | SQLite + SQLAlchemy ORM |
+| Data | SQLite + SQLAlchemy ORM |
 | Packaging (planned) | PyInstaller |
 | Tests | pytest |
 | Lint / Format | ruff |
 
-The in-memory store is an intentional placeholder that allows the UI layer to be built and validated before committing to a schema. The SQLAlchemy migration preserves all public service interfaces.
+The store is SQLite-backed through SQLAlchemy while preserving a small UI-facing service API.
 
 ---
 
@@ -43,9 +42,13 @@ The in-memory store is an intentional placeholder that allows the UI layer to be
 ```
 inventory_control/
 ├── app.py                  # Entry point — wires store, style, and main window
+├── backup.py               # SQLite backup helper with retention
 ├── config.py               # Path constants (data/, backups/, exports/, logs/)
-├── models.py               # Dataclasses: Part, Transaction, Shipment, BOMComponent, BOMRequirement, BOMTreeNode
-├── store.py                # InventoryStore — in-memory state + subscriber pattern
+├── db.py                   # SQLite engine/session setup and pragmas
+├── migrations.py           # Lightweight schema bootstrap/version setting
+├── models.py               # Dataclasses / DTOs used by the UI-facing store
+├── orm.py                  # SQLAlchemy ORM tables
+├── store.py                # InventoryStore — SQLite-backed service facade + subscriber pattern
 └── ui/
     ├── main_window.py      # MainWindow + QStackedWidget navigation
     ├── views.py            # Task-based views including BOM builder/visualizer
@@ -55,7 +58,7 @@ inventory_control/
 
 **Data flow:** Views gather input → call `STORE` methods → display results via toast notifications. No business logic lives inside views.
 
-**Planned service layer:** `PartService`, `InventoryService`, `ShipmentService`, `BackupService`, `ImportExportService` — replacing direct store calls so the UI never touches the database.
+**Service boundary:** `InventoryStore` is now a SQLite-backed facade. The UI still calls store methods and never writes database rows directly.
 
 ---
 
@@ -97,7 +100,7 @@ RETURN        Reversal of an erroneous outbound transaction
 ## Running the App
 
 ```bash
-pip install PySide6
+pip install PySide6 SQLAlchemy
 python inventory_visualizer.py
 ```
 
@@ -105,14 +108,27 @@ No database setup required — default locations (`Receiving`, `Stock`, `Shippin
 
 ---
 
-## Planned Database Schema
+## Database
 
-Once the SQLAlchemy layer is introduced, the core tables will be:
+The app stores data locally at `data/inventory.db`. Startup backups are written to `backups/inventory-YYYYMMDD-HHMMSS.db`, with the latest 20 backups retained.
+
+SQLite is opened with foreign keys, WAL mode, and a busy timeout enabled.
+
+## Lot Tracking
+
+Lot numbers are required when receiving stock. Opening inventory should be entered through **Receive Stock** with a real lot number and a reference such as `OPENING`.
+
+Shipping, moving, and adjusting stock operate against a selected lot. For BOM shipments, the operator selects the component lot for each required leaf component.
+
+## Database Schema
+
+The core tables are:
 
 | Table | Purpose |
 |---|---|
 | `parts` | Part master — number, description, category, UoM, min qty, active |
 | `locations` | Named stock locations — active flag, no hard deletes |
+| `lots` | Lot master per part |
 | `inventory_balances` | Current qty per part/location — fast lookup only |
 | `inventory_transactions` | Immutable audit log — every balance change |
 | `shipments` | Outbound shipment records — number, recipient, carrier, tracking |
@@ -127,14 +143,18 @@ Shipment number format: `SHP-YYYYMMDD-0001` (counter resets per day).
 ## Planned MVP Feature Scope
 
 **Must-have (in progress)**
-- SQLite + SQLAlchemy persistence
-- Persistent nested BOM tables and BOM shipment component snapshots
-- Service layer with full test coverage
 - CSV export (parts, inventory, transactions, shipments)
 - CSV export/import for BOM definitions
 - CSV import with row-level preview and validation
-- Automatic startup backups + manual backup button
+- Manual backup button
 - Application log file (`logs/app.log`)
+
+**Done**
+- SQLite + SQLAlchemy persistence
+- Persistent nested BOM tables and BOM shipment component snapshots
+- Required lot tracking for stock-changing workflows
+- Automatic startup backups
+- Service facade with regression and persistence tests
 
 **Should-have**
 - Barcode field on parts; barcode-compatible search input
@@ -145,7 +165,7 @@ Shipment number format: `SHP-YYYYMMDD-0001` (counter resets per day).
 - Purchase orders, sales orders, supplier/customer databases
 - Role-based permissions, password login
 - Cloud sync, carrier API integrations, label printing
-- Serial / lot / expiry tracking
+- Serial / expiry tracking
 
 ---
 
@@ -154,13 +174,13 @@ Shipment number format: `SHP-YYYYMMDD-0001` (counter resets per day).
 | Phase | Goal | Status |
 |---|---|---|
 | 0 | App skeleton + navigation | Done |
-| 1 | Database + SQLAlchemy models | Planned |
-| 2 | Parts management + PartService | Planned |
-| 3 | Inventory core + service tests | Planned |
-| 3B | Nested BOM core + shipment explosion traceability | Done (in-memory) |
-| 4 | Receive / Ship UI | Done (in-memory) |
-| 5 | Move / Adjust UI | Done (in-memory) |
-| 6 | Dashboard + History | Done (in-memory) |
+| 1 | Database + SQLAlchemy models | Done |
+| 2 | Parts management + service facade | Done |
+| 3 | Inventory core + service tests | Done |
+| 3B | Nested BOM core + shipment explosion traceability | Done |
+| 4 | Receive / Ship UI | Done |
+| 5 | Move / Adjust UI | Done |
+| 6 | Dashboard + History | Done |
 | 7 | CSV import/export + backup | Planned |
 | 8 | MVP hardening + PyInstaller | Planned |
 

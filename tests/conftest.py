@@ -109,5 +109,5 @@ def part_in_store(blank_store):
     stock but don't want to repeat the setup boilerplate in every test.
     """
     blank_store.add_part("TEST-001", "Test Widget", minimum_quantity=3)
-    blank_store.receive("TEST-001", 10, "Stock", "tester", reference="setup")
+    blank_store.receive("TEST-001", 10, "Stock", "LOT-1", "tester", reference="setup")
     return blank_store

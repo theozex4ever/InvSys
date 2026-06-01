@@ -1,4 +1,4 @@
-from typing import List
+from typing import Callable, List
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
 from PySide6.QtGui import QColor
@@ -48,10 +48,14 @@ class Card(QFrame):
 class Toast(QFrame):
     COLORS = {"success": "#178553", "error": "#d14343", "warning": "#f6c343", "info": "#2f6fed"}
 
-    def __init__(self, parent: QWidget, message: str, level: str = "info") -> None:
+    def __init__(self, parent: QWidget, message: str, level: str = "info", fade_in_ms: int = 220, fade_out_ms: int = 260) -> None:
         super().__init__(parent)
         self.setObjectName("Toast")
         self.setAttribute(Qt.WA_StyledBackground, True)
+        self._fading_out = False
+        self._fade_out_ms = fade_out_ms
+        self.dismiss_timer = QTimer(self)
+        self.dismiss_timer.setSingleShot(True)
         color = self.COLORS.get(level, self.COLORS["info"])
         self.setStyleSheet(
             "QFrame#Toast {"
@@ -68,47 +72,92 @@ class Toast(QFrame):
         layout.addWidget(label)
         self.effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self.effect)
-        self.anim = QPropertyAnimation(self.effect, b"opacity", self)
-        self.anim.setDuration(220)
+        self.anim = QPropertyAnimation(self.effect, b"opacity")
+        self.anim.setDuration(fade_in_ms)
         self.anim.setStartValue(0.0)
         self.anim.setEndValue(1.0)
         self.anim.setEasingCurve(QEasingCurve.OutCubic)
         self.adjustSize()
 
-    def fade_out(self) -> None:
-        self.anim = QPropertyAnimation(self.effect, b"opacity", self)
-        self.anim.setDuration(260)
+    def start_auto_dismiss(self, display_ms: int, on_timeout: Callable[[], None]) -> None:
+        self.dismiss_timer.timeout.connect(on_timeout)
+        self.dismiss_timer.start(display_ms)
+
+    def fade_out(self, on_finished: Callable[[], None]) -> None:
+        if self._fading_out:
+            return
+        self._fading_out = True
+        self.dismiss_timer.stop()
+        self.anim = QPropertyAnimation(self.effect, b"opacity")
+        self.anim.setDuration(self._fade_out_ms)
         self.anim.setStartValue(1.0)
         self.anim.setEndValue(0.0)
-        self.anim.finished.connect(self.deleteLater)
+        self.anim.finished.connect(on_finished)
         self.anim.start()
 
 
 class ToastManager:
-    def __init__(self, parent: QWidget) -> None:
+    def __init__(
+        self,
+        parent: QWidget,
+        display_ms: int = 3300,
+        fade_in_ms: int = 220,
+        fade_out_ms: int = 260,
+        max_visible: int = 4,
+    ) -> None:
         self.parent = parent
         self.toasts: List[Toast] = []
+        self.display_ms = display_ms
+        self.fade_in_ms = fade_in_ms
+        self.fade_out_ms = fade_out_ms
+        self.max_visible = max_visible
 
     def show(self, message: str, level: str = "info") -> None:
-        toast = Toast(self.parent, message, level)
+        toast = Toast(self.parent, message, level, self.fade_in_ms, self.fade_out_ms)
         toast.show()
         self.toasts.append(toast)
+        self._enforce_limit()
         self.reposition()
         toast.anim.start()
-        QTimer.singleShot(3300, toast.fade_out)
-        toast.destroyed.connect(self.cleanup)
+        toast.start_auto_dismiss(self.display_ms, lambda: self._fade_toast(toast))
 
-    def cleanup(self) -> None:
-        self.toasts = [t for t in self.toasts if t is not None and not t.isHidden()]
-        self.reposition()
+    def _fade_toast(self, toast: Toast) -> None:
+        if toast not in self.toasts:
+            return
+        toast.fade_out(lambda: self._finish_toast(toast))
+
+    def _finish_toast(self, toast: Toast) -> None:
+        self._remove_toast(toast)
+        toast.anim.stop()
+        toast.hide()
+        toast.deleteLater()
+
+    def _remove_toast(self, toast: Toast, reposition: bool = True) -> None:
+        self.toasts = [existing for existing in self.toasts if existing is not toast]
+        if reposition:
+            self.reposition()
+
+    def _enforce_limit(self) -> None:
+        while len(self.toasts) > self.max_visible:
+            toast = self.toasts.pop(0)
+            toast.dismiss_timer.stop()
+            toast.hide()
+            toast.deleteLater()
 
     def reposition(self) -> None:
         margin = 20
-        y = self.parent.height() - margin
-        for toast in reversed(self.toasts[-4:]):
-            toast.adjustSize()
-            y -= toast.height()
-            toast.move(self.parent.width() - toast.width() - margin, y)
+        try:
+            parent_width = self.parent.width()
+            y = self.parent.height() - margin
+        except RuntimeError:
+            return
+        for toast in reversed(self.toasts[-self.max_visible:]):
+            try:
+                toast.adjustSize()
+                y -= toast.height()
+                toast.move(parent_width - toast.width() - margin, y)
+            except RuntimeError:
+                continue
             y -= 10
 
 

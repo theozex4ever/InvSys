@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from inventory_control.store import STORE
+from inventory_control.models import LotAllocation
 from inventory_control.ui.widgets import BaseView, Card, PartCombo, add_field
 
 
@@ -333,6 +334,8 @@ class ReceiveView(BaseView):
         self.location = QComboBox()
         self.location.addItems(STORE.locations)
         self.location.setCurrentText("Stock")
+        self.lot = QLineEdit()
+        self.lot.setPlaceholderText("Required lot number")
         self.reference = QLineEdit()
         self.reference.setPlaceholderText("PO, project, or note")
         self.preview = QLabel("Choose a part and quantity.")
@@ -344,6 +347,7 @@ class ReceiveView(BaseView):
         add_field(card.layout, "Part", self.part, required=True)
         add_field(card.layout, "Quantity", self.qty, required=True)
         add_field(card.layout, "Location", self.location, required=True)
+        add_field(card.layout, "Lot number", self.lot, required=True)
         add_field(card.layout, "Reference", self.reference, hint="Optional.")
         card.layout.addWidget(self.preview)
         card.layout.addWidget(btn)
@@ -368,9 +372,11 @@ class ReceiveView(BaseView):
             pn = self.part.part_number()
             qty = int(self.qty.text() or 0)
             loc = self.location.currentText()
-            STORE.receive(pn, qty, loc, self.operator_getter(), self.reference.text())
-            self.toast(f"Received {qty} {pn}. New stock in {loc}: {STORE.stock_at(pn, loc)}.", "success")
+            lot = self.lot.text()
+            STORE.receive(pn, qty, loc, lot, self.operator_getter(), self.reference.text())
+            self.toast(f"Received {qty} {pn} lot {lot.strip().upper()}. New stock in {loc}: {STORE.stock_at(pn, loc)}.", "success")
             self.qty.clear()
+            self.lot.clear()
             self.reference.clear()
         except ValueError as e:
             self.toast(str(e), "error")
@@ -390,6 +396,8 @@ class ShipView(BaseView):
         self.location = QComboBox()
         self.location.addItems(STORE.locations)
         self.location.setCurrentText("Stock")
+        self.lot = QComboBox()
+        self.lot.setEditable(False)
         self.recipient = QLineEdit()
         self.recipient.setPlaceholderText("Project, customer, or recipient")
         self.carrier = QLineEdit()
@@ -398,6 +406,10 @@ class ShipView(BaseView):
         self.tracking.setPlaceholderText("Tracking number")
         self.preview = QLabel("Choose a part and quantity.")
         self.preview.setObjectName("HelpText")
+        self.component_lot_table = QTableWidget(0, 4)
+        self.component_lot_table.setHorizontalHeaderLabels(["Component", "Required", "Selected lot", "Available"])
+        self.component_lot_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.component_lot_table.verticalHeader().setVisible(False)
         btn = QPushButton("Ship Stock")
         btn.setObjectName("DangerButton")
         btn.setMinimumHeight(50)
@@ -405,10 +417,12 @@ class ShipView(BaseView):
         add_field(card.layout, "Part", self.part, required=True)
         add_field(card.layout, "Quantity", self.qty, required=True)
         add_field(card.layout, "Location", self.location, required=True)
+        add_field(card.layout, "Lot", self.lot, required=True, hint="For BOM shipments, select lots in the component table below.")
         add_field(card.layout, "Recipient / project", self.recipient, required=True)
         add_field(card.layout, "Carrier", self.carrier, hint="Optional.")
         add_field(card.layout, "Tracking number", self.tracking, hint="Optional.")
         card.layout.addWidget(self.preview)
+        card.layout.addWidget(self.component_lot_table)
         card.layout.addWidget(btn)
         self.part.currentTextChanged.connect(self.update_preview)
         self.qty.textChanged.connect(self.update_preview)
@@ -422,10 +436,13 @@ class ShipView(BaseView):
     def update_preview(self) -> None:
         pn = self.part.part_number()
         loc = self.location.currentText()
+        self._refresh_lot_combo()
+        self.component_lot_table.setRowCount(0)
         stock = STORE.stock_at(pn, loc) if pn in STORE.parts else 0
         qty = int(self.qty.text() or 0)
         if pn in STORE.parts and qty > 0 and STORE.has_bom(pn):
             requirements = STORE.bom_requirements(pn, qty, loc)
+            self._refresh_component_lots(requirements, loc)
             shortages = [req for req in requirements if req.shortage > 0]
             if shortages:
                 detail = "; ".join(f"{req.part_number} short {req.shortage}" for req in shortages[:3])
@@ -435,21 +452,26 @@ class ShipView(BaseView):
                 total = sum(req.quantity_required for req in requirements)
                 self.preview.setText(f"OK: BOM shipment will consume {total} units across {count} component parts.")
             return
-        after = stock - qty
+        lot = self.lot.currentText()
+        lot_stock = STORE.stock_at(pn, loc, lot) if pn in STORE.parts and lot else 0
+        after = lot_stock - qty
         marker = "OK" if after >= 0 else "Blocked"
-        self.preview.setText(f"{marker}: available at {loc}: {stock}  ->  after ship: {after}")
+        self.preview.setText(f"{marker}: selected lot at {loc}: {lot_stock} / total {stock}  ->  after ship: {after}")
 
     def ship(self) -> None:
         try:
             pn = self.part.part_number()
             qty = int(self.qty.text() or 0)
             loc = self.location.currentText()
+            component_lots = self._selected_component_lots(loc) if pn in STORE.parts and STORE.has_bom(pn) else None
             sn = STORE.ship(
                 pn,
                 qty,
                 loc,
                 self.recipient.text(),
                 self.operator_getter(),
+                self.lot.currentText() if component_lots is None else None,
+                component_lots,
                 self.carrier.text(),
                 self.tracking.text(),
             )
@@ -461,6 +483,53 @@ class ShipView(BaseView):
             self.tracking.clear()
         except ValueError as e:
             self.toast(str(e), "error")
+
+    def _refresh_lot_combo(self) -> None:
+        current = self.lot.currentText()
+        self.lot.blockSignals(True)
+        self.lot.clear()
+        pn = self.part.part_number()
+        loc = self.location.currentText()
+        if pn in STORE.parts:
+            for lot in STORE.lots_for_part(pn, loc, positive_only=True):
+                self.lot.addItem(lot.lot_number)
+        self.lot.setCurrentText(current)
+        self.lot.blockSignals(False)
+
+    def _refresh_component_lots(self, requirements, location: str) -> None:
+        self.component_lot_table.setRowCount(len(requirements))
+        for row, req in enumerate(requirements):
+            values = [req.part_number, str(req.quantity_required)]
+            for col, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                self.component_lot_table.setItem(row, col, item)
+            lot_combo = QComboBox()
+            for lot in STORE.lots_for_part(req.part_number, location, positive_only=True):
+                lot_combo.addItem(lot.lot_number)
+            self.component_lot_table.setCellWidget(row, 2, lot_combo)
+            available = STORE.stock_at(req.part_number, location, lot_combo.currentText()) if lot_combo.currentText() else 0
+            item = QTableWidgetItem(str(available))
+            item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+            self.component_lot_table.setItem(row, 3, item)
+
+    def _selected_component_lots(self, location: str) -> list[LotAllocation]:
+        allocations: list[LotAllocation] = []
+        for row in range(self.component_lot_table.rowCount()):
+            part_item = self.component_lot_table.item(row, 0)
+            qty_item = self.component_lot_table.item(row, 1)
+            combo = self.component_lot_table.cellWidget(row, 2)
+            if part_item is None or qty_item is None or not isinstance(combo, QComboBox):
+                continue
+            allocations.append(
+                LotAllocation(
+                    part_item.text(),
+                    combo.currentText(),
+                    location,
+                    int(qty_item.text() or 0),
+                )
+            )
+        return allocations
 
 
 class MoveAdjustView(BaseView):
@@ -480,6 +549,7 @@ class MoveAdjustView(BaseView):
         self.move_from = QComboBox()
         self.move_from.addItems(STORE.locations)
         self.move_from.setCurrentText("Stock")
+        self.move_lot = QComboBox()
         self.move_to = QComboBox()
         self.move_to.addItems(STORE.locations)
         self.move_to.setCurrentText("Shipping Bench")
@@ -489,6 +559,7 @@ class MoveAdjustView(BaseView):
         add_field(move.layout, "Part", self.move_part, required=True)
         add_field(move.layout, "Quantity", self.move_qty, required=True)
         add_field(move.layout, "From", self.move_from, required=True)
+        add_field(move.layout, "Lot", self.move_lot, required=True)
         add_field(move.layout, "To", self.move_to, required=True)
         move.layout.addWidget(move_btn)
         row.addWidget(move)
@@ -501,6 +572,7 @@ class MoveAdjustView(BaseView):
         self.adjust_location = QComboBox()
         self.adjust_location.addItems(STORE.locations)
         self.adjust_location.setCurrentText("Stock")
+        self.adjust_lot = QComboBox()
         self.reason = QLineEdit()
         self.reason.setPlaceholderText("Why the count changed")
         adjust_btn = QPushButton("Correct Count")
@@ -510,14 +582,34 @@ class MoveAdjustView(BaseView):
         add_field(adjust.layout, "Part", self.adjust_part, required=True)
         add_field(adjust.layout, "New counted quantity", self.adjust_count, required=True)
         add_field(adjust.layout, "Location", self.adjust_location, required=True)
+        add_field(adjust.layout, "Lot", self.adjust_lot, required=True)
         add_field(adjust.layout, "Reason", self.reason, required=True)
         adjust.layout.addWidget(adjust_btn)
         row.addWidget(adjust)
+        self.move_part.currentTextChanged.connect(self.refresh_lots)
+        self.move_from.currentTextChanged.connect(self.refresh_lots)
+        self.adjust_part.currentTextChanged.connect(self.refresh_lots)
+        self.adjust_location.currentTextChanged.connect(self.refresh_lots)
         STORE.subscribe(self.refresh)
 
     def refresh(self) -> None:
         self.move_part.refresh()
         self.adjust_part.refresh()
+        self.refresh_lots()
+
+    def refresh_lots(self) -> None:
+        self._fill_lots(self.move_lot, self.move_part.part_number(), self.move_from.currentText())
+        self._fill_lots(self.adjust_lot, self.adjust_part.part_number(), self.adjust_location.currentText())
+
+    def _fill_lots(self, combo: QComboBox, part_number: str, location: str) -> None:
+        current = combo.currentText()
+        combo.blockSignals(True)
+        combo.clear()
+        if part_number in STORE.parts:
+            for lot in STORE.lots_for_part(part_number, location, positive_only=True):
+                combo.addItem(lot.lot_number)
+        combo.setCurrentText(current)
+        combo.blockSignals(False)
 
     def move_stock(self) -> None:
         try:
@@ -526,6 +618,7 @@ class MoveAdjustView(BaseView):
                 int(self.move_qty.text() or 0),
                 self.move_from.currentText(),
                 self.move_to.currentText(),
+                self.move_lot.currentText(),
                 self.operator_getter(),
             )
             self.toast("Stock moved.", "success")
@@ -538,6 +631,7 @@ class MoveAdjustView(BaseView):
             diff = STORE.adjust(
                 self.adjust_part.part_number(),
                 self.adjust_location.currentText(),
+                self.adjust_lot.currentText(),
                 int(self.adjust_count.text() or 0),
                 self.operator_getter(),
                 self.reason.text(),
@@ -554,8 +648,8 @@ class HistoryView(BaseView):
         super().__init__("History", "Trace inventory activity. No hidden changes.")
         card = Card("Transactions")
         self.root.addWidget(card)
-        self.table = QTableWidget(0, 8)
-        self.table.setHorizontalHeaderLabels(["Time", "Type", "Part", "Qty", "From", "To", "Operator", "Reference"])
+        self.table = QTableWidget(0, 9)
+        self.table.setHorizontalHeaderLabels(["Time", "Type", "Part", "Lot", "Qty", "From", "To", "Operator", "Reference"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -570,6 +664,7 @@ class HistoryView(BaseView):
                 tx.timestamp,
                 tx.tx_type,
                 tx.part_number,
+                tx.lot_number,
                 f"{tx.quantity_change:+d}",
                 tx.location_from,
                 tx.location_to,

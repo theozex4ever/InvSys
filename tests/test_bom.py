@@ -9,6 +9,8 @@ nodes, not inventory deductions.
 
 import pytest
 
+from inventory_control.models import LotAllocation
+
 
 def build_nested_bom(store):
     store.add_part("KIT-001", "Service Kit")
@@ -18,6 +20,13 @@ def build_nested_bom(store):
     store.add_bom_component("KIT-001", "SUB-001", 2)
     store.add_bom_component("SUB-001", "SCREW-001", 3)
     store.add_bom_component("KIT-001", "NUT-001", 4)
+
+
+def kit_component_lots(qty: int) -> list[LotAllocation]:
+    return [
+        LotAllocation("NUT-001", "LOT-1", "Stock", 4 * qty),
+        LotAllocation("SCREW-001", "LOT-1", "Stock", 6 * qty),
+    ]
 
 
 class TestBOMSetup:
@@ -62,7 +71,7 @@ class TestNestedBOMRequirements:
 
     def test_requirements_include_availability_and_shortage(self, blank_store):
         build_nested_bom(blank_store)
-        blank_store.receive("SCREW-001", 10, "Stock", "setup")
+        blank_store.receive("SCREW-001", 10, "Stock", "LOT-1", "setup")
 
         requirements = blank_store.bom_requirements("KIT-001", 2, "Stock")
         screw = next(req for req in requirements if req.part_number == "SCREW-001")
@@ -74,30 +83,30 @@ class TestNestedBOMRequirements:
 class TestBOMShip:
     def test_shipping_bom_parent_deducts_leaf_components(self, blank_store):
         build_nested_bom(blank_store)
-        blank_store.receive("SCREW-001", 20, "Stock", "setup")
-        blank_store.receive("NUT-001", 20, "Stock", "setup")
+        blank_store.receive("SCREW-001", 20, "Stock", "LOT-1", "setup")
+        blank_store.receive("NUT-001", 20, "Stock", "LOT-1", "setup")
 
-        blank_store.ship("KIT-001", 2, "Stock", "Acme", "alice")
+        blank_store.ship("KIT-001", 2, "Stock", "Acme", "alice", component_lots=kit_component_lots(2))
 
         assert blank_store.stock_at("SCREW-001", "Stock") == 8
         assert blank_store.stock_at("NUT-001", "Stock") == 12
 
     def test_shipping_bom_parent_does_not_deduct_intermediate_assembly(self, blank_store):
         build_nested_bom(blank_store)
-        blank_store.receive("SUB-001", 5, "Stock", "setup")
-        blank_store.receive("SCREW-001", 20, "Stock", "setup")
-        blank_store.receive("NUT-001", 20, "Stock", "setup")
+        blank_store.receive("SUB-001", 5, "Stock", "LOT-1", "setup")
+        blank_store.receive("SCREW-001", 20, "Stock", "LOT-1", "setup")
+        blank_store.receive("NUT-001", 20, "Stock", "LOT-1", "setup")
 
-        blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice")
+        blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice", component_lots=kit_component_lots(1))
 
         assert blank_store.stock_at("SUB-001", "Stock") == 5
 
     def test_bom_ship_creates_parent_shipment_and_component_trace(self, blank_store):
         build_nested_bom(blank_store)
-        blank_store.receive("SCREW-001", 20, "Stock", "setup")
-        blank_store.receive("NUT-001", 20, "Stock", "setup")
+        blank_store.receive("SCREW-001", 20, "Stock", "LOT-1", "setup")
+        blank_store.receive("NUT-001", 20, "Stock", "LOT-1", "setup")
 
-        shipment_number = blank_store.ship("KIT-001", 2, "Stock", "Acme", "alice")
+        shipment_number = blank_store.ship("KIT-001", 2, "Stock", "Acme", "alice", component_lots=kit_component_lots(2))
 
         shipment = blank_store.shipments[0]
         assert shipment.shipment_number == shipment_number
@@ -109,10 +118,10 @@ class TestBOMShip:
 
     def test_bom_ship_creates_traceable_transactions(self, blank_store):
         build_nested_bom(blank_store)
-        blank_store.receive("SCREW-001", 20, "Stock", "setup")
-        blank_store.receive("NUT-001", 20, "Stock", "setup")
+        blank_store.receive("SCREW-001", 20, "Stock", "LOT-1", "setup")
+        blank_store.receive("NUT-001", 20, "Stock", "LOT-1", "setup")
 
-        shipment_number = blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice")
+        shipment_number = blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice", component_lots=kit_component_lots(1))
 
         assert blank_store.transactions[0].tx_type == "SHIP_BOM"
         consume_transactions = [
@@ -123,11 +132,11 @@ class TestBOMShip:
 
     def test_bom_shortage_blocks_all_changes(self, blank_store):
         build_nested_bom(blank_store)
-        blank_store.receive("SCREW-001", 2, "Stock", "setup")
+        blank_store.receive("SCREW-001", 2, "Stock", "LOT-1", "setup")
         before_transactions = len(blank_store.transactions)
 
         with pytest.raises(ValueError, match="Not enough BOM component stock"):
-            blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice")
+            blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice", component_lots=kit_component_lots(1))
 
         assert blank_store.stock_at("SCREW-001", "Stock") == 2
         assert blank_store.stock_at("NUT-001", "Stock") == 0

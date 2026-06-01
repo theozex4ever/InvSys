@@ -34,12 +34,12 @@ class TestMoveHappyPath:
     def test_source_balance_decreases(self, part_in_store):
         # Arrange: TEST-001 has 10 in Stock
         # Act: move 4 from Stock → Shipping Bench
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol")
         # Assert
         assert part_in_store.stock_at("TEST-001", "Stock") == 6
 
     def test_destination_balance_increases(self, part_in_store):
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert part_in_store.stock_at("TEST-001", "Shipping Bench") == 4
 
@@ -47,7 +47,7 @@ class TestMoveHappyPath:
         # Moving does not create or destroy units — total must stay the same
         before = part_in_store.total_stock("TEST-001")
 
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert part_in_store.total_stock("TEST-001") == before
 
@@ -55,33 +55,33 @@ class TestMoveHappyPath:
         # part_in_store already has 1 RECEIVE transaction from conftest setup
         tx_count_before = len(part_in_store.transactions)
 
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert len(part_in_store.transactions) == tx_count_before + 2
 
     def test_move_in_transaction_is_most_recent(self, part_in_store):
         # MOVE_IN is inserted last (second insert) so it ends up at [0]
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert part_in_store.transactions[0].tx_type == "MOVE_IN"
 
     def test_move_out_transaction_is_second(self, part_in_store):
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert part_in_store.transactions[1].tx_type == "MOVE_OUT"
 
     def test_move_in_has_positive_quantity(self, part_in_store):
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert part_in_store.transactions[0].quantity_change == 4
 
     def test_move_out_has_negative_quantity(self, part_in_store):
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert part_in_store.transactions[1].quantity_change == -4
 
     def test_both_transactions_record_source_and_destination(self, part_in_store):
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         move_in = part_in_store.transactions[0]
         move_out = part_in_store.transactions[1]
@@ -93,13 +93,13 @@ class TestMoveHappyPath:
         assert move_out.location_to == "Shipping Bench"
 
     def test_transactions_record_operator(self, part_in_store):
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert part_in_store.transactions[0].operator == "carol"
         assert part_in_store.transactions[1].operator == "carol"
 
     def test_transactions_record_reference(self, part_in_store):
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "carol",
+        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol",
                            reference="WO-007")
 
         assert part_in_store.transactions[0].reference == "WO-007"
@@ -107,7 +107,7 @@ class TestMoveHappyPath:
 
     def test_move_entire_available_quantity_succeeds(self, part_in_store):
         # Moving exactly the available amount (10) should be allowed
-        part_in_store.move("TEST-001", 10, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 10, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert part_in_store.stock_at("TEST-001", "Stock") == 0
         assert part_in_store.stock_at("TEST-001", "Shipping Bench") == 10
@@ -121,16 +121,16 @@ class TestMoveValidation:
 
     def test_same_source_and_destination_raises(self, part_in_store):
         with pytest.raises(ValueError, match="Source and destination cannot match"):
-            part_in_store.move("TEST-001", 1, "Stock", "Stock", "carol")
+            part_in_store.move("TEST-001", 1, "Stock", "Stock", "LOT-1", "carol")
 
     def test_insufficient_source_stock_raises(self, part_in_store):
         # Only 10 in Stock; request 11
         with pytest.raises(ValueError, match="Not enough stock"):
-            part_in_store.move("TEST-001", 11, "Stock", "Shipping Bench", "carol")
+            part_in_store.move("TEST-001", 11, "Stock", "Shipping Bench", "LOT-1", "carol")
 
     def test_insufficient_stock_does_not_change_either_balance(self, part_in_store):
         try:
-            part_in_store.move("TEST-001", 99, "Stock", "Shipping Bench", "carol")
+            part_in_store.move("TEST-001", 99, "Stock", "Shipping Bench", "LOT-1", "carol")
         except ValueError:
             pass
 
@@ -141,7 +141,7 @@ class TestMoveValidation:
         tx_count_before = len(part_in_store.transactions)
 
         try:
-            part_in_store.move("TEST-001", 99, "Stock", "Shipping Bench", "carol")
+            part_in_store.move("TEST-001", 99, "Stock", "Shipping Bench", "LOT-1", "carol")
         except ValueError:
             pass
 
@@ -149,17 +149,17 @@ class TestMoveValidation:
 
     def test_invalid_source_location_raises(self, part_in_store):
         with pytest.raises(ValueError, match="Invalid location"):
-            part_in_store.move("TEST-001", 1, "Narnia", "Stock", "carol")
+            part_in_store.move("TEST-001", 1, "Narnia", "Stock", "LOT-1", "carol")
 
     def test_invalid_destination_location_raises(self, part_in_store):
         with pytest.raises(ValueError, match="Invalid destination location"):
-            part_in_store.move("TEST-001", 1, "Stock", "Narnia", "carol")
+            part_in_store.move("TEST-001", 1, "Stock", "Narnia", "LOT-1", "carol")
 
     def test_unknown_part_raises(self, part_in_store):
         with pytest.raises(ValueError, match="Part not found"):
-            part_in_store.move("GHOST-000", 1, "Stock", "Shipping Bench", "carol")
+            part_in_store.move("GHOST-000", 1, "Stock", "Shipping Bench", "LOT-1", "carol")
 
     @pytest.mark.parametrize("qty", [0, -1])
     def test_non_positive_quantity_raises(self, part_in_store, qty):
         with pytest.raises(ValueError, match="Quantity must be greater than zero"):
-            part_in_store.move("TEST-001", qty, "Stock", "Shipping Bench", "carol")
+            part_in_store.move("TEST-001", qty, "Stock", "Shipping Bench", "LOT-1", "carol")

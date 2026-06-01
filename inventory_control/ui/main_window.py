@@ -102,7 +102,7 @@ class MainWindow(QMainWindow):
         self.global_search.setPlaceholderText("Use Parts to search current part records")
         self.global_search.setEnabled(False)
         header_layout.addWidget(self.global_search)
-        self.status = QLabel("Local mode | In-memory prototype")
+        self.status = QLabel("Local mode | SQLite")
         self.status.setObjectName("Muted")
         header_layout.addWidget(self.status)
         content_layout.addWidget(header)

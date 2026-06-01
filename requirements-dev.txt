@@ -1,3 +1,5 @@
 # Development and testing dependencies.
 # Install with:  pip install -r requirements-dev.txt
 pytest>=8.0
+pytest-qt>=4.4
+SQLAlchemy>=2.0

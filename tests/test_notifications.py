@@ -79,7 +79,7 @@ class TestSubscribeAndNotify:
         count, cb = make_counter()
         blank_store.subscribe(cb)
 
-        blank_store.receive("ABC-1", 5, "Stock", "alice")
+        blank_store.receive("ABC-1", 5, "Stock", "LOT-1", "alice")
 
         assert count[0] == 1
 
@@ -87,7 +87,7 @@ class TestSubscribeAndNotify:
         count, cb = make_counter()
         part_in_store.subscribe(cb)
 
-        part_in_store.ship("TEST-001", 1, "Stock", "Acme Corp", "bob")
+        part_in_store.ship("TEST-001", 1, "Stock", "Acme Corp", "bob", "LOT-1")
 
         assert count[0] == 1
 
@@ -95,7 +95,7 @@ class TestSubscribeAndNotify:
         count, cb = make_counter()
         part_in_store.subscribe(cb)
 
-        part_in_store.move("TEST-001", 1, "Stock", "Shipping Bench", "carol")
+        part_in_store.move("TEST-001", 1, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert count[0] == 1
 
@@ -103,7 +103,7 @@ class TestSubscribeAndNotify:
         count, cb = make_counter()
         part_in_store.subscribe(cb)
 
-        part_in_store.adjust("TEST-001", "Stock", 7, "dave", "Spot check")
+        part_in_store.adjust("TEST-001", "Stock", "LOT-1", 7, "dave", "Spot check")
 
         assert count[0] == 1
 
@@ -113,9 +113,9 @@ class TestSubscribeAndNotify:
         blank_store.subscribe(cb)
 
         # Three separate receives → three calls
-        blank_store.receive("ABC-1", 1, "Stock", "alice")
-        blank_store.receive("ABC-1", 2, "Stock", "alice")
-        blank_store.receive("ABC-1", 3, "Stock", "alice")
+        blank_store.receive("ABC-1", 1, "Stock", "LOT-1", "alice")
+        blank_store.receive("ABC-1", 2, "Stock", "LOT-1", "alice")
+        blank_store.receive("ABC-1", 3, "Stock", "LOT-1", "alice")
 
         assert count[0] == 3
 
@@ -144,8 +144,8 @@ class TestMultipleSubscribers:
         blank_store.subscribe(cb_a)
         blank_store.subscribe(cb_b)
 
-        blank_store.receive("ABC-1", 5, "Stock", "alice")
-        blank_store.receive("ABC-1", 3, "Stock", "alice")
+        blank_store.receive("ABC-1", 5, "Stock", "LOT-1", "alice")
+        blank_store.receive("ABC-1", 3, "Stock", "LOT-1", "alice")
 
         assert count_a[0] == count_b[0] == 2
 
@@ -185,20 +185,20 @@ class TestNotifyFalseFlag:
         count, cb = make_counter()
         blank_store.subscribe(cb)
 
-        blank_store.receive("ABC-1", 5, "Stock", "alice", notify=False)
+        blank_store.receive("ABC-1", 5, "Stock", "LOT-1", "alice", notify=False)
 
         assert count[0] == 0, "Subscriber should NOT be called when notify=False"
 
     def test_notify_false_still_updates_balance(self, blank_store):
         # The flag only suppresses the callback — the data change must still happen
         blank_store.add_part("ABC-1", "Widget A", notify=False)
-        blank_store.receive("ABC-1", 7, "Stock", "alice", notify=False)
+        blank_store.receive("ABC-1", 7, "Stock", "LOT-1", "alice", notify=False)
 
         assert blank_store.stock_at("ABC-1", "Stock") == 7
 
     def test_notify_false_still_creates_transaction(self, blank_store):
         blank_store.add_part("ABC-1", "Widget A", notify=False)
-        blank_store.receive("ABC-1", 7, "Stock", "alice", notify=False)
+        blank_store.receive("ABC-1", 7, "Stock", "LOT-1", "alice", notify=False)
 
         assert len(blank_store.transactions) == 1
         assert blank_store.transactions[0].tx_type == "RECEIVE"
@@ -209,6 +209,6 @@ class TestNotifyFalseFlag:
         count, cb = make_counter()
         blank_store.subscribe(cb)
 
-        blank_store.receive("ABC-1", 5, "Stock", "alice")  # notify=True (default)
+        blank_store.receive("ABC-1", 5, "Stock", "LOT-1", "alice")  # notify=True (default)
 
         assert count[0] == 1
