@@ -91,3 +91,39 @@ class BOMTreeNode:
     quantity_per_parent: int
     stock_available: int
     children: list["BOMTreeNode"] = field(default_factory=list)
+
+
+@dataclass
+class CSVRowIssue:
+    row_number: int
+    field: str
+    message: str
+    level: str = "error"
+
+
+@dataclass
+class CSVPreview:
+    kind: str
+    path: str
+    row_count: int
+    valid_count: int
+    errors: list[CSVRowIssue] = field(default_factory=list)
+    warnings: list[CSVRowIssue] = field(default_factory=list)
+
+    @property
+    def can_import(self) -> bool:
+        return not self.errors and self.valid_count > 0
+
+
+@dataclass
+class ImportResult:
+    kind: str
+    rows_imported: int
+    backup_path: str = ""
+
+
+@dataclass
+class ExportResult:
+    kind: str
+    path: str
+    rows_exported: int

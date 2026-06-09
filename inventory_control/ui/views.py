@@ -1,9 +1,10 @@
 from typing import Callable
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIntValidator
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices, QIntValidator
 from PySide6.QtWidgets import (
     QComboBox,
+    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
@@ -17,6 +18,9 @@ from PySide6.QtWidgets import (
     QTreeWidgetItem,
 )
 
+from inventory_control.backup import backup_database
+from inventory_control.config import BACKUP_DIR, DB_PATH, EXPORT_DIR
+from inventory_control.import_export import ImportExportService
 from inventory_control.store import STORE
 from inventory_control.models import LotAllocation
 from inventory_control.ui.widgets import BaseView, Card, PartCombo, add_field
@@ -675,3 +679,150 @@ class HistoryView(BaseView):
                 item = QTableWidgetItem(value)
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable)
                 self.table.setItem(r, c, item)
+
+
+class SettingsView(BaseView):
+    def __init__(self, toast: Callable[[str, str], None], operator_getter: Callable[[], str]) -> None:
+        super().__init__("Settings", "Import, export, and backup tools.")
+        self.toast = toast
+        self.operator_getter = operator_getter
+        self.service = ImportExportService(STORE)
+        self.preview_kind = ""
+        self.preview_path = ""
+
+        grid = QGridLayout()
+        grid.setSpacing(16)
+        self.root.addLayout(grid)
+
+        export_card = Card("Export", "Write CSV snapshots to the exports folder.")
+        export_btn = QPushButton("Export All")
+        export_btn.setObjectName("SecondaryButton")
+        export_btn.setMinimumHeight(50)
+        export_btn.clicked.connect(self.export_all)
+        self.export_summary = QLabel("No export yet.")
+        self.export_summary.setObjectName("HelpText")
+        export_card.layout.addWidget(export_btn)
+        export_card.layout.addWidget(self.export_summary)
+        grid.addWidget(export_card, 0, 0)
+
+        backup_card = Card("Backup", "Create a manual SQLite database backup.")
+        backup_btn = QPushButton("Create Backup")
+        backup_btn.setObjectName("SecondaryButton")
+        backup_btn.setMinimumHeight(50)
+        backup_btn.clicked.connect(self.create_backup)
+        self.backup_summary = QLabel("Startup backups run automatically.")
+        self.backup_summary.setObjectName("HelpText")
+        backup_card.layout.addWidget(backup_btn)
+        backup_card.layout.addWidget(self.backup_summary)
+        grid.addWidget(backup_card, 0, 1)
+
+        import_card = Card("Import", "Preview row-level CSV issues before committing changes.")
+        import_buttons = QHBoxLayout()
+        for label, kind in [
+            ("Choose Parts CSV", "parts"),
+            ("Choose Inventory CSV", "inventory"),
+            ("Choose BOM CSV", "bom"),
+        ]:
+            btn = QPushButton(label)
+            btn.setMinimumHeight(44)
+            btn.clicked.connect(lambda _, k=kind: self.choose_import(k))
+            import_buttons.addWidget(btn)
+        self.preview_summary = QLabel("Choose a CSV to preview.")
+        self.preview_summary.setObjectName("HelpText")
+        self.issue_table = QTableWidget(0, 4)
+        self.issue_table.setHorizontalHeaderLabels(["Row", "Level", "Field", "Message"])
+        self.issue_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.issue_table.verticalHeader().setVisible(False)
+        self.commit_btn = QPushButton("Commit Import")
+        self.commit_btn.setObjectName("SuccessButton")
+        self.commit_btn.setMinimumHeight(50)
+        self.commit_btn.setEnabled(False)
+        self.commit_btn.clicked.connect(self.commit_import)
+        import_card.layout.addLayout(import_buttons)
+        import_card.layout.addWidget(self.preview_summary)
+        import_card.layout.addWidget(self.issue_table)
+        import_card.layout.addWidget(self.commit_btn)
+        grid.addWidget(import_card, 1, 0, 1, 2)
+
+        folders_card = Card("Folders", "Open generated exports or database backups.")
+        folder_buttons = QHBoxLayout()
+        exports_btn = QPushButton("Open Exports")
+        backups_btn = QPushButton("Open Backups")
+        exports_btn.clicked.connect(lambda: self.open_folder(EXPORT_DIR))
+        backups_btn.clicked.connect(lambda: self.open_folder(BACKUP_DIR))
+        folder_buttons.addWidget(exports_btn)
+        folder_buttons.addWidget(backups_btn)
+        folders_card.layout.addLayout(folder_buttons)
+        grid.addWidget(folders_card, 2, 0, 1, 2)
+        self.root.addStretch()
+
+    def export_all(self) -> None:
+        try:
+            results = self.service.export_all()
+            self.export_summary.setText(f"Exported {len(results)} files to {EXPORT_DIR}.")
+            self.toast(f"Exported {len(results)} CSV files.", "success")
+        except OSError as e:
+            self.toast(f"Export failed: {e}", "error")
+
+    def choose_import(self, kind: str) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, f"Choose {kind} CSV", str(EXPORT_DIR), "CSV files (*.csv)")
+        if not path:
+            return
+        self.preview_kind = kind
+        self.preview_path = path
+        try:
+            preview = {
+                "parts": self.service.preview_parts_import_csv,
+                "inventory": self.service.preview_inventory_import_csv,
+                "bom": self.service.preview_bom_import_csv,
+            }[kind](path)
+            self.preview_summary.setText(
+                f"{kind.title()} preview: {preview.row_count} rows, {preview.valid_count} valid, "
+                f"{len(preview.errors)} errors, {len(preview.warnings)} warnings."
+            )
+            self.commit_btn.setEnabled(preview.can_import)
+            self._show_issues(preview.errors + preview.warnings)
+            if preview.errors:
+                self.toast("CSV has validation errors.", "error")
+            else:
+                self.toast("CSV preview passed.", "success")
+        except ValueError as e:
+            self.commit_btn.setEnabled(False)
+            self.toast(str(e), "error")
+
+    def commit_import(self) -> None:
+        if not self.preview_kind or not self.preview_path:
+            self.toast("Choose a CSV first.", "error")
+            return
+        try:
+            result = {
+                "parts": self.service.import_parts_csv,
+                "inventory": self.service.import_inventory_csv,
+                "bom": self.service.import_bom_csv,
+            }[self.preview_kind](self.preview_path, self.operator_getter())
+            self.toast(f"Imported {result.rows_imported} {result.kind} rows.", "success")
+            self.commit_btn.setEnabled(False)
+            self.preview_summary.setText(f"Imported {result.rows_imported} rows. Backup: {result.backup_path}")
+        except ValueError as e:
+            self.toast(str(e), "error")
+
+    def create_backup(self) -> None:
+        backup = backup_database(DB_PATH, BACKUP_DIR, reason="manual")
+        if backup is None:
+            self.toast("No database file exists to back up.", "error")
+            return
+        self.backup_summary.setText(str(backup))
+        self.toast(f"Backup created: {backup.name}", "success")
+
+    def open_folder(self, path) -> None:
+        path.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    def _show_issues(self, issues) -> None:
+        self.issue_table.setRowCount(len(issues))
+        for row, issue in enumerate(issues):
+            values = [str(issue.row_number), issue.level, issue.field, issue.message]
+            for col, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                self.issue_table.setItem(row, col, item)

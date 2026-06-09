@@ -14,7 +14,16 @@ from PySide6.QtWidgets import (
 )
 
 from inventory_control.config import APP_NAME
-from inventory_control.ui.views import BOMView, DashboardView, HistoryView, MoveAdjustView, PartsView, ReceiveView, ShipView
+from inventory_control.ui.views import (
+    BOMView,
+    DashboardView,
+    HistoryView,
+    MoveAdjustView,
+    PartsView,
+    ReceiveView,
+    SettingsView,
+    ShipView,
+)
 from inventory_control.ui.widgets import ToastManager
 
 
@@ -55,6 +64,7 @@ class MainWindow(QMainWindow):
             "ship": ShipView(self.toast, self.operator_name),
             "move": MoveAdjustView(self.toast, self.operator_name),
             "history": HistoryView(),
+            "settings": SettingsView(self.toast, self.operator_name),
         }
         nav = [
             ("dashboard", "Dashboard"),
@@ -64,6 +74,7 @@ class MainWindow(QMainWindow):
             ("ship", "Ship"),
             ("move", "Move / Adjust"),
             ("history", "History"),
+            ("settings", "Settings"),
         ]
         for key, text in nav:
             btn = QPushButton(text)

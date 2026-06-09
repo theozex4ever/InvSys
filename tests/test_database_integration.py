@@ -76,7 +76,8 @@ def test_backup_database_creates_openable_copy_and_applies_retention(tmp_path):
     backup_database(db_path=db_path, backup_dir=backup_dir, keep=1)
 
     assert backup is not None
-    assert len(list(backup_dir.glob("inventory-*.db"))) == 1
-    with sqlite3.connect(backup) as connection:
+    backups = list(backup_dir.glob("inventory-*.db"))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as connection:
         part_count = connection.execute("SELECT COUNT(*) FROM parts").fetchone()[0]
     assert part_count == 1

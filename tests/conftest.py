@@ -27,9 +27,42 @@ We use function scope throughout so each test starts in a clean, predictable
 state.
 """
 
+import os
+import time
+
 import pytest
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication
 
 from inventory_control.store import InventoryStore
+
+
+@pytest.fixture
+def qtbot():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    app = QApplication.instance() or QApplication([])
+
+    class QtBot:
+        def __init__(self):
+            self.widgets = []
+
+        def addWidget(self, widget):
+            self.widgets.append(widget)
+
+        def wait(self, ms: int):
+            QTest.qWait(ms)
+            app.processEvents()
+
+        def waitUntil(self, callback, timeout: int = 1000, interval: int = 10):
+            deadline = time.monotonic() + (timeout / 1000)
+            while time.monotonic() < deadline:
+                app.processEvents()
+                if callback():
+                    return
+                QTest.qWait(interval)
+            raise TimeoutError("qtbot.waitUntil timed out")
+
+    return QtBot()
 
 
 # ---------------------------------------------------------------------------

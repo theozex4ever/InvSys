@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List
+from typing import Any, Callable, Dict, Iterable, List
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.engine import Engine
@@ -36,6 +36,7 @@ class InventoryStore:
     """SQLite-backed inventory store with the original UI-facing API shape."""
 
     def __init__(self, db_path: str | Path | None = ":memory:", seed: bool = True) -> None:
+        self.db_path = db_path
         self.engine: Engine = create_inventory_engine(db_path)
         bootstrap_database(self.engine)
         self.session_factory: sessionmaker[Session] = create_session_factory(self.engine)
@@ -149,6 +150,148 @@ class InventoryStore:
             )
         if notify:
             self.notify()
+
+    def upsert_part(
+        self,
+        part_number: str,
+        description: str,
+        minimum_quantity: int = 0,
+        location: str = "Stock",
+        active: bool = True,
+        notify: bool = True,
+    ) -> None:
+        part_number = self._normalize_part_number(part_number)
+        if not part_number:
+            raise ValueError("Part number required.")
+        if not description.strip():
+            raise ValueError("Description required.")
+        if minimum_quantity < 0:
+            raise ValueError("Minimum quantity cannot be negative.")
+        with self.session_factory.begin() as session:
+            location_row = self._require_location(session, location)
+            now = self.now()
+            part = self._part(session, part_number)
+            if part is None:
+                session.add(
+                    PartRecord(
+                        part_number=part_number,
+                        description=description.strip(),
+                        minimum_quantity=minimum_quantity,
+                        default_location_id=location_row.id,
+                        active=active,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+            else:
+                part.description = description.strip()
+                part.minimum_quantity = minimum_quantity
+                part.default_location_id = location_row.id
+                part.active = active
+                part.updated_at = now
+        if notify:
+            self.notify()
+
+    def import_inventory_receipts(self, rows: List[dict[str, Any]], operator: str, notify: bool = True) -> int:
+        with self.session_factory.begin() as session:
+            for row in rows:
+                part_number = self._normalize_part_number(str(row["part_number"]))
+                lot_number = self._normalize_lot_number(str(row["lot_number"]))
+                quantity = int(row["quantity"])
+                part, loc = self._require_part_location_qty(session, part_number, str(row["location"]), quantity)
+                lot = self._get_or_create_lot(session, part, lot_number)
+                balance = self._get_or_create_balance(session, part, loc, lot)
+                balance.quantity += quantity
+                balance.updated_at = self.now()
+                self._add_transaction(
+                    session,
+                    "RECEIVE",
+                    part,
+                    quantity,
+                    None,
+                    loc,
+                    operator,
+                    str(row.get("reference", "")).strip(),
+                    str(row.get("notes", "")).strip(),
+                    lot,
+                )
+        if notify:
+            self.notify()
+        return len(rows)
+
+    def import_parts(self, rows: List[dict[str, Any]], notify: bool = True) -> int:
+        with self.session_factory.begin() as session:
+            for row in rows:
+                part_number = self._normalize_part_number(str(row["part_number"]))
+                description = str(row["description"]).strip()
+                minimum_quantity = int(row.get("minimum_quantity", 0))
+                location = str(row.get("location", "Stock") or "Stock")
+                active = bool(row.get("active", True))
+                if not part_number:
+                    raise ValueError("Part number required.")
+                if not description:
+                    raise ValueError("Description required.")
+                if minimum_quantity < 0:
+                    raise ValueError("Minimum quantity cannot be negative.")
+                location_row = self._require_location(session, location)
+                now = self.now()
+                part = self._part(session, part_number)
+                if part is None:
+                    session.add(
+                        PartRecord(
+                            part_number=part_number,
+                            description=description,
+                            minimum_quantity=minimum_quantity,
+                            default_location_id=location_row.id,
+                            active=active,
+                            created_at=now,
+                            updated_at=now,
+                        )
+                    )
+                else:
+                    part.description = description
+                    part.minimum_quantity = minimum_quantity
+                    part.default_location_id = location_row.id
+                    part.active = active
+                    part.updated_at = now
+        if notify:
+            self.notify()
+        return len(rows)
+
+    def import_bom_components(self, rows: List[dict[str, Any]], notify: bool = True) -> int:
+        with self.session_factory.begin() as session:
+            for row in rows:
+                parent = self._normalize_part_number(str(row["parent_part_number"]))
+                component = self._normalize_part_number(str(row["component_part_number"]))
+                quantity_per = int(row["quantity_per"])
+                if parent == component:
+                    raise ValueError("A part cannot contain itself.")
+                if quantity_per <= 0:
+                    raise ValueError("Component quantity must be greater than zero.")
+                parent_part = self._require_part(session, parent)
+                component_part = self._require_part(session, component)
+                existing = session.scalar(
+                    select(BOMComponentRecord).where(
+                        BOMComponentRecord.parent_part_id == parent_part.id,
+                        BOMComponentRecord.component_part_id == component_part.id,
+                    )
+                )
+                if existing is None and self._bom_contains(session, component, parent):
+                    raise ValueError("This component would create a circular BOM.")
+                if existing is None:
+                    session.add(
+                        BOMComponentRecord(
+                            parent_part_id=parent_part.id,
+                            component_part_id=component_part.id,
+                            quantity_per=quantity_per,
+                        )
+                    )
+                    session.flush()
+                else:
+                    existing.quantity_per = quantity_per
+        if notify:
+            self.notify()
+        return len(rows)
 
     def add_bom_component(
         self,

@@ -8,7 +8,7 @@ from inventory_control.ui.style import STYLE
 
 
 def main() -> int:
-    backup_database()
+    backup_database(reason="startup")
     from inventory_control.ui.main_window import MainWindow
 
     app = QApplication(sys.argv)
