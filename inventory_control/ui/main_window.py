@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from inventory_control.config import APP_NAME
+from inventory_control.store import STORE
 from inventory_control.ui.views import (
     BOMView,
     DashboardView,
@@ -87,9 +88,12 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(self.views[key])
         side.addStretch()
 
-        self.operator = QLineEdit("Operator")
+        self.operator = QLineEdit(STORE.get_setting("last_operator"))
         self.operator.setPlaceholderText("Operator name")
         self.operator.setMinimumHeight(44)
+        self.operator.setAccessibleName("Active operator name")
+        self.operator.textChanged.connect(self._operator_changed)
+        self.operator.editingFinished.connect(self._save_operator)
         op_card = QFrame()
         op_card.setObjectName("Header")
         op_layout = QVBoxLayout(op_card)
@@ -121,6 +125,7 @@ class MainWindow(QMainWindow):
 
         shell_layout.addWidget(self.sidebar)
         shell_layout.addWidget(content)
+        self._operator_changed(self.operator.text())
         self.navigate("dashboard")
 
     def resizeEvent(self, event) -> None:
@@ -128,7 +133,20 @@ class MainWindow(QMainWindow):
         self.toast_manager.reposition()
 
     def operator_name(self) -> str:
-        return self.operator.text().strip() or "Operator"
+        operator = self.operator.text().strip()
+        if not operator:
+            self.operator.setFocus()
+            raise ValueError("Enter an operator name before recording inventory activity.")
+        return operator
+
+    def _operator_changed(self, text: str) -> None:
+        self.operator.setProperty("invalid", not bool(text.strip()))
+        self.operator.style().unpolish(self.operator)
+        self.operator.style().polish(self.operator)
+        self.status.setText(f"Operator: {text.strip() or 'not set'}  |  Local mode  |  SQLite")
+
+    def _save_operator(self) -> None:
+        STORE.set_setting("last_operator", self.operator.text().strip())
 
     def toast(self, message: str, level: str = "info") -> None:
         self.toast_manager.show(message, level)

@@ -29,6 +29,7 @@ from inventory_control.orm import (
     PartRecord,
     ShipmentComponentRecord,
     ShipmentRecord,
+    SettingRecord,
 )
 
 
@@ -105,6 +106,19 @@ class InventoryStore:
     def notify(self) -> None:
         for callback in self._subscribers:
             callback()
+
+    def get_setting(self, key: str, default: str = "") -> str:
+        with self.session_factory() as session:
+            setting = session.get(SettingRecord, key)
+            return setting.value if setting is not None else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self.session_factory.begin() as session:
+            setting = session.get(SettingRecord, key)
+            if setting is None:
+                session.add(SettingRecord(key=key, value=value))
+            else:
+                setting.value = value
 
     def seed(self) -> None:
         if self.parts:
@@ -189,6 +203,17 @@ class InventoryStore:
                 part.default_location_id = location_row.id
                 part.active = active
                 part.updated_at = now
+        if notify:
+            self.notify()
+
+    def set_part_active(self, part_number: str, active: bool, notify: bool = True) -> None:
+        part_number = self._normalize_part_number(part_number)
+        with self.session_factory.begin() as session:
+            part = self._part(session, part_number)
+            if part is None:
+                raise ValueError("Part not found.")
+            part.active = active
+            part.updated_at = self.now()
         if notify:
             self.notify()
 
@@ -624,7 +649,7 @@ class InventoryStore:
         return [
             p
             for p in self.parts.values()
-            if p.minimum_quantity > 0 and self.total_stock(p.part_number) <= p.minimum_quantity
+            if p.active and p.minimum_quantity > 0 and self.total_stock(p.part_number) <= p.minimum_quantity
         ]
 
     def _ship_bom_part(
@@ -760,10 +785,12 @@ class InventoryStore:
             raise ValueError("Quantity must be greater than zero.")
         return part, loc
 
-    def _require_part(self, session: Session, part_number: str) -> PartRecord:
+    def _require_part(self, session: Session, part_number: str, allow_inactive: bool = False) -> PartRecord:
         part = self._part(session, part_number)
         if part is None:
             raise ValueError("Part not found.")
+        if not allow_inactive and not part.active:
+            raise ValueError(f"Part {part.part_number} is inactive. Reactivate it before recording inventory activity.")
         return part
 
     def _part(self, session: Session, part_number: str) -> PartRecord | None:

@@ -1,6 +1,6 @@
 from typing import Callable, List
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
+    QPushButton,
+    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -46,6 +48,7 @@ class Card(QFrame):
 
 
 class Toast(QFrame):
+    dismiss_requested = Signal()
     COLORS = {"success": "#178553", "error": "#d14343", "warning": "#f6c343", "info": "#2f6fed"}
 
     def __init__(self, parent: QWidget, message: str, level: str = "info", fade_in_ms: int = 220, fade_out_ms: int = 260) -> None:
@@ -70,6 +73,14 @@ class Toast(QFrame):
         label = QLabel(message)
         label.setWordWrap(True)
         layout.addWidget(label)
+        close = QPushButton("×")
+        close.setObjectName("ToastCloseButton")
+        close.setAccessibleName("Dismiss notification")
+        close.setToolTip("Dismiss")
+        close.setFixedSize(30, 30)
+        close.clicked.connect(self.dismiss_requested.emit)
+        layout.addWidget(close)
+        self.setAccessibleName(f"{level.title()}: {message}")
         self.effect = QGraphicsOpacityEffect(self)
         self.setGraphicsEffect(self.effect)
         self.anim = QPropertyAnimation(self.effect, b"opacity")
@@ -114,6 +125,7 @@ class ToastManager:
 
     def show(self, message: str, level: str = "info") -> None:
         toast = Toast(self.parent, message, level, self.fade_in_ms, self.fade_out_ms)
+        toast.dismiss_requested.connect(lambda: self._fade_toast(toast))
         toast.show()
         self.toasts.append(toast)
         self._enforce_limit()
@@ -161,10 +173,17 @@ class ToastManager:
             y -= 10
 
 
-class BaseView(QWidget):
+class BaseView(QScrollArea):
     def __init__(self, title: str, subtitle: str = "") -> None:
         super().__init__()
-        self.root = QVBoxLayout(self)
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.content = QWidget()
+        self.content.setObjectName("ViewContent")
+        self.setWidget(self.content)
+        self.root = QVBoxLayout(self.content)
         self.root.setContentsMargins(24, 20, 24, 24)
         self.root.setSpacing(16)
         title_label = QLabel(title)
@@ -187,23 +206,43 @@ class PartCombo(QComboBox):
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setFilterMode(Qt.MatchContains)
         self.setCompleter(completer)
+        if self.lineEdit() is not None:
+            self.lineEdit().setPlaceholderText("Select or search for a part")
         self.refresh()
 
     def refresh(self) -> None:
-        current = self.currentText()
+        current_part = self.part_number()
         self.clear()
         for part in STORE.parts.values():
+            if not part.active:
+                continue
             self.addItem(f"{part.part_number} - {part.description}", part.part_number)
-        self.setCurrentText(current)
+        matching_index = self.findData(current_part) if current_part else -1
+        self.setCurrentIndex(matching_index)
+        if matching_index < 0:
+            self.setEditText("")
 
     def part_number(self) -> str:
-        data = self.currentData()
         text = self.currentText().strip()
-        if data:
-            return str(data)
-        if " - " in text:
-            return text.split(" - ", 1)[0].strip().upper()
-        return text.upper()
+        if not text:
+            return ""
+        exact_index = self.findText(text, Qt.MatchFixedString)
+        if exact_index >= 0:
+            return str(self.itemData(exact_index))
+        normalized = text.upper()
+        part = STORE.parts.get(normalized)
+        return normalized if part is not None and part.active else ""
+
+    def has_valid_part(self) -> bool:
+        return bool(self.part_number())
+
+
+def set_feedback(label: QLabel, message: str, level: str = "info") -> None:
+    label.setText(message)
+    label.setProperty("level", level)
+    label.setAccessibleName(f"{level.title()}: {message}")
+    label.style().unpolish(label)
+    label.style().polish(label)
 
 
 def add_field(layout: QVBoxLayout, label: str, widget: QWidget, required: bool = False, hint: str = "") -> None:

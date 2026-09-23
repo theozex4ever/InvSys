@@ -66,6 +66,16 @@ def test_shipment_counter_continues_after_reopen(tmp_path):
     assert int(second.split("-")[-1]) == int(first.split("-")[-1]) + 1
 
 
+def test_operator_setting_persists_after_reopen(tmp_path):
+    db_path = tmp_path / "inventory.db"
+    store = InventoryStore(db_path=db_path, seed=False)
+    store.set_setting("last_operator", "Theo")
+
+    reopened = InventoryStore(db_path=db_path, seed=False)
+
+    assert reopened.get_setting("last_operator") == "Theo"
+
+
 def test_backup_database_creates_openable_copy_and_applies_retention(tmp_path):
     db_path = tmp_path / "inventory.db"
     backup_dir = tmp_path / "backups"

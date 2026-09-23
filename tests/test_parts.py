@@ -220,6 +220,11 @@ class TestLowStock:
 
         assert any(p.part_number == "ABC-1" for p in low)
 
+    def test_inactive_part_is_not_returned(self, blank_store):
+        blank_store.add_part("OLD-1", "Retired widget", minimum_quantity=5)
+        blank_store.set_part_active("OLD-1", False)
+
+        assert all(part.part_number != "OLD-1" for part in blank_store.low_stock())
     def test_part_above_minimum_is_not_returned(self, blank_store):
         blank_store.add_part("ABC-1", "Widget A", minimum_quantity=5)
         blank_store.receive("ABC-1", 10, "Stock", "LOT-1", "tester")  # 10 > 5 → ok
@@ -255,3 +260,21 @@ class TestLowStock:
 
         assert "LOW-1" in low_numbers
         assert "OK-1" not in low_numbers
+
+
+class TestInactiveParts:
+    def test_inventory_activity_requires_reactivation(self, blank_store):
+        blank_store.add_part("OLD-1", "Retired widget")
+        blank_store.set_part_active("OLD-1", False)
+
+        with pytest.raises(ValueError, match="is inactive"):
+            blank_store.receive("OLD-1", 1, "Stock", "LOT-1", "alice")
+
+    def test_part_can_be_reactivated(self, blank_store):
+        blank_store.add_part("OLD-1", "Retired widget")
+        blank_store.set_part_active("OLD-1", False)
+        blank_store.set_part_active("OLD-1", True)
+
+        blank_store.receive("OLD-1", 1, "Stock", "LOT-1", "alice")
+
+        assert blank_store.stock_at("OLD-1", "Stock") == 1
