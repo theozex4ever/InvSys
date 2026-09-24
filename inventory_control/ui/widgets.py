@@ -183,6 +183,7 @@ class BaseView(QScrollArea):
         self.content = QWidget()
         self.content.setObjectName("ViewContent")
         self.setWidget(self.content)
+        self.primary_widget: QWidget | None = None
         self.root = QVBoxLayout(self.content)
         self.root.setContentsMargins(24, 20, 24, 24)
         self.root.setSpacing(16)
@@ -194,6 +195,13 @@ class BaseView(QScrollArea):
             sub.setObjectName("HelpText")
             sub.setWordWrap(True)
             self.root.addWidget(sub)
+
+    def set_primary_widget(self, widget: QWidget) -> None:
+        self.primary_widget = widget
+
+    def focus_primary(self) -> None:
+        if self.primary_widget is not None and self.primary_widget.isEnabled():
+            self.primary_widget.setFocus(Qt.ShortcutFocusReason)
 
 
 class PartCombo(QComboBox):
@@ -212,6 +220,7 @@ class PartCombo(QComboBox):
 
     def refresh(self) -> None:
         current_part = self.part_number()
+        self.blockSignals(True)
         self.clear()
         for part in STORE.parts.values():
             if not part.active:
@@ -221,6 +230,7 @@ class PartCombo(QComboBox):
         self.setCurrentIndex(matching_index)
         if matching_index < 0:
             self.setEditText("")
+        self.blockSignals(False)
 
     def part_number(self) -> str:
         text = self.currentText().strip()
