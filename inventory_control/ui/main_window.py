@@ -1,6 +1,7 @@
 from typing import Dict
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -58,7 +59,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.nav_buttons: Dict[str, QPushButton] = {}
         self.views = {
-            "dashboard": DashboardView(self.navigate),
+            "dashboard": DashboardView(self.navigate, self.open_part, self.open_history),
             "parts": PartsView(self.toast),
             "bom": BOMView(self.toast),
             "receive": ReceiveView(self.toast, self.operator_name),
@@ -114,8 +115,10 @@ class MainWindow(QMainWindow):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(24, 12, 24, 12)
         self.global_search = QLineEdit()
-        self.global_search.setPlaceholderText("Use Parts to search current part records")
-        self.global_search.setEnabled(False)
+        self.global_search.setPlaceholderText("Search parts by number or description (Ctrl+K)")
+        self.global_search.setAccessibleName("Global part search")
+        self.global_search.setClearButtonEnabled(True)
+        self.global_search.returnPressed.connect(self._submit_global_search)
         header_layout.addWidget(self.global_search)
         self.status = QLabel("Local mode | SQLite")
         self.status.setObjectName("Muted")
@@ -126,6 +129,7 @@ class MainWindow(QMainWindow):
         shell_layout.addWidget(self.sidebar)
         shell_layout.addWidget(content)
         self._operator_changed(self.operator.text())
+        self._install_shortcuts()
         self.navigate("dashboard")
 
     def resizeEvent(self, event) -> None:
@@ -151,6 +155,33 @@ class MainWindow(QMainWindow):
     def toast(self, message: str, level: str = "info") -> None:
         self.toast_manager.show(message, level)
 
+    def _install_shortcuts(self) -> None:
+        self.shortcuts: list[QShortcut] = []
+        search_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
+        search_shortcut.activated.connect(self._focus_global_search)
+        self.shortcuts.append(search_shortcut)
+        for index, key in enumerate(self.views, start=1):
+            shortcut = QShortcut(QKeySequence(f"Ctrl+{index}"), self)
+            shortcut.activated.connect(lambda k=key: self.navigate(k))
+            self.shortcuts.append(shortcut)
+
+    def _focus_global_search(self) -> None:
+        self.global_search.setFocus(Qt.ShortcutFocusReason)
+        self.global_search.selectAll()
+
+    def _submit_global_search(self) -> None:
+        query = self.global_search.text().strip()
+        self.navigate("parts")
+        self.views["parts"].set_search(query)
+
+    def open_part(self, part_number: str) -> None:
+        self.navigate("parts")
+        self.views["parts"].set_search(part_number, select_exact=True)
+
+    def open_history(self, query: str = "") -> None:
+        self.navigate("history")
+        self.views["history"].set_search(query)
+
     def navigate(self, key: str) -> None:
         keys = list(self.views.keys())
         self.stack.setCurrentIndex(keys.index(key))
@@ -158,3 +189,4 @@ class MainWindow(QMainWindow):
             btn.setProperty("active", name == key)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
+        self.views[key].focus_primary()

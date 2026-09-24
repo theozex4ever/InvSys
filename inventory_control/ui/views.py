@@ -1,7 +1,9 @@
+from datetime import datetime
+from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QIntValidator
+from PySide6.QtGui import QBrush, QColor, QDesktopServices, QIntValidator
 from PySide6.QtWidgets import (
     QComboBox,
     QCheckBox,
@@ -12,12 +14,15 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
+    QVBoxLayout,
 )
 
 from inventory_control.backup import backup_database
@@ -28,8 +33,21 @@ from inventory_control.models import LotAllocation
 from inventory_control.ui.widgets import BaseView, Card, PartCombo, add_field, set_feedback
 
 
+class NumericTableWidgetItem(QTableWidgetItem):
+    def __lt__(self, other) -> bool:
+        try:
+            return int(self.text()) < int(other.text())
+        except (TypeError, ValueError):
+            return super().__lt__(other)
+
+
 class DashboardView(BaseView):
-    def __init__(self, navigate: Callable[[str], None]) -> None:
+    def __init__(
+        self,
+        navigate: Callable[[str], None],
+        open_part: Callable[[str], None],
+        open_history: Callable[[str], None],
+    ) -> None:
         super().__init__("Dashboard", "Fast actions first. Important warnings visible. No hunting.")
         grid = QGridLayout()
         grid.setSpacing(16)
@@ -53,12 +71,13 @@ class DashboardView(BaseView):
         action_row = QHBoxLayout()
         for text, screen, obj in [
             ("Receive Stock", "receive", "SuccessButton"),
-            ("Ship Stock", "ship", "DangerButton"),
+            ("Ship Stock", "ship", ""),
             ("Find Part", "parts", "SecondaryButton"),
         ]:
             btn = QPushButton(text)
             btn.setMinimumHeight(50)
-            btn.setObjectName(obj)
+            if obj:
+                btn.setObjectName(obj)
             btn.clicked.connect(lambda _, s=screen: navigate(s))
             action_row.addWidget(btn)
         actions.layout.addLayout(action_row)
@@ -66,13 +85,16 @@ class DashboardView(BaseView):
 
         self.low_list = QListWidget()
         self.recent_list = QListWidget()
-        low_card = Card("Low Stock", "Items at or below minimum quantity.")
+        self.low_list.itemActivated.connect(lambda item: open_part(str(item.data(Qt.UserRole) or "")))
+        self.recent_list.itemActivated.connect(lambda item: open_history(str(item.data(Qt.UserRole) or "")))
+        low_card = Card("Low Stock", "Items at or below minimum quantity. Double-click to open.")
         low_card.layout.addWidget(self.low_list)
-        recent_card = Card("Recent Activity", "Latest inventory movements.")
+        recent_card = Card("Recent Activity", "Latest inventory movements. Double-click to open History.")
         recent_card.layout.addWidget(self.recent_list)
         grid.addWidget(low_card, 2, 0, 1, 1)
         grid.addWidget(recent_card, 2, 1, 1, 2)
         self.root.addStretch()
+        self.set_primary_widget(self.low_list)
         STORE.subscribe(self.refresh)
         self.refresh()
 
@@ -83,14 +105,20 @@ class DashboardView(BaseView):
         self.low_count.setText(str(len(STORE.low_stock())))
         self.low_list.clear()
         for part in STORE.low_stock():
-            self.low_list.addItem(
-                f"Low: {part.part_number}   {STORE.total_stock(part.part_number)} / min {part.minimum_quantity}"
-            )
+            item = QListWidgetItem()
+            item.setText(f"Low: {part.part_number}   {STORE.total_stock(part.part_number)} / min {part.minimum_quantity}")
+            item.setData(Qt.UserRole, part.part_number)
+            self.low_list.addItem(item)
         if self.low_list.count() == 0:
-            self.low_list.addItem("No low-stock items")
+            empty_item = QListWidgetItem("No low-stock items")
+            empty_item.setFlags(empty_item.flags() & ~Qt.ItemIsSelectable & ~Qt.ItemIsEnabled)
+            self.low_list.addItem(empty_item)
         self.recent_list.clear()
         for tx in STORE.transactions[:8]:
-            self.recent_list.addItem(f"{tx.timestamp}  {tx.tx_type}  {tx.part_number}  {tx.quantity_change:+d}")
+            item = QListWidgetItem()
+            item.setText(f"{tx.timestamp}  {tx.tx_type}  {tx.part_number}  {tx.quantity_change:+d}")
+            item.setData(Qt.UserRole, tx.part_number)
+            self.recent_list.addItem(item)
 
 
 class PartsView(BaseView):
@@ -112,6 +140,7 @@ class PartsView(BaseView):
         self.location.addItems(STORE.locations)
         self.add_btn = QPushButton("Add Part")
         self.add_btn.setMinimumHeight(50)
+        self.add_btn.setEnabled(False)
         self.add_btn.clicked.connect(self.add_part)
         self.edit_btn = QPushButton("Save Selected Part")
         self.edit_btn.setObjectName("SecondaryButton")
@@ -120,6 +149,8 @@ class PartsView(BaseView):
         self.new_btn = QPushButton("Clear / New Part")
         self.new_btn.setObjectName("SecondaryButton")
         self.new_btn.clicked.connect(self._clear_part_form)
+        self.part_number.textChanged.connect(self.update_part_actions)
+        self.description.textChanged.connect(self.update_part_actions)
         add_field(form.layout, "Part number", self.part_number, required=True)
         add_field(form.layout, "Description", self.description, required=True)
         add_field(form.layout, "Minimum quantity", self.minimum)
@@ -137,10 +168,13 @@ class PartsView(BaseView):
         self.show_inactive.toggled.connect(self.refresh)
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Part", "Description", "Total", "Min", "Status"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.setAlternatingRowColors(True)
+        self.table.setSortingEnabled(True)
         self.table.itemSelectionChanged.connect(self.select_part)
         self.toggle_active_btn = QPushButton("Deactivate Selected")
         self.toggle_active_btn.setObjectName("SecondaryButton")
@@ -152,7 +186,20 @@ class PartsView(BaseView):
         list_card.layout.addWidget(self.toggle_active_btn)
         row.addWidget(list_card, 2)
         STORE.subscribe(self.refresh)
+        self.set_primary_widget(self.search)
         self.refresh()
+
+    def set_search(self, query: str, select_exact: bool = False) -> None:
+        self.search.setText(query)
+        self.search.setFocus(Qt.ShortcutFocusReason)
+        self.search.selectAll()
+        if select_exact:
+            for row in range(self.table.rowCount()):
+                item = self.table.item(row, 0)
+                if item is not None and item.text() == query:
+                    self.table.selectRow(row)
+                    self.table.scrollToItem(item)
+                    break
 
     def add_part(self) -> None:
         try:
@@ -190,8 +237,8 @@ class PartsView(BaseView):
         enabled = bool(selected)
         self.edit_btn.setEnabled(enabled)
         self.toggle_active_btn.setEnabled(enabled)
-        self.add_btn.setEnabled(not enabled)
         if not selected:
+            self.update_part_actions()
             return
         part = STORE.parts[selected]
         self.part_number.setText(part.part_number)
@@ -200,6 +247,13 @@ class PartsView(BaseView):
         self.minimum.setText(str(part.minimum_quantity))
         self.location.setCurrentText(part.location)
         self.toggle_active_btn.setText("Deactivate Selected" if part.active else "Reactivate Selected")
+        self.update_part_actions()
+
+    def update_part_actions(self) -> None:
+        selected = bool(self._selected_part_number()) if hasattr(self, "table") else False
+        valid = bool(self.part_number.text().strip() and self.description.text().strip())
+        self.add_btn.setEnabled(valid and not selected)
+        self.edit_btn.setEnabled(valid and selected)
 
     def toggle_selected_part(self) -> None:
         selected = self._selected_part_number()
@@ -233,15 +287,19 @@ class PartsView(BaseView):
         self.minimum.setText("0")
         self.edit_btn.setEnabled(False)
         self.toggle_active_btn.setEnabled(False)
-        self.add_btn.setEnabled(True)
+        self.update_part_actions()
 
     def refresh(self) -> None:
         query = self.search.text().lower().strip() if hasattr(self, "search") else ""
         include_inactive = self.show_inactive.isChecked() if hasattr(self, "show_inactive") else False
+        selected_before = self._selected_part_number() if hasattr(self, "table") else ""
         rows = [
             p for p in STORE.parts.values()
             if (p.active or include_inactive) and (query in p.part_number.lower() or query in p.description.lower())
         ]
+        sorting = self.table.isSortingEnabled()
+        self.table.setSortingEnabled(False)
+        self.table.blockSignals(True)
         self.table.setRowCount(len(rows))
         for r, p in enumerate(rows):
             values = [
@@ -252,9 +310,24 @@ class PartsView(BaseView):
                 "Active" if p.active else "Inactive",
             ]
             for c, value in enumerate(values):
-                item = QTableWidgetItem(value)
+                item = NumericTableWidgetItem(value) if c in (2, 3) else QTableWidgetItem(value)
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                item.setToolTip(value)
+                if c in (2, 3):
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                if c == 4 and not p.active:
+                    item.setForeground(QBrush(QColor("#f6c343")))
                 self.table.setItem(r, c, item)
+        self.table.setSortingEnabled(sorting)
+        self.table.blockSignals(False)
+        if selected_before:
+            for row in range(self.table.rowCount()):
+                item = self.table.item(row, 0)
+                if item is not None and item.text() == selected_before:
+                    self.table.selectRow(row)
+                    break
+            else:
+                self._clear_part_form()
 
 
 class BOMView(BaseView):
@@ -270,23 +343,33 @@ class BOMView(BaseView):
         self.component_part = PartCombo()
         self.quantity_per = QLineEdit("1")
         self.quantity_per.setValidator(QIntValidator(1, 999999))
-        add_btn = QPushButton("Add / Update Component")
-        add_btn.setMinimumHeight(50)
-        add_btn.clicked.connect(self.add_component)
-        self.component_table = QTableWidget(0, 3)
-        self.component_table.setHorizontalHeaderLabels(["Component", "Description", "Qty per"])
-        self.component_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.editing_component = ""
+        self.component_save_btn = QPushButton("Add Component")
+        self.component_save_btn.setMinimumHeight(50)
+        self.component_save_btn.setEnabled(False)
+        self.component_save_btn.clicked.connect(self.add_component)
+        clear_component_btn = QPushButton("Clear Component Editor")
+        clear_component_btn.setObjectName("SecondaryButton")
+        clear_component_btn.clicked.connect(self.clear_component_editor)
+        self.component_table = QTableWidget(0, 2)
+        self.component_table.setHorizontalHeaderLabels(["Component", "Qty / parent"])
+        self.component_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.component_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.component_table.verticalHeader().setVisible(False)
         self.component_table.setSelectionBehavior(QTableWidget.SelectRows)
-        remove_btn = QPushButton("Remove Selected")
-        remove_btn.setObjectName("SecondaryButton")
-        remove_btn.clicked.connect(self.remove_component)
+        self.component_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.component_table.itemSelectionChanged.connect(self.select_component)
+        self.remove_component_btn = QPushButton("Remove Selected")
+        self.remove_component_btn.setObjectName("SecondaryButton")
+        self.remove_component_btn.setEnabled(False)
+        self.remove_component_btn.clicked.connect(self.remove_component)
         add_field(builder.layout, "Parent assembly / kit", self.parent_part, required=True)
         add_field(builder.layout, "Component part", self.component_part, required=True)
         add_field(builder.layout, "Quantity per parent", self.quantity_per, required=True)
-        builder.layout.addWidget(add_btn)
+        builder.layout.addWidget(self.component_save_btn)
+        builder.layout.addWidget(clear_component_btn)
         builder.layout.addWidget(self.component_table)
-        builder.layout.addWidget(remove_btn)
+        builder.layout.addWidget(self.remove_component_btn)
         row.addWidget(builder, 1)
 
         visual = Card("BOM Trace", "Tree shows nesting. Requirements show the exact leaf parts consumed by shipping.")
@@ -297,13 +380,14 @@ class BOMView(BaseView):
         self.location.addItems(STORE.locations)
         self.location.setCurrentText("Stock")
         self.summary = QLabel()
-        self.summary.setObjectName("HelpText")
+        self.summary.setObjectName("FeedbackLabel")
         self.tree = QTreeWidget()
         self.tree.setColumnCount(4)
         self.tree.setHeaderLabels(["Part", "Required", "Stock", "Status"])
         self.requirements = QTableWidget(0, 5)
         self.requirements.setHorizontalHeaderLabels(["Component", "Description", "Required", "Available", "Shortage"])
-        self.requirements.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.requirements.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.requirements.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.requirements.verticalHeader().setVisible(False)
         add_field(visual.layout, "Visualize part", self.visual_part, required=True)
         add_field(visual.layout, "Ship quantity", self.build_qty, required=True)
@@ -313,11 +397,14 @@ class BOMView(BaseView):
         visual.layout.addWidget(self.requirements)
         row.addWidget(visual, 2)
 
-        self.parent_part.currentTextChanged.connect(self.refresh_direct_components)
+        self.parent_part.currentTextChanged.connect(self.parent_changed)
+        self.component_part.currentTextChanged.connect(self.update_component_action)
+        self.quantity_per.textChanged.connect(self.update_component_action)
         self.visual_part.currentTextChanged.connect(self.update_visual)
         self.build_qty.textChanged.connect(self.update_visual)
         self.location.currentTextChanged.connect(self.update_visual)
         STORE.subscribe(self.refresh)
+        self.set_primary_widget(self.parent_part)
         self.refresh()
 
     def refresh(self) -> None:
@@ -327,16 +414,56 @@ class BOMView(BaseView):
         self.refresh_direct_components()
         self.update_visual()
 
+    def parent_changed(self) -> None:
+        self.clear_component_editor()
+        self.refresh_direct_components()
+
     def add_component(self) -> None:
         try:
+            parent = self.parent_part.part_number()
+            component = self.component_part.part_number()
+            existing = {child.component_part_number for child in STORE.bom_children(parent)} if parent else set()
+            if component in existing and self.editing_component != component:
+                raise ValueError("That component already exists. Select its row before changing the quantity.")
             STORE.add_bom_component(
-                self.parent_part.part_number(),
-                self.component_part.part_number(),
+                parent,
+                component,
                 int(self.quantity_per.text() or 0),
             )
-            self.toast("BOM component saved.", "success")
+            action = "updated" if self.editing_component else "added"
+            self.toast(f"BOM component {action}.", "success")
+            self.clear_component_editor()
         except ValueError as e:
             self.toast(str(e), "error")
+
+    def select_component(self) -> None:
+        row = self.component_table.currentRow()
+        component_item = self.component_table.item(row, 0) if row >= 0 else None
+        qty_item = self.component_table.item(row, 1) if row >= 0 else None
+        if component_item is None or qty_item is None:
+            return
+        self.editing_component = component_item.text()
+        self.component_part.setCurrentIndex(self.component_part.findData(self.editing_component))
+        self.quantity_per.setText(qty_item.text())
+        self.component_save_btn.setText("Update Component")
+        self.remove_component_btn.setEnabled(True)
+        self.update_component_action()
+
+    def clear_component_editor(self) -> None:
+        self.editing_component = ""
+        self.component_table.clearSelection()
+        self.component_part.setCurrentIndex(-1)
+        self.component_part.setEditText("")
+        self.quantity_per.setText("1")
+        self.component_save_btn.setText("Add Component")
+        self.remove_component_btn.setEnabled(False)
+        self.update_component_action()
+
+    def update_component_action(self) -> None:
+        parent = self.parent_part.part_number()
+        component = self.component_part.part_number()
+        quantity = int(self.quantity_per.text() or 0)
+        self.component_save_btn.setEnabled(bool(parent and component and parent != component and quantity > 0))
 
     def remove_component(self) -> None:
         row = self.component_table.currentRow()
@@ -356,6 +483,7 @@ class BOMView(BaseView):
         try:
             STORE.remove_bom_component(self.parent_part.part_number(), component)
             self.toast("BOM component removed.", "success")
+            self.clear_component_editor()
         except ValueError as e:
             self.toast(str(e), "error")
 
@@ -364,11 +492,13 @@ class BOMView(BaseView):
         children = STORE.bom_children(parent) if parent in STORE.parts else []
         self.component_table.setRowCount(len(children))
         for r, child in enumerate(children):
-            part = STORE.parts[child.component_part_number]
-            values = [child.component_part_number, part.description, str(child.quantity_per)]
+            values = [child.component_part_number, str(child.quantity_per)]
             for c, value in enumerate(values):
-                item = QTableWidgetItem(value)
+                item = NumericTableWidgetItem(value) if c == 1 else QTableWidgetItem(value)
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                item.setToolTip(value)
+                if c == 1:
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.component_table.setItem(r, c, item)
 
     def update_visual(self) -> None:
@@ -378,7 +508,7 @@ class BOMView(BaseView):
         self.tree.clear()
         self.requirements.setRowCount(0)
         if part_number not in STORE.parts or qty <= 0:
-            self.summary.setText("Choose a part and quantity.")
+            set_feedback(self.summary, "Choose a part and quantity.", "info")
             return
         try:
             root = STORE.bom_tree(part_number, qty, location)
@@ -388,11 +518,11 @@ class BOMView(BaseView):
             self.tree.expandAll()
             requirements = STORE.bom_requirements(part_number, qty, location)
         except ValueError as e:
-            self.summary.setText(str(e))
+            set_feedback(self.summary, str(e), "error")
             return
 
         if not requirements:
-            self.summary.setText("This part has no BOM. Shipping deducts the part itself.")
+            set_feedback(self.summary, "This part has no BOM. Shipping deducts the part itself.", "info")
             return
 
         self.requirements.setRowCount(len(requirements))
@@ -407,13 +537,18 @@ class BOMView(BaseView):
                 str(req.shortage),
             ]
             for c, value in enumerate(values):
-                item = QTableWidgetItem(value)
+                item = NumericTableWidgetItem(value) if c >= 2 else QTableWidgetItem(value)
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                item.setToolTip(value)
+                if c >= 2:
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                if c == 4 and req.shortage > 0:
+                    item.setForeground(QBrush(QColor("#ff9b9b")))
                 self.requirements.setItem(r, c, item)
         if total_shortage:
-            self.summary.setText(f"Blocked: component shortage totals {total_shortage} units.")
+            set_feedback(self.summary, f"Blocked: component shortage totals {total_shortage} units.", "error")
         else:
-            self.summary.setText("Ready: all required BOM components are available.")
+            set_feedback(self.summary, "Ready: all required BOM components are available.", "success")
 
     def _tree_item(self, node) -> QTreeWidgetItem:
         shortage = max(node.quantity_required - node.stock_available, 0) if not node.children else 0
@@ -426,6 +561,12 @@ class BOMView(BaseView):
                 status,
             ]
         )
+        item.setTextAlignment(1, Qt.AlignRight | Qt.AlignVCenter)
+        item.setTextAlignment(2, Qt.AlignRight | Qt.AlignVCenter)
+        if shortage:
+            item.setForeground(3, QBrush(QColor("#ff9b9b")))
+        elif not node.children:
+            item.setForeground(3, QBrush(QColor("#8ee3b5")))
         for child in node.children:
             item.addChild(self._tree_item(child))
         return item
@@ -459,18 +600,37 @@ class ReceiveView(BaseView):
         self.receive_btn.setEnabled(False)
         self.receive_btn.clicked.connect(self.receive)
         add_field(card.layout, "Part", self.part, required=True)
-        add_field(card.layout, "Quantity", self.qty, required=True)
-        add_field(card.layout, "Location", self.location, required=True)
-        add_field(card.layout, "Lot number", self.lot, required=True)
-        add_field(card.layout, "Reference", self.reference, hint="Optional.")
+        quantity_location = QHBoxLayout()
+        quantity_column = QVBoxLayout()
+        location_column = QVBoxLayout()
+        add_field(quantity_column, "Quantity", self.qty, required=True)
+        add_field(location_column, "Location", self.location, required=True)
+        quantity_location.addLayout(quantity_column, 1)
+        quantity_location.addLayout(location_column, 1)
+        card.layout.addLayout(quantity_location)
+        lot_reference = QHBoxLayout()
+        lot_column = QVBoxLayout()
+        reference_column = QVBoxLayout()
+        add_field(lot_column, "Lot number", self.lot, required=True)
+        add_field(reference_column, "Reference", self.reference, hint="Optional.")
+        lot_reference.addLayout(lot_column, 1)
+        lot_reference.addLayout(reference_column, 1)
+        card.layout.addLayout(lot_reference)
         card.layout.addWidget(self.preview)
         card.layout.addWidget(self.result)
         card.layout.addWidget(self.receive_btn)
-        self.part.currentTextChanged.connect(self.update_preview)
+        self.part.currentTextChanged.connect(self.part_changed)
         self.qty.textChanged.connect(self.update_preview)
         self.location.currentTextChanged.connect(self.update_preview)
         self.lot.textChanged.connect(self.update_preview)
         STORE.subscribe(self.refresh)
+        self.set_primary_widget(self.part)
+
+    def part_changed(self) -> None:
+        pn = self.part.part_number()
+        if pn in STORE.parts:
+            self.location.setCurrentText(STORE.parts[pn].location)
+        self.update_preview()
 
     def refresh(self) -> None:
         self.part.refresh()
@@ -534,9 +694,13 @@ class ShipView(BaseView):
         self.preview = QLabel("Choose a part and quantity.")
         self.preview.setObjectName("HelpText")
         self.component_lot_table = QTableWidget(0, 5)
-        self.component_lot_table.setHorizontalHeaderLabels(["Component", "Required", "Auto lot", "Allocated", "Lot stock"])
-        self.component_lot_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.component_lot_table.setHorizontalHeaderLabels(
+            ["Component", "Required", "Auto lot", "Allocated", "Lot stock"]
+        )
+        self.component_lot_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.component_lot_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.component_lot_table.verticalHeader().setVisible(False)
+        self.component_lot_table.setVisible(False)
         self.result = QLabel("Complete the required fields to create a shipment.")
         self.result.setObjectName("FeedbackLabel")
         self.ship_btn = QPushButton("Review & Ship")
@@ -544,22 +708,47 @@ class ShipView(BaseView):
         self.ship_btn.setEnabled(False)
         self.ship_btn.clicked.connect(self.ship)
         add_field(card.layout, "Part", self.part, required=True)
-        add_field(card.layout, "Quantity", self.qty, required=True)
-        add_field(card.layout, "Location", self.location, required=True)
-        add_field(card.layout, "Lot", self.lot, required=True, hint="For BOM shipments, select lots in the component table below.")
-        add_field(card.layout, "Recipient / project", self.recipient, required=True)
-        add_field(card.layout, "Carrier", self.carrier, hint="Optional.")
-        add_field(card.layout, "Tracking number", self.tracking, hint="Optional.")
+        quantity_location = QHBoxLayout()
+        quantity_column = QVBoxLayout()
+        location_column = QVBoxLayout()
+        add_field(quantity_column, "Quantity", self.qty, required=True)
+        add_field(location_column, "Location", self.location, required=True)
+        quantity_location.addLayout(quantity_column, 1)
+        quantity_location.addLayout(location_column, 1)
+        card.layout.addLayout(quantity_location)
+        lot_recipient = QHBoxLayout()
+        lot_column = QVBoxLayout()
+        recipient_column = QVBoxLayout()
+        add_field(lot_column, "Lot", self.lot, required=True, hint="BOM lots are allocated below.")
+        add_field(recipient_column, "Recipient / project", self.recipient, required=True)
+        lot_recipient.addLayout(lot_column, 1)
+        lot_recipient.addLayout(recipient_column, 1)
+        card.layout.addLayout(lot_recipient)
+        shipping_details = QHBoxLayout()
+        carrier_column = QVBoxLayout()
+        tracking_column = QVBoxLayout()
+        add_field(carrier_column, "Carrier", self.carrier, hint="Optional.")
+        add_field(tracking_column, "Tracking number", self.tracking, hint="Optional.")
+        shipping_details.addLayout(carrier_column, 1)
+        shipping_details.addLayout(tracking_column, 1)
+        card.layout.addLayout(shipping_details)
         card.layout.addWidget(self.preview)
         card.layout.addWidget(self.component_lot_table)
         card.layout.addWidget(self.result)
         card.layout.addWidget(self.ship_btn)
-        self.part.currentTextChanged.connect(self.update_preview)
+        self.part.currentTextChanged.connect(self.part_changed)
         self.qty.textChanged.connect(self.update_preview)
         self.location.currentTextChanged.connect(self.update_preview)
         self.lot.currentTextChanged.connect(self.update_preview)
         self.recipient.textChanged.connect(self.update_preview)
         STORE.subscribe(self.refresh)
+        self.set_primary_widget(self.part)
+
+    def part_changed(self) -> None:
+        pn = self.part.part_number()
+        if pn in STORE.parts:
+            self.location.setCurrentText(STORE.parts[pn].location)
+        self.update_preview()
 
     def refresh(self) -> None:
         self.part.refresh()
@@ -570,6 +759,7 @@ class ShipView(BaseView):
         loc = self.location.currentText()
         self._refresh_lot_combo()
         self.component_lot_table.setRowCount(0)
+        self.component_lot_table.setVisible(False)
         stock = STORE.stock_at(pn, loc) if pn in STORE.parts else 0
         qty = int(self.qty.text() or 0)
         self.ship_btn.setEnabled(False)
@@ -577,6 +767,7 @@ class ShipView(BaseView):
             self.preview.setText("Select a valid part.")
             return
         if pn in STORE.parts and qty > 0 and STORE.has_bom(pn):
+            self.component_lot_table.setVisible(True)
             requirements = STORE.bom_requirements(pn, qty, loc)
             allocations_complete = self._refresh_component_lots(requirements, loc)
             shortages = [req for req in requirements if req.shortage > 0]
@@ -586,7 +777,9 @@ class ShipView(BaseView):
             else:
                 count = len(requirements)
                 total = sum(req.quantity_required for req in requirements)
-                self.preview.setText(f"Ready: auto-allocated {total} units across {count} component parts using lot order.")
+                self.preview.setText(
+                    f"Ready: auto-allocated {total} units across {count} component parts using lot order."
+                )
                 self.ship_btn.setEnabled(bool(self.recipient.text().strip()))
             return
         lot = self.lot.currentText()
@@ -605,7 +798,11 @@ class ShipView(BaseView):
             component_lots = self._selected_component_lots(loc) if pn in STORE.parts and STORE.has_bom(pn) else None
             if not self.ship_btn.isEnabled():
                 raise ValueError("Complete the required fields and resolve stock shortages before shipping.")
-            allocation_text = "BOM lots shown in the allocation table" if component_lots is not None else f"lot {self.lot.currentText()}"
+            allocation_text = (
+                "BOM lots shown in the allocation table"
+                if component_lots is not None
+                else f"lot {self.lot.currentText()}"
+            )
             answer = QMessageBox.question(
                 self,
                 "Confirm shipment",
@@ -672,6 +869,9 @@ class ShipView(BaseView):
             for col, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                item.setToolTip(str(value))
+                if col in (1, 3, 4):
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.component_lot_table.setItem(row, col, item)
         return complete
 
@@ -700,9 +900,9 @@ class MoveAdjustView(BaseView):
         super().__init__("Move / Adjust", "Move stock between locations or correct a physical count.")
         self.toast = toast
         self.operator_getter = operator_getter
-        row = QHBoxLayout()
-        row.setSpacing(16)
-        self.root.addLayout(row)
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+        self.root.addWidget(self.tabs)
 
         move = Card("Move Stock", "Source decreases. Destination increases.")
         self.move_part = PartCombo()
@@ -729,7 +929,7 @@ class MoveAdjustView(BaseView):
         add_field(move.layout, "To", self.move_to, required=True)
         move.layout.addWidget(self.move_preview)
         move.layout.addWidget(self.move_btn)
-        row.addWidget(move)
+        self.tabs.addTab(move, "Move Stock")
 
         adjust = Card("Adjust Count", "Requires a reason. Keeps the audit trail.")
         self.adjust_part = PartCombo()
@@ -756,10 +956,10 @@ class MoveAdjustView(BaseView):
         add_field(adjust.layout, "Reason", self.reason, required=True)
         adjust.layout.addWidget(self.adjust_preview)
         adjust.layout.addWidget(self.adjust_btn)
-        row.addWidget(adjust)
-        self.move_part.currentTextChanged.connect(self.refresh_lots)
+        self.tabs.addTab(adjust, "Adjust Count")
+        self.move_part.currentTextChanged.connect(self.move_part_changed)
         self.move_from.currentTextChanged.connect(self.refresh_lots)
-        self.adjust_part.currentTextChanged.connect(self.refresh_lots)
+        self.adjust_part.currentTextChanged.connect(self.adjust_part_changed)
         self.adjust_location.currentTextChanged.connect(self.refresh_lots)
         self.move_qty.textChanged.connect(self.update_previews)
         self.move_lot.currentTextChanged.connect(self.update_previews)
@@ -768,6 +968,19 @@ class MoveAdjustView(BaseView):
         self.adjust_lot.currentTextChanged.connect(self.update_previews)
         self.reason.textChanged.connect(self.update_previews)
         STORE.subscribe(self.refresh)
+        self.set_primary_widget(self.move_part)
+
+    def move_part_changed(self) -> None:
+        pn = self.move_part.part_number()
+        if pn in STORE.parts:
+            self.move_from.setCurrentText(STORE.parts[pn].location)
+        self.refresh_lots()
+
+    def adjust_part_changed(self) -> None:
+        pn = self.adjust_part.part_number()
+        if pn in STORE.parts:
+            self.adjust_location.setCurrentText(STORE.parts[pn].location)
+        self.refresh_lots()
 
     def refresh(self) -> None:
         self.move_part.refresh()
@@ -798,7 +1011,11 @@ class MoveAdjustView(BaseView):
         adjust_part = self.adjust_part.part_number()
         adjust_lot = self.adjust_lot.currentText()
         count_text = self.adjust_count.text()
-        current = STORE.stock_at(adjust_part, self.adjust_location.currentText(), adjust_lot) if adjust_part and adjust_lot else 0
+        current = (
+            STORE.stock_at(adjust_part, self.adjust_location.currentText(), adjust_lot)
+            if adjust_part and adjust_lot
+            else 0
+        )
         new_count = int(count_text or 0)
         adjust_valid = bool(adjust_part and adjust_lot and count_text and self.reason.text().strip())
         self.adjust_btn.setEnabled(adjust_valid)
@@ -832,7 +1049,11 @@ class MoveAdjustView(BaseView):
             )
             self.toast("Stock moved.", "success")
             self.move_qty.clear()
-            set_feedback(self.move_preview, "Stock moved successfully. The paired move transactions are in History.", "success")
+            set_feedback(
+                self.move_preview,
+                "Stock moved successfully. The paired move transactions are in History.",
+                "success",
+            )
         except ValueError as e:
             set_feedback(self.move_preview, str(e), "error")
             self.toast(str(e), "error")
@@ -878,18 +1099,91 @@ class HistoryView(BaseView):
         super().__init__("History", "Trace inventory activity. No hidden changes.")
         card = Card("Transactions")
         self.root.addWidget(card)
+        filters = QHBoxLayout()
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Search part, lot, operator, reference, or location")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self.refresh)
+        self.type_filter = QComboBox()
+        self.type_filter.addItem("All transaction types", "")
+        self.type_filter.currentIndexChanged.connect(self.refresh)
+        clear_filters = QPushButton("Clear Filters")
+        clear_filters.setObjectName("SecondaryButton")
+        clear_filters.clicked.connect(self.clear_filters)
+        filters.addWidget(self.search, 2)
+        filters.addWidget(self.type_filter, 1)
+        filters.addWidget(clear_filters)
+        card.layout.addLayout(filters)
+        self.filter_summary = QLabel()
+        self.filter_summary.setObjectName("HelpText")
+        card.layout.addWidget(self.filter_summary)
         self.table = QTableWidget(0, 9)
-        self.table.setHorizontalHeaderLabels(["Time", "Type", "Part", "Lot", "Qty", "From", "To", "Operator", "Reference"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setHorizontalHeaderLabels(
+            ["Time", "Type", "Part", "Lot", "Qty", "From", "To", "Operator", "Reference"]
+        )
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(8, QHeaderView.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.setSortingEnabled(True)
         card.layout.addWidget(self.table)
         STORE.subscribe(self.refresh)
+        self.set_primary_widget(self.search)
         self.refresh()
 
+    def set_search(self, query: str) -> None:
+        self.search.setText(query)
+        self.search.setFocus(Qt.ShortcutFocusReason)
+        self.search.selectAll()
+
+    def clear_filters(self) -> None:
+        self.search.clear()
+        self.type_filter.setCurrentIndex(0)
+
     def refresh(self) -> None:
-        self.table.setRowCount(len(STORE.transactions))
-        for r, tx in enumerate(STORE.transactions):
+        transactions = STORE.transactions
+        current_type = self.type_filter.currentData() if hasattr(self, "type_filter") else ""
+        transaction_types = sorted({tx.tx_type for tx in transactions})
+        self.type_filter.blockSignals(True)
+        self.type_filter.clear()
+        self.type_filter.addItem("All transaction types", "")
+        for tx_type in transaction_types:
+            self.type_filter.addItem(tx_type.replace("_", " ").title(), tx_type)
+        selected_type_index = self.type_filter.findData(current_type)
+        self.type_filter.setCurrentIndex(max(selected_type_index, 0))
+        self.type_filter.blockSignals(False)
+
+        query = self.search.text().strip().lower() if hasattr(self, "search") else ""
+        tx_type = self.type_filter.currentData() or ""
+        filtered = []
+        for tx in transactions:
+            searchable = " ".join(
+                [
+                    tx.timestamp,
+                    tx.tx_type,
+                    tx.part_number,
+                    tx.lot_number,
+                    tx.location_from,
+                    tx.location_to,
+                    tx.operator,
+                    tx.reference,
+                    tx.notes,
+                ]
+            ).lower()
+            if query and query not in searchable:
+                continue
+            if tx_type and tx.tx_type != tx_type:
+                continue
+            filtered.append(tx)
+
+        shown = filtered[:1000]
+        capped_note = " (first 1,000)" if len(filtered) > 1000 else ""
+        self.filter_summary.setText(f"Showing {len(shown)} of {len(transactions)} transactions{capped_note}")
+        sorting = self.table.isSortingEnabled()
+        self.table.setSortingEnabled(False)
+        self.table.setRowCount(len(shown))
+        for r, tx in enumerate(shown):
             values = [
                 tx.timestamp,
                 tx.tx_type,
@@ -902,9 +1196,14 @@ class HistoryView(BaseView):
                 tx.reference,
             ]
             for c, value in enumerate(values):
-                item = QTableWidgetItem(value)
+                item = NumericTableWidgetItem(value) if c == 4 else QTableWidgetItem(value)
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                item.setToolTip(value)
+                if c == 4:
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item.setForeground(QBrush(QColor("#8ee3b5" if tx.quantity_change >= 0 else "#ff9b9b")))
                 self.table.setItem(r, c, item)
+        self.table.setSortingEnabled(sorting)
 
 
 class SettingsView(BaseView):
@@ -937,8 +1236,9 @@ class SettingsView(BaseView):
         backup_btn.setObjectName("SecondaryButton")
         backup_btn.setMinimumHeight(50)
         backup_btn.clicked.connect(self.create_backup)
-        self.backup_summary = QLabel("Startup backups run automatically.")
+        self.backup_summary = QLabel()
         self.backup_summary.setObjectName("HelpText")
+        self.backup_summary.setWordWrap(True)
         backup_card.layout.addWidget(backup_btn)
         backup_card.layout.addWidget(self.backup_summary)
         grid.addWidget(backup_card, 0, 1)
@@ -956,9 +1256,14 @@ class SettingsView(BaseView):
             import_buttons.addWidget(btn)
         self.preview_summary = QLabel("Choose a CSV to preview.")
         self.preview_summary.setObjectName("HelpText")
+        self.preview_summary.setWordWrap(True)
+        self.selected_file = QLabel("No file selected.")
+        self.selected_file.setObjectName("Muted")
+        self.selected_file.setWordWrap(True)
         self.issue_table = QTableWidget(0, 4)
         self.issue_table.setHorizontalHeaderLabels(["Row", "Level", "Field", "Message"])
-        self.issue_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.issue_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.issue_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.issue_table.verticalHeader().setVisible(False)
         self.commit_btn = QPushButton("Commit Import")
         self.commit_btn.setObjectName("SuccessButton")
@@ -966,6 +1271,7 @@ class SettingsView(BaseView):
         self.commit_btn.setEnabled(False)
         self.commit_btn.clicked.connect(self.commit_import)
         import_card.layout.addLayout(import_buttons)
+        import_card.layout.addWidget(self.selected_file)
         import_card.layout.addWidget(self.preview_summary)
         import_card.layout.addWidget(self.issue_table)
         import_card.layout.addWidget(self.commit_btn)
@@ -982,6 +1288,7 @@ class SettingsView(BaseView):
         folders_card.layout.addLayout(folder_buttons)
         grid.addWidget(folders_card, 2, 0, 1, 2)
         self.root.addStretch()
+        self.refresh_backup_status()
 
     def export_all(self) -> None:
         try:
@@ -997,6 +1304,8 @@ class SettingsView(BaseView):
             return
         self.preview_kind = kind
         self.preview_path = path
+        self.selected_file.setText(f"Selected file: {Path(path).name}")
+        self.selected_file.setToolTip(path)
         try:
             preview = {
                 "parts": self.service.preview_parts_import_csv,
@@ -1004,7 +1313,7 @@ class SettingsView(BaseView):
                 "bom": self.service.preview_bom_import_csv,
             }[kind](path)
             self.preview_summary.setText(
-                f"{kind.title()} preview — {path}: {preview.row_count} rows, {preview.valid_count} valid, "
+                f"{kind.title()} preview: {preview.row_count} rows, {preview.valid_count} valid, "
                 f"{len(preview.errors)} errors, {len(preview.warnings)} warnings."
             )
             self.preview_row_count = preview.row_count
@@ -1027,7 +1336,8 @@ class SettingsView(BaseView):
             answer = QMessageBox.question(
                 self,
                 "Confirm CSV import",
-                f"Import {self.preview_row_count} {self.preview_kind} rows from {self.preview_path}? A backup will be created first.",
+                f"Import {self.preview_row_count} {self.preview_kind} rows from {self.preview_path}? "
+                "A backup will be created first.",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
@@ -1049,8 +1359,18 @@ class SettingsView(BaseView):
         if backup is None:
             self.toast("No database file exists to back up.", "error")
             return
-        self.backup_summary.setText(str(backup))
+        self.refresh_backup_status()
         self.toast(f"Backup created: {backup.name}", "success")
+
+    def refresh_backup_status(self) -> None:
+        backups = sorted(BACKUP_DIR.glob("inventory-*.db"), key=lambda path: path.stat().st_mtime, reverse=True)
+        if not backups:
+            self.backup_summary.setText("No backup found yet. Startup backups run automatically.")
+            return
+        latest = backups[0]
+        timestamp = datetime.fromtimestamp(latest.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+        size_kb = max(1, latest.stat().st_size // 1024)
+        self.backup_summary.setText(f"Last backup: {timestamp} — {latest.name} ({size_kb} KB)")
 
     def open_folder(self, path) -> None:
         path.mkdir(parents=True, exist_ok=True)
@@ -1063,4 +1383,9 @@ class SettingsView(BaseView):
             for col, value in enumerate(values):
                 item = QTableWidgetItem(value)
                 item.setFlags(item.flags() ^ Qt.ItemIsEditable)
+                item.setToolTip(value)
+                if issue.level == "error":
+                    item.setForeground(QBrush(QColor("#ff9b9b")))
+                elif issue.level == "warning":
+                    item.setForeground(QBrush(QColor("#f6c343")))
                 self.issue_table.setItem(row, col, item)

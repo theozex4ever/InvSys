@@ -185,6 +185,28 @@ QScrollBar::handle:vertical {
 QScrollBar::handle:vertical:hover { background: #606975; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+QTabWidget::pane {
+    border: 1px solid #343941;
+    border-radius: 8px;
+    background: #202326;
+    top: -1px;
+}
+QTabBar::tab {
+    background: #191c1f;
+    color: #b2b8c2;
+    border: 1px solid #343941;
+    padding: 11px 24px;
+    min-width: 130px;
+    font-weight: 800;
+}
+QTabBar::tab:selected {
+    background: #2f6fed;
+    color: #ffffff;
+}
+QTabBar::tab:hover:!selected { background: #24282d; }
+QTableWidget {
+    alternate-background-color: #1b1e21;
+}
 QListWidget, QTableWidget {
     background: #17191c;
     color: #f2f4f7;
