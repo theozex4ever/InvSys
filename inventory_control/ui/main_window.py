@@ -26,7 +26,7 @@ from inventory_control.ui.views import (
     SettingsView,
     ShipView,
 )
-from inventory_control.ui.widgets import ToastManager
+from inventory_control.ui.widgets import ToastManager, bind_required_field
 
 
 class MainWindow(QMainWindow):
@@ -90,7 +90,6 @@ class MainWindow(QMainWindow):
         side.addStretch()
 
         self.operator = QLineEdit(STORE.get_setting("last_operator"))
-        self.operator.setPlaceholderText("Operator name")
         self.operator.setMinimumHeight(44)
         self.operator.setAccessibleName("Active operator name")
         self.operator.textChanged.connect(self._operator_changed)
@@ -101,6 +100,7 @@ class MainWindow(QMainWindow):
         op_layout.setContentsMargins(12, 12, 12, 12)
         op_label = QLabel("Operator")
         op_label.setObjectName("SidebarSubtle")
+        bind_required_field(self.operator, op_label)
         op_layout.addWidget(op_label)
         op_layout.addWidget(self.operator)
         side.addWidget(op_card)
@@ -115,10 +115,10 @@ class MainWindow(QMainWindow):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(24, 12, 24, 12)
         self.global_search = QLineEdit()
-        self.global_search.setPlaceholderText("Search parts by number or description (Ctrl+K)")
         self.global_search.setAccessibleName("Global part search")
         self.global_search.setClearButtonEnabled(True)
         self.global_search.returnPressed.connect(self._submit_global_search)
+        header_layout.addWidget(QLabel("Search parts"))
         header_layout.addWidget(self.global_search)
         self.status = QLabel("Local mode | SQLite")
         self.status.setObjectName("Muted")
@@ -144,9 +144,6 @@ class MainWindow(QMainWindow):
         return operator
 
     def _operator_changed(self, text: str) -> None:
-        self.operator.setProperty("invalid", not bool(text.strip()))
-        self.operator.style().unpolish(self.operator)
-        self.operator.style().polish(self.operator)
         self.status.setText(f"Operator: {text.strip() or 'not set'}  |  Local mode  |  SQLite")
 
     def _save_operator(self) -> None:

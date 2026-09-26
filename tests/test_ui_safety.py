@@ -1,6 +1,6 @@
 """Regression tests for inventory UI safety and responsive behavior."""
 
-from PySide6.QtWidgets import QScrollArea, QTabWidget
+from PySide6.QtWidgets import QLabel, QScrollArea, QTabWidget
 
 import inventory_control.ui.main_window as main_window_module
 import inventory_control.ui.views as views_module
@@ -189,6 +189,47 @@ def test_part_create_action_requires_required_fields(qtbot, blank_store, monkeyp
     assert view.add_btn.isEnabled() is False
     view.description.setText("Widget")
     assert view.add_btn.isEnabled() is True
+
+
+def test_required_highlight_clears_and_returns_with_field_value(qtbot, blank_store, monkeypatch):
+    monkeypatch.setattr(views_module, "STORE", blank_store)
+    view = PartsView(lambda *_: None)
+    qtbot.addWidget(view)
+    label = next(
+        item for item in view.findChildren(QLabel)
+        if item.objectName() == "FieldLabel" and item.text() == "Part number"
+    )
+
+    assert view.part_number.property("missing") is True
+    assert label.property("missing") is True
+
+    view.part_number.setText("ABC-1")
+    assert view.part_number.property("missing") is False
+    assert label.property("missing") is False
+
+    view.part_number.setText("   ")
+    assert view.part_number.property("missing") is True
+    assert label.property("missing") is True
+
+
+def test_required_part_selector_clears_highlight_only_for_valid_part(qtbot, blank_store, monkeypatch):
+    blank_store.add_part("ABC-1", "Widget")
+    monkeypatch.setattr(widgets_module, "STORE", blank_store)
+    combo = PartCombo()
+    qtbot.addWidget(combo)
+    label = QLabel("Part")
+    widgets_module.bind_required_field(combo, label)
+
+    assert combo.property("missing") is True
+    combo.setEditText("NOT-A-PART")
+    assert combo.property("missing") is True
+    combo.setCurrentIndex(combo.findData("ABC-1"))
+    assert combo.property("missing") is False
+    assert label.property("missing") is False
+    combo.refresh()
+    assert combo.property("missing") is False
+    combo.setCurrentIndex(-1)
+    assert combo.property("missing") is True
 
 
 def test_standard_shipping_hides_bom_allocation_table(qtbot, blank_store, monkeypatch):

@@ -65,10 +65,8 @@ QLabel#FieldLabel {
     font-size: 12px;
     font-weight: 800;
 }
-QLabel#RequiredMark {
-    color: #f6c343;
-    font-size: 12px;
-    font-weight: 900;
+QLabel#FieldLabel[missing="true"], QLabel#SidebarSubtle[missing="true"] {
+    color: #ffb8bd;
 }
 QLabel#Metric {
     color: #ffffff;
@@ -83,8 +81,18 @@ QLineEdit, QComboBox, QTextEdit {
     padding: 10px 11px;
     selection-background-color: #2f6fed;
 }
+QLineEdit[missing="true"], QComboBox[missing="true"], QTextEdit[missing="true"] {
+    background: #2b1d20;
+    border: 1px solid #bd6b72;
+}
 QLineEdit:focus, QComboBox:focus, QTextEdit:focus {
     border: 2px solid #6ea8ff;
+    padding: 9px 10px;
+}
+QLineEdit[missing="true"]:focus, QComboBox[missing="true"]:focus,
+QTextEdit[missing="true"]:focus {
+    background: #2b1d20;
+    border: 2px solid #f29ca5;
     padding: 9px 10px;
 }
 QLineEdit[invalid="true"], QComboBox[invalid="true"] {

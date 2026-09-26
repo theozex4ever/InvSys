@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -214,8 +215,6 @@ class PartCombo(QComboBox):
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setFilterMode(Qt.MatchContains)
         self.setCompleter(completer)
-        if self.lineEdit() is not None:
-            self.lineEdit().setPlaceholderText("Select or search for a part")
         self.refresh()
 
     def refresh(self) -> None:
@@ -231,6 +230,9 @@ class PartCombo(QComboBox):
         if matching_index < 0:
             self.setEditText("")
         self.blockSignals(False)
+        refresh_required = getattr(self, "_refresh_required_state", None)
+        if refresh_required is not None:
+            refresh_required()
 
     def part_number(self) -> str:
         text = self.currentText().strip()
@@ -255,19 +257,43 @@ def set_feedback(label: QLabel, message: str, level: str = "info") -> None:
     label.style().polish(label)
 
 
+def bind_required_field(widget: QWidget, label: QLabel) -> None:
+    widget.setProperty("required", True)
+    widget.setAccessibleDescription("Required field")
+
+    def refresh(*_args) -> None:
+        if isinstance(widget, PartCombo):
+            filled = widget.has_valid_part()
+        elif isinstance(widget, QComboBox):
+            filled = widget.currentIndex() >= 0 and bool(widget.currentText().strip())
+        else:
+            filled = bool(widget.text().strip())
+        for target in (widget, label):
+            target.setProperty("missing", not filled)
+            target.style().unpolish(target)
+            target.style().polish(target)
+
+    widget._refresh_required_state = refresh
+    if isinstance(widget, QComboBox):
+        widget.currentIndexChanged.connect(refresh)
+        if widget.isEditable():
+            widget.editTextChanged.connect(refresh)
+    elif isinstance(widget, QLineEdit):
+        widget.textChanged.connect(refresh)
+    refresh()
+
+
 def add_field(layout: QVBoxLayout, label: str, widget: QWidget, required: bool = False, hint: str = "") -> None:
     label_row = QHBoxLayout()
     field_label = QLabel(label)
     field_label.setObjectName("FieldLabel")
     label_row.addWidget(field_label)
-    if required:
-        required_label = QLabel("Required")
-        required_label.setObjectName("RequiredMark")
-        label_row.addWidget(required_label)
     label_row.addStretch()
     layout.addLayout(label_row)
     widget.setMinimumHeight(44)
     widget.setAccessibleName(label)
+    if required:
+        bind_required_field(widget, field_label)
     layout.addWidget(widget)
     if hint:
         hint_label = QLabel(hint)
