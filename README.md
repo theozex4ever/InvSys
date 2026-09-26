@@ -11,7 +11,7 @@ This application handles the core inventory workflows that matter most to operat
 - **Receive stock** — add incoming inventory with a full transaction record
 - **Ship stock** — reduce inventory and generate a shipment record in one action
 - **Nested BOM shipping** — ship an assembly/kit and automatically consume the required component parts
-- **BOM trace view** — visualize parent/child structure, nested requirements, component availability, and shortages
+- **BOM flowchart** — follow nested assemblies to their materials, see how many final products current stock can build, and spot low capacity at 500 builds or critical capacity at 100 builds
 - **Move stock** — relocate parts between locations with paired MOVE_OUT / MOVE_IN transactions
 - **Adjust stock** — correct physical count discrepancies with a required reason field
 - **Parts catalog** — searchable part master with active/inactive state, minimum quantities, and per-location balances

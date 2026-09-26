@@ -6,6 +6,7 @@ import inventory_control.ui.main_window as main_window_module
 import inventory_control.ui.views as views_module
 import inventory_control.ui.widgets as widgets_module
 from inventory_control.ui.main_window import MainWindow
+from inventory_control.ui.bom_flowchart import BOMFlowchart, capacity_level
 from inventory_control.ui.views import (
     BOMView,
     DashboardView,
@@ -177,6 +178,39 @@ def test_bom_row_selection_enters_explicit_update_mode(qtbot, blank_store, monke
     assert view.quantity_per.text() == "2"
     assert view.component_save_btn.text() == "Update Component"
     assert view.component_save_btn.isEnabled() is True
+
+
+def test_bom_flowchart_uses_final_build_alert_thresholds(qtbot, blank_store, monkeypatch):
+    blank_store.add_part("KIT", "Finished kit")
+    blank_store.add_part("SCREW", "Screw")
+    blank_store.add_bom_component("KIT", "SCREW", 2)
+    blank_store.receive("SCREW", 200, "Stock", "LOT-1", "setup")
+    monkeypatch.setattr(widgets_module, "STORE", blank_store)
+    monkeypatch.setattr(views_module, "STORE", blank_store)
+    view = BOMView(lambda *_: None)
+    qtbot.addWidget(view)
+    view.visual_part.setCurrentIndex(view.visual_part.findData("KIT"))
+
+    assert isinstance(view.flowchart, BOMFlowchart)
+    assert view.flowchart._node_count == 2
+    assert view.capacity.property("level") == "critical"
+    assert "100 final products" in view.capacity.text()
+
+    blank_store.receive("SCREW", 800, "Stock", "LOT-2", "setup")
+    assert view.capacity.property("level") == "low"
+    assert "500 final products" in view.capacity.text()
+
+    blank_store.receive("SCREW", 2, "Stock", "LOT-3", "setup")
+    assert view.capacity.property("level") == "ready"
+    assert "501 final products" in view.capacity.text()
+
+
+def test_capacity_level_boundaries():
+    assert capacity_level(0) == "critical"
+    assert capacity_level(100) == "critical"
+    assert capacity_level(101) == "low"
+    assert capacity_level(500) == "low"
+    assert capacity_level(501) == "ready"
 
 
 def test_part_create_action_requires_required_fields(qtbot, blank_store, monkeypatch):

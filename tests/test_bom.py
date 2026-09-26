@@ -80,6 +80,36 @@ class TestNestedBOMRequirements:
         assert screw.shortage == 2
 
 
+class TestBOMBuildCapacity:
+    def test_capacity_uses_final_product_units_and_selected_location(self, blank_store):
+        build_nested_bom(blank_store)
+        blank_store.receive("SCREW-001", 900, "Stock", "LOT-1", "setup")
+        blank_store.receive("NUT-001", 800, "Stock", "LOT-1", "setup")
+        blank_store.receive("NUT-001", 400, "Receiving", "LOT-2", "setup")
+
+        buildable, capacities = blank_store.bom_build_capacity("KIT-001", "Stock")
+
+        assert capacities == {"NUT-001": 200, "SCREW-001": 150}
+        assert buildable == 150
+
+    def test_shared_material_counts_all_branches(self, blank_store):
+        for part in ("KIT", "LEFT", "RIGHT", "SCREW"):
+            blank_store.add_part(part, part)
+        blank_store.add_bom_component("KIT", "LEFT", 1)
+        blank_store.add_bom_component("KIT", "RIGHT", 1)
+        blank_store.add_bom_component("LEFT", "SCREW", 2)
+        blank_store.add_bom_component("RIGHT", "SCREW", 3)
+        blank_store.receive("SCREW", 504, "Stock", "LOT-1", "setup")
+
+        assert blank_store.bom_build_capacity("KIT", "Stock") == (100, {"SCREW": 100})
+
+    def test_part_without_bom_uses_its_own_stock(self, blank_store):
+        blank_store.add_part("SINGLE", "Standalone")
+        blank_store.receive("SINGLE", 501, "Stock", "LOT-1", "setup")
+
+        assert blank_store.bom_build_capacity("SINGLE", "Stock") == (501, {"SINGLE": 501})
+
+
 class TestBOMShip:
     def test_shipping_bom_parent_deducts_leaf_components(self, blank_store):
         build_nested_bom(blank_store)
