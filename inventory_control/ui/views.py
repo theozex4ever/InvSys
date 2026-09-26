@@ -20,8 +20,6 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
-    QTreeWidget,
-    QTreeWidgetItem,
     QVBoxLayout,
 )
 
@@ -30,6 +28,7 @@ from inventory_control.config import BACKUP_DIR, DB_PATH, EXPORT_DIR
 from inventory_control.import_export import ImportExportService
 from inventory_control.store import STORE
 from inventory_control.models import LotAllocation
+from inventory_control.ui.bom_flowchart import BOMFlowchart, capacity_level
 from inventory_control.ui.widgets import BaseView, Card, PartCombo, add_field, set_feedback
 
 
@@ -372,7 +371,7 @@ class BOMView(BaseView):
         builder.layout.addWidget(self.remove_component_btn)
         row.addWidget(builder, 1)
 
-        visual = Card("BOM Trace", "Tree shows nesting. Requirements show the exact leaf parts consumed by shipping.")
+        visual = Card("BOM Flowchart", "Follow each assembly to its materials. Colors show final-product build capacity.")
         self.visual_part = PartCombo()
         self.build_qty = QLineEdit("1")
         self.build_qty.setValidator(QIntValidator(1, 999999))
@@ -381,19 +380,46 @@ class BOMView(BaseView):
         self.location.setCurrentText("Stock")
         self.summary = QLabel()
         self.summary.setObjectName("FeedbackLabel")
-        self.tree = QTreeWidget()
-        self.tree.setColumnCount(4)
-        self.tree.setHeaderLabels(["Part", "Required", "Stock", "Status"])
+        self.capacity = QLabel("Select a product to see build capacity.")
+        self.capacity.setObjectName("BOMCapacity")
+        self.flowchart = BOMFlowchart()
+        chart_controls = QHBoxLayout()
+        legend = QLabel(
+            '<span style="color:#f16e75">●</span> Critical ≤100  '
+            '<span style="color:#f6c85f">●</span> Low ≤500  '
+            '<span style="color:#80b5f6">●</span> Ready >500 final builds'
+        )
+        legend.setObjectName("BOMLegend")
+        legend.setAccessibleName("Critical at 100 or fewer; low at 500 or fewer; ready above 500 final builds")
+        legend.setWordWrap(True)
+        chart_controls.addWidget(legend, 1)
+        for label, action in (("−", self.flowchart.zoom_out), ("+", self.flowchart.zoom_in),
+                              ("Fit", self.flowchart.fit_chart)):
+            button = QPushButton(label)
+            button.setObjectName("SecondaryButton")
+            button.setToolTip(f"{label} flowchart")
+            button.clicked.connect(action)
+            chart_controls.addWidget(button)
         self.requirements = QTableWidget(0, 5)
         self.requirements.setHorizontalHeaderLabels(["Component", "Description", "Required", "Available", "Shortage"])
         self.requirements.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.requirements.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.requirements.verticalHeader().setVisible(False)
-        add_field(visual.layout, "Visualize part", self.visual_part, required=True)
-        add_field(visual.layout, "Ship quantity", self.build_qty, required=True)
-        add_field(visual.layout, "Consume from location", self.location, required=True)
+        selectors = QHBoxLayout()
+        selectors.setSpacing(12)
+        for title, field, stretch in (
+            ("Visualize part", self.visual_part, 3),
+            ("Ship quantity", self.build_qty, 1),
+            ("Consume from location", self.location, 2),
+        ):
+            column = QVBoxLayout()
+            add_field(column, title, field, required=True)
+            selectors.addLayout(column, stretch)
+        visual.layout.addLayout(selectors)
+        visual.layout.addWidget(self.capacity)
         visual.layout.addWidget(self.summary)
-        visual.layout.addWidget(self.tree)
+        visual.layout.addLayout(chart_controls)
+        visual.layout.addWidget(self.flowchart)
         visual.layout.addWidget(self.requirements)
         row.addWidget(visual, 2)
 
@@ -505,21 +531,31 @@ class BOMView(BaseView):
         part_number = self.visual_part.part_number()
         qty = int(self.build_qty.text() or 0)
         location = self.location.currentText()
-        self.tree.clear()
+        self.flowchart.clear_bom()
         self.requirements.setRowCount(0)
         if part_number not in STORE.parts or qty <= 0:
+            self.capacity.setText("Select a product to see build capacity.")
             set_feedback(self.summary, "Choose a part and quantity.", "info")
             return
         try:
             root = STORE.bom_tree(part_number, qty, location)
-            root_item = self._tree_item(root)
-            self.tree.addTopLevelItem(root_item)
-            root_item.setExpanded(True)
-            self.tree.expandAll()
+            buildable, capacities = STORE.bom_build_capacity(part_number, location)
+            self.flowchart.set_bom(root, capacities)
             requirements = STORE.bom_requirements(part_number, qty, location)
         except ValueError as e:
+            self.capacity.setText("")
             set_feedback(self.summary, str(e), "error")
             return
+
+        limiting = sorted(part for part, capacity in capacities.items() if capacity == buildable)
+        level = capacity_level(buildable)
+        self.capacity.setText(
+            f"{buildable:,} final products buildable at {location}  ·  "
+            f"{level.title()}  ·  Limited by {', '.join(limiting)}"
+        )
+        self.capacity.setProperty("level", level)
+        self.capacity.style().unpolish(self.capacity)
+        self.capacity.style().polish(self.capacity)
 
         if not requirements:
             set_feedback(self.summary, "This part has no BOM. Shipping deducts the part itself.", "info")
@@ -546,30 +582,9 @@ class BOMView(BaseView):
                     item.setForeground(QBrush(QColor("#ff9b9b")))
                 self.requirements.setItem(r, c, item)
         if total_shortage:
-            set_feedback(self.summary, f"Blocked: component shortage totals {total_shortage} units.", "error")
+            set_feedback(self.summary, f"Ship {qty:,}: blocked by {total_shortage:,} missing component units.", "error")
         else:
-            set_feedback(self.summary, "Ready: all required BOM components are available.", "success")
-
-    def _tree_item(self, node) -> QTreeWidgetItem:
-        shortage = max(node.quantity_required - node.stock_available, 0) if not node.children else 0
-        status = "Assembly" if node.children else ("OK" if shortage == 0 else f"Short {shortage}")
-        item = QTreeWidgetItem(
-            [
-                f"{node.part_number} - {node.description}",
-                str(node.quantity_required),
-                str(node.stock_available),
-                status,
-            ]
-        )
-        item.setTextAlignment(1, Qt.AlignRight | Qt.AlignVCenter)
-        item.setTextAlignment(2, Qt.AlignRight | Qt.AlignVCenter)
-        if shortage:
-            item.setForeground(3, QBrush(QColor("#ff9b9b")))
-        elif not node.children:
-            item.setForeground(3, QBrush(QColor("#8ee3b5")))
-        for child in node.children:
-            item.addChild(self._tree_item(child))
-        return item
+            set_feedback(self.summary, f"Ship {qty:,}: all required components are available.", "success")
 
 
 class ReceiveView(BaseView):

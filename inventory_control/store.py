@@ -430,6 +430,22 @@ class InventoryStore:
     def bom_can_ship(self, part_number: str, qty: int, location: str) -> bool:
         return all(req.shortage == 0 for req in self.bom_requirements(part_number, qty, location))
 
+    def bom_build_capacity(self, part_number: str, location: str) -> tuple[int, Dict[str, int]]:
+        """Return final products buildable and each leaf's final-product capacity.
+
+        Requirements are exploded for one final product so a material used in
+        multiple branches is counted once with its combined quantity.
+        """
+        requirements = self.bom_requirements(part_number, 1, location)
+        if not requirements:
+            stock = self.stock_at(part_number, location)
+            return stock, {part_number.strip().upper(): stock}
+        capacities = {
+            req.part_number: req.stock_available // req.quantity_required
+            for req in requirements
+        }
+        return min(capacities.values()), capacities
+
     def total_stock(self, part_number: str) -> int:
         part_number = self._normalize_part_number(part_number)
         with self.session_factory() as session:

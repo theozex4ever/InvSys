@@ -75,6 +75,33 @@ QLabel#Metric {
     font-size: 30px;
     font-weight: 900;
 }
+QLabel#BOMCapacity {
+    background: #243447;
+    color: #d8eaff;
+    border: 1px solid #6389ae;
+    border-radius: 7px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 800;
+}
+QLabel#BOMCapacity[level="low"] {
+    background: #4c3e23;
+    color: #ffe3a0;
+    border-color: #d4aa45;
+}
+QLabel#BOMCapacity[level="critical"] {
+    background: #51272d;
+    color: #ffd7db;
+    border-color: #e36a72;
+}
+QLabel#BOMLegend {
+    color: #c2cbd6;
+    font-size: 11px;
+}
+QGraphicsView#BOMFlowchart {
+    border: 1px solid #3b4652;
+    border-radius: 8px;
+}
 QLineEdit, QComboBox, QTextEdit {
     background: #111315;
     color: #f2f4f7;
