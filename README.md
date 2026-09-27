@@ -118,7 +118,7 @@ SQLite is opened with foreign keys, WAL mode, and a busy timeout enabled.
 
 Lot numbers are required when receiving stock. Opening inventory should be entered through **Receive Stock** with a real lot number and a reference such as `OPENING`.
 
-Shipping, moving, and adjusting stock operate against a selected lot. For BOM shipments, the operator selects the component lot for each required leaf component.
+Shipping a single part, moving, and adjusting stock operate against a selected lot. For BOM shipments, the app automatically allocates each required leaf material from positive-stock lots in lot-number order. The operator reviews those allocations before shipping; if they change before submission, the shipment is blocked until the updated allocation is reviewed.
 
 ## Database Schema
 

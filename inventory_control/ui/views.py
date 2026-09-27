@@ -27,7 +27,7 @@ from inventory_control.backup import backup_database
 from inventory_control.config import BACKUP_DIR, DB_PATH, EXPORT_DIR
 from inventory_control.import_export import ImportExportService
 from inventory_control.store import STORE
-from inventory_control.models import LotAllocation
+from inventory_control.models import BOMShipmentPlan
 from inventory_control.ui.bom_flowchart import BOMFlowchart, capacity_level
 from inventory_control.ui.widgets import BaseView, Card, PartCombo, add_field, set_feedback
 
@@ -535,32 +535,30 @@ class BOMView(BaseView):
             set_feedback(self.summary, "Choose a part and quantity.", "info")
             return
         try:
-            root = STORE.bom_tree(part_number, qty, location)
-            buildable, capacities = STORE.bom_build_capacity(part_number, location)
-            self.flowchart.set_bom(root, capacities)
-            requirements = STORE.bom_requirements(part_number, qty, location)
+            availability = STORE.bom_availability(part_number, qty, location)
+            self.flowchart.set_bom(availability.tree, availability.capacities)
         except ValueError as e:
             self.capacity.setText("")
             set_feedback(self.summary, str(e), "error")
             return
 
-        limiting = sorted(part for part, capacity in capacities.items() if capacity == buildable)
-        level = capacity_level(buildable)
+        limiting = sorted(part for part, capacity in availability.capacities.items() if capacity == availability.buildable)
+        level = capacity_level(availability.buildable)
         self.capacity.setText(
-            f"{buildable:,} final products buildable at {location}  ·  "
+            f"{availability.buildable:,} final products buildable at {location}  ·  "
             f"{level.title()}  ·  Limited by {', '.join(limiting)}"
         )
         self.capacity.setProperty("level", level)
         self.capacity.style().unpolish(self.capacity)
         self.capacity.style().polish(self.capacity)
 
-        if not requirements:
+        if not availability.requirements:
             set_feedback(self.summary, "This part has no BOM. Shipping deducts the part itself.", "info")
             return
 
-        self.requirements.setRowCount(len(requirements))
+        self.requirements.setRowCount(len(availability.requirements))
         total_shortage = 0
-        for r, req in enumerate(requirements):
+        for r, req in enumerate(availability.requirements):
             total_shortage += req.shortage
             values = [
                 req.part_number,
@@ -706,6 +704,7 @@ class ShipView(BaseView):
         self.component_lot_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.component_lot_table.verticalHeader().setVisible(False)
         self.component_lot_table.setVisible(False)
+        self._bom_plan: BOMShipmentPlan | None = None
         self.result = QLabel("Complete the required fields to create a shipment.")
         self.result.setObjectName("FeedbackLabel")
         self.ship_btn = QPushButton("Review & Ship")
@@ -762,6 +761,7 @@ class ShipView(BaseView):
     def update_preview(self) -> None:
         pn = self.part.part_number()
         loc = self.location.currentText()
+        self._bom_plan = None
         self._refresh_lot_combo()
         self.component_lot_table.setRowCount(0)
         self.component_lot_table.setVisible(False)
@@ -773,15 +773,16 @@ class ShipView(BaseView):
             return
         if pn in STORE.parts and qty > 0 and STORE.has_bom(pn):
             self.component_lot_table.setVisible(True)
-            requirements = STORE.bom_requirements(pn, qty, loc)
-            allocations_complete = self._refresh_component_lots(requirements, loc)
-            shortages = [req for req in requirements if req.shortage > 0]
-            if shortages or not allocations_complete:
+            plan = STORE.prepare_bom_shipment(pn, qty, loc)
+            self._bom_plan = plan
+            self._show_component_lots(plan)
+            shortages = [req for req in plan.requirements if req.shortage > 0]
+            if not plan.ready:
                 detail = "; ".join(f"{req.part_number} short {req.shortage}" for req in shortages[:3])
-                self.preview.setText(f"Blocked: BOM component shortage. {detail}".rstrip())
+                self.preview.setText(f"Blocked: BOM component shortage. {detail or 'Review available lots.'}")
             else:
-                count = len(requirements)
-                total = sum(req.quantity_required for req in requirements)
+                count = len(plan.requirements)
+                total = sum(req.quantity_required for req in plan.requirements)
                 self.preview.setText(
                     f"Ready: auto-allocated {total} units across {count} component parts using lot order."
                 )
@@ -800,12 +801,12 @@ class ShipView(BaseView):
             qty = int(self.qty.text() or 0)
             loc = self.location.currentText()
             operator = self.operator_getter()
-            component_lots = self._selected_component_lots(loc) if pn in STORE.parts and STORE.has_bom(pn) else None
+            plan = self._bom_plan
             if not self.ship_btn.isEnabled():
                 raise ValueError("Complete the required fields and resolve stock shortages before shipping.")
             allocation_text = (
                 "BOM lots shown in the allocation table"
-                if component_lots is not None
+                if plan is not None
                 else f"lot {self.lot.currentText()}"
             )
             answer = QMessageBox.question(
@@ -823,10 +824,10 @@ class ShipView(BaseView):
                 loc,
                 self.recipient.text(),
                 operator,
-                self.lot.currentText() if component_lots is None else None,
-                component_lots,
-                self.carrier.text(),
-                self.tracking.text(),
+                lot_number=self.lot.currentText() if plan is None else None,
+                carrier=self.carrier.text(),
+                tracking=self.tracking.text(),
+                expected_bom_plan=plan,
             )
             suffix = " BOM components deducted." if STORE.shipments and STORE.shipments[0].consumed_components else ""
             self.toast(f"Shipped {qty} of {pn}. Shipment: {sn}.{suffix}", "success")
@@ -836,6 +837,8 @@ class ShipView(BaseView):
             self.tracking.clear()
             set_feedback(self.result, f"Shipment {sn} created: {qty} of {pn} shipped from {loc}.", "success")
         except ValueError as e:
+            if str(e).startswith("BOM lot allocation changed"):
+                self.update_preview()
             set_feedback(self.result, str(e), "error")
             self.toast(str(e), "error")
 
@@ -851,24 +854,20 @@ class ShipView(BaseView):
         self.lot.setCurrentText(current)
         self.lot.blockSignals(False)
 
-    def _refresh_component_lots(self, requirements, location: str) -> bool:
+    def _show_component_lots(self, plan: BOMShipmentPlan) -> None:
         rows: list[tuple[str, int, str, int, int]] = []
-        complete = True
-        for req in requirements:
-            remaining = req.quantity_required
-            lots = STORE.lots_for_part(req.part_number, location, positive_only=True)
-            for lot in lots:
-                available = STORE.stock_at(req.part_number, location, lot.lot_number)
-                allocated = min(remaining, available)
-                if allocated > 0:
-                    rows.append((req.part_number, req.quantity_required, lot.lot_number, allocated, available))
-                    remaining -= allocated
-                if remaining == 0:
-                    break
-            if remaining > 0:
-                complete = False
-                if not lots:
-                    rows.append((req.part_number, req.quantity_required, "No stock lot", 0, 0))
+        for line in plan.lines:
+            rows.append((
+                line.part_number,
+                line.quantity_required,
+                line.lot_number,
+                line.quantity_allocated,
+                line.lot_stock,
+            ))
+        allocated_parts = {line.part_number for line in plan.lines}
+        for req in plan.requirements:
+            if req.part_number not in allocated_parts:
+                rows.append((req.part_number, req.quantity_required, "No stock lot", 0, 0))
         self.component_lot_table.setRowCount(len(rows))
         for row, values in enumerate(rows):
             for col, value in enumerate(values):
@@ -878,26 +877,6 @@ class ShipView(BaseView):
                 if col in (1, 3, 4):
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.component_lot_table.setItem(row, col, item)
-        return complete
-
-    def _selected_component_lots(self, location: str) -> list[LotAllocation]:
-        allocations: list[LotAllocation] = []
-        for row in range(self.component_lot_table.rowCount()):
-            part_item = self.component_lot_table.item(row, 0)
-            qty_item = self.component_lot_table.item(row, 1)
-            lot_item = self.component_lot_table.item(row, 2)
-            allocation_item = self.component_lot_table.item(row, 3)
-            if part_item is None or qty_item is None or lot_item is None or allocation_item is None:
-                continue
-            allocations.append(
-                LotAllocation(
-                    part_item.text(),
-                    lot_item.text(),
-                    location,
-                    int(allocation_item.text() or 0),
-                )
-            )
-        return allocations
 
 
 class MoveAdjustView(BaseView):

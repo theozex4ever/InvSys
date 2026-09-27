@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List
+from typing import Any, Callable, Dict, List
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.engine import Engine
@@ -9,12 +9,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from inventory_control.db import create_inventory_engine, create_session_factory
 from inventory_control.migrations import bootstrap_database
 from inventory_control.models import (
+    BOMAvailability,
     BOMComponent,
+    BOMLotPlanLine,
     BOMRequirement,
+    BOMShipmentPlan,
     BOMTreeNode,
     ComponentConsumption,
     Lot,
-    LotAllocation,
     LotBalance,
     Part,
     Shipment,
@@ -400,51 +402,22 @@ class InventoryStore:
                 for row in rows
             ]
 
-    def bom_requirements(self, part_number: str, qty: int, location: str) -> List[BOMRequirement]:
+    def bom_availability(self, part_number: str, qty: int, location: str) -> BOMAvailability:
         part_number = self._normalize_part_number(part_number)
         with self.session_factory() as session:
-            self._require_part_location_qty(session, part_number, location, qty)
-            if not self._has_bom(session, part_number):
-                return []
-            requirements = self._leaf_requirements(session, part_number, qty)
-            return [
-                BOMRequirement(
-                    component,
-                    self._require_part(session, component).description,
-                    required,
-                    self.stock_at(component, location),
-                    max(required - self.stock_at(component, location), 0),
-                )
-                for component, required in sorted(requirements.items())
-            ]
+            part, loc = self._require_part_location_qty(session, part_number, location, qty)
+            return self._bom_availability_in_session(session, part, qty, loc)
 
-    def bom_tree(self, part_number: str, qty: int = 1, location: str = "Stock") -> BOMTreeNode:
+    def prepare_bom_shipment(self, part_number: str, qty: int, location: str) -> BOMShipmentPlan:
         part_number = self._normalize_part_number(part_number)
         with self.session_factory() as session:
-            self._require_part(session, part_number)
-            self._require_location(session, location)
-            if qty <= 0:
-                raise ValueError("Quantity must be greater than zero.")
-            return self._bom_tree_node(session, part_number, qty, 1, location)
+            part, loc = self._require_part_location_qty(session, part_number, location, qty)
+            if not self._has_bom(session, part_number):
+                raise ValueError("Part has no BOM.")
+            return self._prepare_bom_shipment(session, part, qty, loc)
 
     def bom_can_ship(self, part_number: str, qty: int, location: str) -> bool:
-        return all(req.shortage == 0 for req in self.bom_requirements(part_number, qty, location))
-
-    def bom_build_capacity(self, part_number: str, location: str) -> tuple[int, Dict[str, int]]:
-        """Return final products buildable and each leaf's final-product capacity.
-
-        Requirements are exploded for one final product so a material used in
-        multiple branches is counted once with its combined quantity.
-        """
-        requirements = self.bom_requirements(part_number, 1, location)
-        if not requirements:
-            stock = self.stock_at(part_number, location)
-            return stock, {part_number.strip().upper(): stock}
-        capacities = {
-            req.part_number: req.stock_available // req.quantity_required
-            for req in requirements
-        }
-        return min(capacities.values()), capacities
+        return all(req.shortage == 0 for req in self.bom_availability(part_number, qty, location).requirements)
 
     def total_stock(self, part_number: str) -> int:
         part_number = self._normalize_part_number(part_number)
@@ -549,10 +522,10 @@ class InventoryStore:
         recipient: str,
         operator: str,
         lot_number: str | None = None,
-        component_lots: List[LotAllocation] | None = None,
         carrier: str = "",
         tracking: str = "",
         reference: str = "",
+        expected_bom_plan: BOMShipmentPlan | None = None,
     ) -> str:
         part_number = self._normalize_part_number(part_number)
         with self.session_factory.begin() as session:
@@ -567,7 +540,7 @@ class InventoryStore:
                     loc,
                     recipient,
                     operator,
-                    component_lots,
+                    expected_bom_plan,
                     carrier,
                     tracking,
                     reference,
@@ -676,31 +649,30 @@ class InventoryStore:
         location: LocationRecord,
         recipient: str,
         operator: str,
-        component_lots: List[LotAllocation] | None,
+        expected_plan: BOMShipmentPlan | None,
         carrier: str = "",
         tracking: str = "",
         reference: str = "",
     ) -> str:
-        if not component_lots:
-            raise ValueError("Component lot selections required.")
-
-        requirements = self._leaf_requirements(session, part.part_number, qty)
-        expected = {(part_number, location.name): required for part_number, required in requirements.items()}
-        allocations = self._aggregate_allocations(component_lots)
-        if allocations != expected:
-            raise ValueError("Component lot selections must exactly match BOM requirements.")
-
-        for allocation in component_lots:
-            component_part = self._require_part(session, allocation.part_number)
-            component_location = self._require_location(session, allocation.location)
-            lot = self._lot(session, component_part.id, allocation.lot_number)
-            available = self._stock_at(session, component_part.id, component_location.id, lot.id) if lot else 0
-            if allocation.quantity > available:
-                raise ValueError(
-                    f"Not enough BOM component stock for {part.part_number}. "
-                    f"{component_part.part_number} lot {self._normalize_lot_number(allocation.lot_number)}: available {available}, "
-                    f"required {allocation.quantity}."
-                )
+        if expected_plan is None:
+            raise ValueError("Review the BOM lot allocation before shipping.")
+        plan = self._prepare_bom_shipment(session, part, qty, location)
+        expected_lots = tuple(
+            (line.part_number, line.lot_number, line.location, line.quantity_allocated)
+            for line in expected_plan.lines
+        )
+        current_lots = tuple(
+            (line.part_number, line.lot_number, line.location, line.quantity_allocated)
+            for line in plan.lines
+        )
+        if (
+            (expected_plan.part_number, expected_plan.quantity, expected_plan.location)
+            != (part.part_number, qty, location.name)
+            or expected_lots != current_lots
+        ):
+            raise ValueError("BOM lot allocation changed. Review the updated lots before shipping.")
+        if not plan.ready:
+            raise ValueError(f"Not enough BOM component stock for {part.part_number}.")
 
         shipment_number = self._next_shipment_number(session)
         timestamp = self.now()
@@ -717,12 +689,14 @@ class InventoryStore:
         session.add(shipment)
         session.flush()
 
-        for allocation in component_lots:
-            component_part = self._require_part(session, allocation.part_number)
-            component_location = self._require_location(session, allocation.location)
-            lot = self._require_lot(session, component_part.id, allocation.lot_number)
+        for line in plan.lines:
+            component_part = self._require_part(session, line.part_number)
+            component_location = self._require_location(session, line.location)
+            lot = self._require_lot(session, component_part.id, line.lot_number)
             balance = self._require_balance(session, component_part, component_location, lot)
-            balance.quantity -= allocation.quantity
+            if line.quantity_allocated > balance.quantity:
+                raise ValueError(f"Not enough BOM component stock for {part.part_number}.")
+            balance.quantity -= line.quantity_allocated
             balance.updated_at = timestamp
             session.add(
                 ShipmentComponentRecord(
@@ -730,14 +704,14 @@ class InventoryStore:
                     part_id=component_part.id,
                     lot_id=lot.id,
                     location_id=component_location.id,
-                    quantity=allocation.quantity,
+                    quantity=line.quantity_allocated,
                 )
             )
             self._add_transaction(
                 session,
                 "BOM_CONSUME",
                 component_part,
-                -allocation.quantity,
+                -line.quantity_allocated,
                 component_location,
                 None,
                 operator,
@@ -766,15 +740,6 @@ class InventoryStore:
             timestamp,
         )
         return shipment_number
-
-    def _aggregate_allocations(self, allocations: Iterable[LotAllocation]) -> Dict[tuple[str, str], int]:
-        result: Dict[tuple[str, str], int] = {}
-        for allocation in allocations:
-            if allocation.quantity <= 0:
-                raise ValueError("Component lot quantity must be greater than zero.")
-            key = (self._normalize_part_number(allocation.part_number), allocation.location)
-            result[key] = result.get(key, 0) + allocation.quantity
-        return result
 
     def _next_shipment_number(self, session: Session) -> str:
         today = datetime.now().strftime("%Y%m%d")
@@ -949,29 +914,102 @@ class InventoryStore:
                 return True
         return False
 
-    def _leaf_requirements(self, session: Session, part_number: str, qty: int) -> Dict[str, int]:
-        part = self._require_part(session, part_number)
-        children = session.scalars(
-            select(BOMComponentRecord).where(BOMComponentRecord.parent_part_id == part.id)
-        ).all()
-        if not children:
-            return {part.part_number: qty}
-        requirements: Dict[str, int] = {}
-        for child in children:
-            child_requirements = self._leaf_requirements(session, child.component_part.part_number, qty * child.quantity_per)
-            for leaf, required in child_requirements.items():
-                requirements[leaf] = requirements.get(leaf, 0) + required
-        return requirements
+    def _bom_availability_in_session(
+        self, session: Session, part: PartRecord, qty: int, location: LocationRecord
+    ) -> BOMAvailability:
+        required: Dict[str, int] = {}
+        parts: Dict[str, PartRecord] = {}
+        tree = self._bom_structure(session, part, qty, 1, required, parts)
+        stock_by_id = dict(
+            session.execute(
+                select(InventoryBalanceRecord.part_id, func.sum(InventoryBalanceRecord.quantity))
+                .where(
+                    InventoryBalanceRecord.location_id == location.id,
+                    InventoryBalanceRecord.part_id.in_(row.id for row in parts.values()),
+                )
+                .group_by(InventoryBalanceRecord.part_id)
+            ).all()
+        )
+        stock = {number: int(stock_by_id.get(row.id) or 0) for number, row in parts.items()}
 
-    def _bom_tree_node(
+        def set_stock(node: BOMTreeNode) -> None:
+            node.stock_available = stock[node.part_number]
+            for child in node.children:
+                set_stock(child)
+
+        set_stock(tree)
+        requirements = []
+        if tree.children:
+            for number, amount in sorted(required.items()):
+                requirements.append(
+                    BOMRequirement(
+                        number,
+                        parts[number].description,
+                        amount,
+                        stock[number],
+                        max(amount - stock[number], 0),
+                    )
+                )
+            # Required totals include the requested quantity; capacity counts single final products.
+            capacities = {
+                number: stock[number] // (amount // qty)
+                for number, amount in required.items()
+            }
+        else:
+            capacities = {part.part_number: stock[part.part_number]}
+        return BOMAvailability(tree, requirements, min(capacities.values()), capacities)
+
+    def _prepare_bom_shipment(
+        self, session: Session, part: PartRecord, qty: int, location: LocationRecord
+    ) -> BOMShipmentPlan:
+        availability = self._bom_availability_in_session(session, part, qty, location)
+        requirements = availability.requirements
+        rows = session.execute(
+            select(PartRecord.part_number, LotRecord.lot_number, InventoryBalanceRecord.quantity)
+            .select_from(InventoryBalanceRecord)
+            .join(PartRecord, InventoryBalanceRecord.part_id == PartRecord.id)
+            .join(LotRecord, InventoryBalanceRecord.lot_id == LotRecord.id)
+            .where(
+                InventoryBalanceRecord.location_id == location.id,
+                PartRecord.part_number.in_(req.part_number for req in requirements),
+                InventoryBalanceRecord.quantity > 0,
+            )
+            .order_by(PartRecord.part_number, LotRecord.lot_number)
+        ).all()
+        lots_by_part: Dict[str, list[tuple[str, int]]] = {}
+        for part_number, lot_number, stock in rows:
+            lots_by_part.setdefault(part_number, []).append((lot_number, stock))
+
+        lines: list[BOMLotPlanLine] = []
+        ready = True
+        for req in requirements:
+            remaining = req.quantity_required
+            for lot_number, lot_stock in lots_by_part.get(req.part_number, []):
+                allocated = min(remaining, lot_stock)
+                if allocated > 0:
+                    lines.append(
+                        BOMLotPlanLine(
+                            req.part_number, lot_number, location.name,
+                            req.quantity_required, allocated, lot_stock,
+                        )
+                    )
+                    remaining -= allocated
+                if remaining == 0:
+                    break
+            if remaining > 0 or req.shortage > 0:
+                ready = False
+        return BOMShipmentPlan(part.part_number, qty, location.name, tuple(requirements), tuple(lines), ready)
+
+    def _bom_structure(
         self,
         session: Session,
-        part_number: str,
+        part: PartRecord,
         qty_required: int,
         quantity_per_parent: int,
-        location: str,
+        requirements: Dict[str, int],
+        parts: Dict[str, PartRecord],
     ) -> BOMTreeNode:
-        part = self._require_part(session, part_number)
+        parts[part.part_number] = part
         children = session.scalars(
             select(BOMComponentRecord)
             .where(BOMComponentRecord.parent_part_id == part.id)
@@ -979,15 +1017,24 @@ class InventoryStore:
             .order_by(PartRecord.part_number)
         ).all()
         child_nodes = [
-            self._bom_tree_node(session, child.component_part.part_number, qty_required * child.quantity_per, child.quantity_per, location)
+            self._bom_structure(
+                session,
+                self._require_part(session, child.component_part.part_number),
+                qty_required * child.quantity_per,
+                child.quantity_per,
+                requirements,
+                parts,
+            )
             for child in children
         ]
+        if not children:
+            requirements[part.part_number] = requirements.get(part.part_number, 0) + qty_required
         return BOMTreeNode(
             part.part_number,
             part.description,
             qty_required,
             quantity_per_parent,
-            self.stock_at(part.part_number, location),
+            0,
             child_nodes,
         )
 
