@@ -29,6 +29,7 @@ class Card(QFrame):
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(18, 16, 18, 16)
         self.layout.setSpacing(10)
+        self.layout.setAlignment(Qt.AlignTop)
         self._shadow()
         if title:
             label = QLabel(title)
@@ -188,9 +189,10 @@ class BaseView(QScrollArea):
         self.root = QVBoxLayout(self.content)
         self.root.setContentsMargins(24, 20, 24, 24)
         self.root.setSpacing(16)
-        title_label = QLabel(title)
-        title_label.setObjectName("PageTitle")
-        self.root.addWidget(title_label)
+        self.root.setAlignment(Qt.AlignTop)
+        self.title_label = QLabel(title)
+        self.title_label.setObjectName("PageTitle")
+        self.root.addWidget(self.title_label)
         if subtitle:
             sub = QLabel(subtitle)
             sub.setObjectName("HelpText")
@@ -251,8 +253,9 @@ class PartCombo(QComboBox):
 
 def set_feedback(label: QLabel, message: str, level: str = "info") -> None:
     label.setText(message)
+    label.setVisible(bool(message))
     label.setProperty("level", level)
-    label.setAccessibleName(f"{level.title()}: {message}")
+    label.setAccessibleName(f"{level.title()}: {message}" if message else "")
     label.style().unpolish(label)
     label.style().polish(label)
 
@@ -283,7 +286,7 @@ def bind_required_field(widget: QWidget, label: QLabel) -> None:
     refresh()
 
 
-def add_field(layout: QVBoxLayout, label: str, widget: QWidget, required: bool = False, hint: str = "") -> None:
+def add_field(layout: QVBoxLayout, label: str, widget: QWidget, required: bool = False) -> None:
     label_row = QHBoxLayout()
     field_label = QLabel(label)
     field_label.setObjectName("FieldLabel")
@@ -295,8 +298,3 @@ def add_field(layout: QVBoxLayout, label: str, widget: QWidget, required: bool =
     if required:
         bind_required_field(widget, field_label)
     layout.addWidget(widget)
-    if hint:
-        hint_label = QLabel(hint)
-        hint_label.setObjectName("HelpText")
-        hint_label.setWordWrap(True)
-        layout.addWidget(hint_label)

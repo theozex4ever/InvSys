@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QStackedWidget,
+    QTabBar,
     QVBoxLayout,
     QWidget,
 )
@@ -50,14 +51,13 @@ class MainWindow(QMainWindow):
         side.setSpacing(10)
         title = QLabel("Inventory\nControl")
         title.setObjectName("AppTitle")
-        subtitle = QLabel("Local MVP")
-        subtitle.setObjectName("SidebarSubtle")
         side.addWidget(title)
-        side.addWidget(subtitle)
         side.addSpacing(16)
 
         self.stack = QStackedWidget()
         self.nav_buttons: Dict[str, QPushButton] = {}
+        self.group_bars: Dict[str, QTabBar] = {}
+        self.group_stacks: Dict[str, QStackedWidget] = {}
         self.views = {
             "dashboard": DashboardView(self.navigate, self.open_part, self.open_history),
             "parts": PartsView(self.toast),
@@ -68,13 +68,35 @@ class MainWindow(QMainWindow):
             "history": HistoryView(),
             "settings": SettingsView(self.toast, self.operator_name),
         }
+        catalog = self._make_group("catalog", [("parts", "Parts"), ("bom", "BOM")])
+        self.group_bars["catalog"].setTabToolTip(1, "Bill of materials: parts needed to build an assembly or kit.")
+        stock = self._make_group(
+            "stock",
+            [("receive", "Receive"), ("ship", "Ship"), ("move", "Move"), ("adjust", "Adjust")],
+        )
+        self.views["move"].tabs.tabBar().hide()
+        self.sections = {
+            "dashboard": self.views["dashboard"],
+            "catalog": catalog,
+            "stock": stock,
+            "history": self.views["history"],
+            "settings": self.views["settings"],
+        }
+        self.section_for_page = {
+            "dashboard": "dashboard",
+            "parts": "catalog",
+            "bom": "catalog",
+            "receive": "stock",
+            "ship": "stock",
+            "move": "stock",
+            "adjust": "stock",
+            "history": "history",
+            "settings": "settings",
+        }
         nav = [
             ("dashboard", "Dashboard"),
-            ("parts", "Parts"),
-            ("bom", "BOM"),
-            ("receive", "Receive"),
-            ("ship", "Ship"),
-            ("move", "Move / Adjust"),
+            ("catalog", "Catalog"),
+            ("stock", "Stock"),
             ("history", "History"),
             ("settings", "Settings"),
         ]
@@ -86,13 +108,12 @@ class MainWindow(QMainWindow):
             btn.clicked.connect(lambda _, k=key: self.navigate(k))
             self.nav_buttons[key] = btn
             side.addWidget(btn)
-            self.stack.addWidget(self.views[key])
+            self.stack.addWidget(self.sections[key])
         side.addStretch()
 
         self.operator = QLineEdit(STORE.get_setting("last_operator"))
         self.operator.setMinimumHeight(44)
         self.operator.setAccessibleName("Active operator name")
-        self.operator.textChanged.connect(self._operator_changed)
         self.operator.editingFinished.connect(self._save_operator)
         op_card = QFrame()
         op_card.setObjectName("Header")
@@ -120,17 +141,46 @@ class MainWindow(QMainWindow):
         self.global_search.returnPressed.connect(self._submit_global_search)
         header_layout.addWidget(QLabel("Search parts"))
         header_layout.addWidget(self.global_search)
-        self.status = QLabel("Local mode | SQLite")
-        self.status.setObjectName("Muted")
-        header_layout.addWidget(self.status)
         content_layout.addWidget(header)
         content_layout.addWidget(self.stack)
 
         shell_layout.addWidget(self.sidebar)
         shell_layout.addWidget(content)
-        self._operator_changed(self.operator.text())
         self._install_shortcuts()
         self.navigate("dashboard")
+
+    def _make_group(self, section: str, tabs: list[tuple[str, str]]) -> QWidget:
+        group = QWidget()
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        tab_strip = QFrame()
+        tab_strip.setObjectName("GroupTabStrip")
+        tab_strip_layout = QHBoxLayout(tab_strip)
+        tab_strip_layout.setContentsMargins(6, 6, 6, 6)
+        tab_strip_layout.setSpacing(0)
+        bar = QTabBar()
+        bar.setObjectName("GroupTabBar")
+        bar.setDocumentMode(True)
+        bar.setDrawBase(False)
+        bar.setExpanding(False)
+        tab_strip_layout.addWidget(bar)
+        tab_strip_layout.addStretch()
+        pages = QStackedWidget()
+        for key, label in tabs:
+            bar.addTab(label)
+            view = self.views["move" if key == "adjust" else key]
+            if pages.indexOf(view) == -1:
+                pages.addWidget(view)
+        bar.currentChanged.connect(lambda index, keys=[key for key, _ in tabs]: self.navigate(keys[index]))
+        tabs_row = QHBoxLayout()
+        tabs_row.setContentsMargins(24, 16, 24, 0)
+        tabs_row.addWidget(tab_strip)
+        layout.addLayout(tabs_row)
+        layout.addWidget(pages)
+        self.group_bars[section] = bar
+        self.group_stacks[section] = pages
+        return group
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -143,9 +193,6 @@ class MainWindow(QMainWindow):
             raise ValueError("Enter an operator name before recording inventory activity.")
         return operator
 
-    def _operator_changed(self, text: str) -> None:
-        self.status.setText(f"Operator: {text.strip() or 'not set'}  |  Local mode  |  SQLite")
-
     def _save_operator(self) -> None:
         STORE.set_setting("last_operator", self.operator.text().strip())
 
@@ -157,7 +204,10 @@ class MainWindow(QMainWindow):
         search_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
         search_shortcut.activated.connect(self._focus_global_search)
         self.shortcuts.append(search_shortcut)
-        for index, key in enumerate(self.views, start=1):
+        for index, key in enumerate(
+            ("dashboard", "parts", "bom", "receive", "ship", "move", "history", "settings", "adjust"),
+            start=1,
+        ):
             shortcut = QShortcut(QKeySequence(f"Ctrl+{index}"), self)
             shortcut.activated.connect(lambda k=key: self.navigate(k))
             self.shortcuts.append(shortcut)
@@ -180,10 +230,28 @@ class MainWindow(QMainWindow):
         self.views["history"].set_search(query)
 
     def navigate(self, key: str) -> None:
-        keys = list(self.views.keys())
-        self.stack.setCurrentIndex(keys.index(key))
+        section = self.section_for_page.get(key, key)
+        self.stack.setCurrentWidget(self.sections[section])
+        if section in self.group_bars:
+            tabs = ["parts", "bom"] if section == "catalog" else ["receive", "ship", "move", "adjust"]
+            if key == section:
+                key = tabs[self.group_bars[section].currentIndex()]
+            if key in tabs:
+                bar = self.group_bars[section]
+                bar.blockSignals(True)
+                bar.setCurrentIndex(tabs.index(key))
+                bar.blockSignals(False)
+                view = self.views["move" if key == "adjust" else key]
+                self.group_stacks[section].setCurrentWidget(view)
+                if section == "stock" and key in ("move", "adjust"):
+                    view.tabs.setCurrentIndex(0 if key == "move" else 1)
+                    view.title_label.setText("Move Stock" if key == "move" else "Adjust Count")
         for name, btn in self.nav_buttons.items():
-            btn.setProperty("active", name == key)
+            btn.setProperty("active", name == section)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
-        self.views[key].focus_primary()
+        if key == "adjust":
+            self.views["move"].adjust_part.setFocus(Qt.ShortcutFocusReason)
+        else:
+            focus_key = {"catalog": "parts", "stock": "receive"}.get(key, key)
+            self.views[focus_key].focus_primary()

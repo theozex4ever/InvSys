@@ -14,4 +14,4 @@ Manual usability smoke checks:
 - Ship with insufficient stock shows an error toast with available and requested quantities.
 - Move to the same location shows an error toast.
 - Adjust without a reason shows an error toast.
-- Dashboard, Parts, BOM, Receive, Ship, Move / Adjust, and History navigation still works after repeated success and error toasts.
+- Dashboard, Catalog (Parts / BOM), Stock (Receive / Ship / Move / Adjust), History, and Settings navigation still works after repeated success and error toasts.

@@ -239,6 +239,30 @@ QTabBar::tab:selected {
     color: #ffffff;
 }
 QTabBar::tab:hover:!selected { background: #24282d; }
+QFrame#GroupTabStrip {
+    background: #202326;
+    border: 1px solid #3a4149;
+    border-radius: 12px;
+}
+QTabBar#GroupTabBar { background: transparent; }
+QTabBar#GroupTabBar::tab {
+    background: transparent;
+    color: #c8cdd3;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    margin-right: 4px;
+    padding: 10px 20px;
+    min-width: 100px;
+}
+QTabBar#GroupTabBar::tab:selected {
+    background: #2f6fed;
+    color: #ffffff;
+    border-color: #6ea8ff;
+}
+QTabBar#GroupTabBar::tab:hover:!selected {
+    background: #343941;
+    color: #ffffff;
+}
 QTableWidget {
     alternate-background-color: #1b1e21;
 }
