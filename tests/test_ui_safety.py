@@ -181,9 +181,40 @@ def test_global_search_navigates_to_filtered_parts(qtbot, blank_store, monkeypat
     window.global_search.setText("ABC-1")
     window._submit_global_search()
 
-    assert window.stack.currentWidget() is window.views["parts"]
+    assert window.stack.currentWidget() is window.sections["catalog"]
+    assert window.group_stacks["catalog"].currentWidget() is window.views["parts"]
     assert window.views["parts"].search.text() == "ABC-1"
     assert window.views["parts"].table.rowCount() == 1
+
+
+def test_sidebar_groups_related_views_without_losing_routes(qtbot, blank_store, monkeypatch):
+    monkeypatch.setattr(widgets_module, "STORE", blank_store)
+    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr(main_window_module, "STORE", blank_store)
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert list(window.nav_buttons) == ["dashboard", "catalog", "stock", "history", "settings"]
+    assert [window.group_bars["catalog"].tabText(i) for i in range(2)] == ["Parts", "BOM"]
+    assert [window.group_bars["stock"].tabText(i) for i in range(4)] == [
+        "Receive", "Ship", "Move", "Adjust"
+    ]
+
+    for key, section in [("bom", "catalog"), ("ship", "stock"), ("history", "history")]:
+        window.navigate(key)
+        assert window.stack.currentWidget() is window.sections[section]
+        assert window.nav_buttons[section].property("active") is True
+
+    window.navigate("adjust")
+    assert window.group_stacks["stock"].currentWidget() is window.views["move"]
+    assert window.views["move"].tabs.currentIndex() == 1
+    assert window.views["move"].title_label.text() == "Adjust Count"
+    assert window.views["move"].tabs.tabBar().isHidden()
+    window.group_bars["stock"].setCurrentIndex(2)
+    assert window.views["move"].tabs.currentIndex() == 0
+    assert window.views["move"].title_label.text() == "Move Stock"
+    window.navigate("catalog")
+    assert window.group_stacks["catalog"].currentWidget() is window.views["bom"]
 
 
 def test_bom_row_selection_enters_explicit_update_mode(qtbot, blank_store, monkeypatch):

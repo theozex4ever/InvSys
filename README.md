@@ -20,6 +20,8 @@ This application handles the core inventory workflows that matter most to operat
 
 The design philosophy is: **make the correct action obvious, make mistakes hard, and make recovery easy.**
 
+The sidebar groups related work into **Catalog** (Parts and BOM) and **Stock** (Receive, Ship, Move, and Adjust). Dashboard, History, and Settings remain separate destinations. Dashboard quick actions and global part search open the matching subtab directly.
+
 ---
 
 ## Tech Stack

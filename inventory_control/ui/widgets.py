@@ -188,9 +188,9 @@ class BaseView(QScrollArea):
         self.root = QVBoxLayout(self.content)
         self.root.setContentsMargins(24, 20, 24, 24)
         self.root.setSpacing(16)
-        title_label = QLabel(title)
-        title_label.setObjectName("PageTitle")
-        self.root.addWidget(title_label)
+        self.title_label = QLabel(title)
+        self.title_label.setObjectName("PageTitle")
+        self.root.addWidget(self.title_label)
         if subtitle:
             sub = QLabel(subtitle)
             sub.setObjectName("HelpText")
