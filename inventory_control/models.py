@@ -39,12 +39,24 @@ class LotBalance:
     quantity: int
 
 
-@dataclass
-class LotAllocation:
+@dataclass(frozen=True)
+class BOMLotPlanLine:
     part_number: str
     lot_number: str
     location: str
+    quantity_required: int
+    quantity_allocated: int
+    lot_stock: int
+
+
+@dataclass(frozen=True)
+class BOMShipmentPlan:
+    part_number: str
     quantity: int
+    location: str
+    requirements: tuple["BOMRequirement", ...]
+    lines: tuple[BOMLotPlanLine, ...]
+    ready: bool
 
 
 @dataclass
@@ -91,6 +103,14 @@ class BOMTreeNode:
     quantity_per_parent: int
     stock_available: int
     children: list["BOMTreeNode"] = field(default_factory=list)
+
+
+@dataclass
+class BOMAvailability:
+    tree: BOMTreeNode
+    requirements: list[BOMRequirement]
+    buildable: int
+    capacities: dict[str, int]
 
 
 @dataclass

@@ -6,7 +6,6 @@ import pytest
 from inventory_control.backup import backup_database
 import inventory_control.backup as backup_mod
 from inventory_control.import_export import ImportExportService
-from inventory_control.models import LotAllocation
 from inventory_control.store import InventoryStore
 
 
@@ -40,17 +39,8 @@ def build_bom_shipment(store):
     store.add_bom_component("KIT-001", "NUT-001", 1)
     store.receive("SCREW-001", 10, "Stock", "LOT-1", "setup")
     store.receive("NUT-001", 10, "Stock", "LOT-1", "setup")
-    store.ship(
-        "KIT-001",
-        2,
-        "Stock",
-        "Acme",
-        "alice",
-        component_lots=[
-            LotAllocation("SCREW-001", "LOT-1", "Stock", 4),
-            LotAllocation("NUT-001", "LOT-1", "Stock", 2),
-        ],
-    )
+    plan = store.prepare_bom_shipment("KIT-001", 2, "Stock")
+    store.ship("KIT-001", 2, "Stock", "Acme", "alice", expected_bom_plan=plan)
 
 
 def test_export_parts_csv_creates_expected_headers_and_rows(tmp_path):

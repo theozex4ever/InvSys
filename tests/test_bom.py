@@ -9,8 +9,6 @@ nodes, not inventory deductions.
 
 import pytest
 
-from inventory_control.models import LotAllocation
-
 
 def build_nested_bom(store):
     store.add_part("KIT-001", "Service Kit")
@@ -22,11 +20,9 @@ def build_nested_bom(store):
     store.add_bom_component("KIT-001", "NUT-001", 4)
 
 
-def kit_component_lots(qty: int) -> list[LotAllocation]:
-    return [
-        LotAllocation("NUT-001", "LOT-1", "Stock", 4 * qty),
-        LotAllocation("SCREW-001", "LOT-1", "Stock", 6 * qty),
-    ]
+def ship_kit(store, qty: int) -> str:
+    plan = store.prepare_bom_shipment("KIT-001", qty, "Stock")
+    return store.ship("KIT-001", qty, "Stock", "Acme", "alice", expected_bom_plan=plan)
 
 
 class TestBOMSetup:
@@ -61,7 +57,7 @@ class TestNestedBOMRequirements:
     def test_nested_requirements_expand_to_leaf_components(self, blank_store):
         build_nested_bom(blank_store)
 
-        requirements = blank_store.bom_requirements("KIT-001", 2, "Stock")
+        requirements = blank_store.bom_availability("KIT-001", 2, "Stock").requirements
         required_by_part = {req.part_number: req.quantity_required for req in requirements}
 
         assert required_by_part == {
@@ -73,11 +69,15 @@ class TestNestedBOMRequirements:
         build_nested_bom(blank_store)
         blank_store.receive("SCREW-001", 10, "Stock", "LOT-1", "setup")
 
-        requirements = blank_store.bom_requirements("KIT-001", 2, "Stock")
+        availability = blank_store.bom_availability("KIT-001", 2, "Stock")
+        requirements = availability.requirements
         screw = next(req for req in requirements if req.part_number == "SCREW-001")
 
         assert screw.stock_available == 10
         assert screw.shortage == 2
+        assert availability.tree.part_number == "KIT-001"
+        assert availability.tree.children[0].quantity_required == 8
+        assert availability.buildable == 0
 
 
 class TestBOMBuildCapacity:
@@ -87,10 +87,15 @@ class TestBOMBuildCapacity:
         blank_store.receive("NUT-001", 800, "Stock", "LOT-1", "setup")
         blank_store.receive("NUT-001", 400, "Receiving", "LOT-2", "setup")
 
-        buildable, capacities = blank_store.bom_build_capacity("KIT-001", "Stock")
+        availability = blank_store.bom_availability("KIT-001", 2, "Stock")
 
-        assert capacities == {"NUT-001": 200, "SCREW-001": 150}
-        assert buildable == 150
+        assert availability.capacities == {"NUT-001": 200, "SCREW-001": 150}
+        assert availability.buildable == 150
+        assert availability.tree.children[0].stock_available == 800
+        assert {req.part_number: req.quantity_required for req in availability.requirements} == {
+            "NUT-001": 8,
+            "SCREW-001": 12,
+        }
 
     def test_shared_material_counts_all_branches(self, blank_store):
         for part in ("KIT", "LEFT", "RIGHT", "SCREW"):
@@ -101,13 +106,18 @@ class TestBOMBuildCapacity:
         blank_store.add_bom_component("RIGHT", "SCREW", 3)
         blank_store.receive("SCREW", 504, "Stock", "LOT-1", "setup")
 
-        assert blank_store.bom_build_capacity("KIT", "Stock") == (100, {"SCREW": 100})
+        availability = blank_store.bom_availability("KIT", 1, "Stock")
+        assert (availability.buildable, availability.capacities) == (100, {"SCREW": 100})
+        assert [(req.part_number, req.quantity_required) for req in availability.requirements] == [("SCREW", 5)]
 
     def test_part_without_bom_uses_its_own_stock(self, blank_store):
         blank_store.add_part("SINGLE", "Standalone")
         blank_store.receive("SINGLE", 501, "Stock", "LOT-1", "setup")
 
-        assert blank_store.bom_build_capacity("SINGLE", "Stock") == (501, {"SINGLE": 501})
+        availability = blank_store.bom_availability("SINGLE", 1, "Stock")
+        assert (availability.buildable, availability.capacities) == (501, {"SINGLE": 501})
+        assert availability.requirements == []
+        assert availability.tree.stock_available == 501
 
 
 class TestBOMShip:
@@ -116,7 +126,7 @@ class TestBOMShip:
         blank_store.receive("SCREW-001", 20, "Stock", "LOT-1", "setup")
         blank_store.receive("NUT-001", 20, "Stock", "LOT-1", "setup")
 
-        blank_store.ship("KIT-001", 2, "Stock", "Acme", "alice", component_lots=kit_component_lots(2))
+        ship_kit(blank_store, 2)
 
         assert blank_store.stock_at("SCREW-001", "Stock") == 8
         assert blank_store.stock_at("NUT-001", "Stock") == 12
@@ -127,7 +137,7 @@ class TestBOMShip:
         blank_store.receive("SCREW-001", 20, "Stock", "LOT-1", "setup")
         blank_store.receive("NUT-001", 20, "Stock", "LOT-1", "setup")
 
-        blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice", component_lots=kit_component_lots(1))
+        ship_kit(blank_store, 1)
 
         assert blank_store.stock_at("SUB-001", "Stock") == 5
 
@@ -136,7 +146,7 @@ class TestBOMShip:
         blank_store.receive("SCREW-001", 20, "Stock", "LOT-1", "setup")
         blank_store.receive("NUT-001", 20, "Stock", "LOT-1", "setup")
 
-        shipment_number = blank_store.ship("KIT-001", 2, "Stock", "Acme", "alice", component_lots=kit_component_lots(2))
+        shipment_number = ship_kit(blank_store, 2)
 
         shipment = blank_store.shipments[0]
         assert shipment.shipment_number == shipment_number
@@ -151,7 +161,7 @@ class TestBOMShip:
         blank_store.receive("SCREW-001", 20, "Stock", "LOT-1", "setup")
         blank_store.receive("NUT-001", 20, "Stock", "LOT-1", "setup")
 
-        shipment_number = blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice", component_lots=kit_component_lots(1))
+        shipment_number = ship_kit(blank_store, 1)
 
         assert blank_store.transactions[0].tx_type == "SHIP_BOM"
         consume_transactions = [
@@ -164,11 +174,72 @@ class TestBOMShip:
         build_nested_bom(blank_store)
         blank_store.receive("SCREW-001", 2, "Stock", "LOT-1", "setup")
         before_transactions = len(blank_store.transactions)
+        plan = blank_store.prepare_bom_shipment("KIT-001", 1, "Stock")
+        assert plan.ready is False
 
         with pytest.raises(ValueError, match="Not enough BOM component stock"):
-            blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice", component_lots=kit_component_lots(1))
+            blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice", expected_bom_plan=plan)
 
         assert blank_store.stock_at("SCREW-001", "Stock") == 2
         assert blank_store.stock_at("NUT-001", "Stock") == 0
         assert len(blank_store.shipments) == 0
         assert len(blank_store.transactions) == before_transactions
+
+    def test_store_allocates_by_lot_number_across_multiple_lots(self, blank_store):
+        blank_store.add_part("KIT", "Kit")
+        blank_store.add_part("COMP", "Component")
+        blank_store.add_bom_component("KIT", "COMP", 5)
+        blank_store.receive("COMP", 3, "Stock", "LOT-B", "setup")
+        blank_store.receive("COMP", 2, "Stock", "LOT-A", "setup")
+
+        plan = blank_store.prepare_bom_shipment("KIT", 1, "Stock")
+
+        assert plan.ready is True
+        assert [(line.lot_number, line.quantity_allocated) for line in plan.lines] == [
+            ("LOT-A", 2),
+            ("LOT-B", 3),
+        ]
+        blank_store.ship("KIT", 1, "Stock", "Acme", "alice", expected_bom_plan=plan)
+        assert {(item.lot_number, item.quantity) for item in blank_store.shipments[0].consumed_components} == {
+            ("LOT-A", 2),
+            ("LOT-B", 3),
+        }
+
+    def test_changed_lot_allocation_requires_review_without_writes(self, blank_store):
+        blank_store.add_part("KIT", "Kit")
+        blank_store.add_part("COMP", "Component")
+        blank_store.add_bom_component("KIT", "COMP", 5)
+        blank_store.receive("COMP", 5, "Stock", "LOT-B", "setup")
+        plan = blank_store.prepare_bom_shipment("KIT", 1, "Stock")
+        blank_store.receive("COMP", 1, "Stock", "LOT-A", "setup")
+        before_transactions = len(blank_store.transactions)
+
+        with pytest.raises(ValueError, match="allocation changed"):
+            blank_store.ship("KIT", 1, "Stock", "Acme", "alice", expected_bom_plan=plan)
+
+        assert blank_store.stock_at("COMP", "Stock") == 6
+        assert blank_store.shipments == []
+        assert len(blank_store.transactions) == before_transactions
+
+    def test_unrelated_stock_change_keeps_reviewed_lots_valid(self, blank_store):
+        blank_store.add_part("KIT", "Kit")
+        blank_store.add_part("COMP", "Component")
+        blank_store.add_bom_component("KIT", "COMP", 5)
+        blank_store.receive("COMP", 5, "Stock", "LOT-A", "setup")
+        plan = blank_store.prepare_bom_shipment("KIT", 1, "Stock")
+        blank_store.receive("COMP", 1, "Stock", "LOT-B", "setup")
+
+        blank_store.ship("KIT", 1, "Stock", "Acme", "alice", expected_bom_plan=plan)
+
+        assert blank_store.stock_at("COMP", "Stock", "LOT-A") == 0
+        assert blank_store.stock_at("COMP", "Stock", "LOT-B") == 1
+
+    def test_bom_shipping_requires_a_reviewed_plan(self, blank_store):
+        build_nested_bom(blank_store)
+        blank_store.receive("SCREW-001", 20, "Stock", "LOT-1", "setup")
+        blank_store.receive("NUT-001", 20, "Stock", "LOT-1", "setup")
+
+        with pytest.raises(ValueError, match="Review the BOM lot allocation"):
+            blank_store.ship("KIT-001", 1, "Stock", "Acme", "alice")
+
+        assert blank_store.shipments == []

@@ -1,6 +1,6 @@
 """Regression tests for inventory UI safety and responsive behavior."""
 
-from PySide6.QtWidgets import QLabel, QScrollArea, QTabWidget
+from PySide6.QtWidgets import QLabel, QMessageBox, QScrollArea, QTabWidget
 
 import inventory_control.ui.main_window as main_window_module
 import inventory_control.ui.views as views_module
@@ -87,6 +87,31 @@ def test_bom_shipping_auto_allocates_across_multiple_lots(qtbot, blank_store, mo
     assert {view.component_lot_table.item(row, 2).text() for row in range(2)} == {"LOT-A", "LOT-B"}
     assert sum(int(view.component_lot_table.item(row, 3).text()) for row in range(2)) == 5
     assert view.ship_btn.isEnabled() is True
+
+
+def test_bom_shipping_requires_new_review_when_lots_change_during_confirmation(qtbot, blank_store, monkeypatch):
+    blank_store.add_part("KIT-1", "Kit")
+    blank_store.add_part("COMP-1", "Component")
+    blank_store.add_bom_component("KIT-1", "COMP-1", 5)
+    blank_store.receive("COMP-1", 5, "Stock", "LOT-B", "setup")
+    monkeypatch.setattr(widgets_module, "STORE", blank_store)
+    monkeypatch.setattr(views_module, "STORE", blank_store)
+    view = ShipView(lambda *_: None, lambda: "alice")
+    qtbot.addWidget(view)
+    view.part.setCurrentIndex(view.part.findData("KIT-1"))
+    view.qty.setText("1")
+    view.recipient.setText("Acme")
+
+    def stock_changes_before_confirmation(*_args):
+        blank_store.receive("COMP-1", 1, "Stock", "LOT-A", "setup")
+        return QMessageBox.Yes
+
+    monkeypatch.setattr(views_module.QMessageBox, "question", stock_changes_before_confirmation)
+    view.ship()
+
+    assert blank_store.shipments == []
+    assert "Review the updated lots" in view.result.text()
+    assert view.component_lot_table.item(0, 2).text() == "LOT-A"
 
 
 def test_receive_uses_selected_parts_default_location(qtbot, blank_store, monkeypatch):
