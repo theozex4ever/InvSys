@@ -51,10 +51,7 @@ class MainWindow(QMainWindow):
         side.setSpacing(10)
         title = QLabel("Inventory\nControl")
         title.setObjectName("AppTitle")
-        subtitle = QLabel("Local MVP")
-        subtitle.setObjectName("SidebarSubtle")
         side.addWidget(title)
-        side.addWidget(subtitle)
         side.addSpacing(16)
 
         self.stack = QStackedWidget()
@@ -72,6 +69,7 @@ class MainWindow(QMainWindow):
             "settings": SettingsView(self.toast, self.operator_name),
         }
         catalog = self._make_group("catalog", [("parts", "Parts"), ("bom", "BOM")])
+        self.group_bars["catalog"].setTabToolTip(1, "Bill of materials: parts needed to build an assembly or kit.")
         stock = self._make_group(
             "stock",
             [("receive", "Receive"), ("ship", "Ship"), ("move", "Move"), ("adjust", "Adjust")],
@@ -116,7 +114,6 @@ class MainWindow(QMainWindow):
         self.operator = QLineEdit(STORE.get_setting("last_operator"))
         self.operator.setMinimumHeight(44)
         self.operator.setAccessibleName("Active operator name")
-        self.operator.textChanged.connect(self._operator_changed)
         self.operator.editingFinished.connect(self._save_operator)
         op_card = QFrame()
         op_card.setObjectName("Header")
@@ -144,15 +141,11 @@ class MainWindow(QMainWindow):
         self.global_search.returnPressed.connect(self._submit_global_search)
         header_layout.addWidget(QLabel("Search parts"))
         header_layout.addWidget(self.global_search)
-        self.status = QLabel("Local mode | SQLite")
-        self.status.setObjectName("Muted")
-        header_layout.addWidget(self.status)
         content_layout.addWidget(header)
         content_layout.addWidget(self.stack)
 
         shell_layout.addWidget(self.sidebar)
         shell_layout.addWidget(content)
-        self._operator_changed(self.operator.text())
         self._install_shortcuts()
         self.navigate("dashboard")
 
@@ -199,9 +192,6 @@ class MainWindow(QMainWindow):
             self.operator.setFocus()
             raise ValueError("Enter an operator name before recording inventory activity.")
         return operator
-
-    def _operator_changed(self, text: str) -> None:
-        self.status.setText(f"Operator: {text.strip() or 'not set'}  |  Local mode  |  SQLite")
 
     def _save_operator(self) -> None:
         STORE.set_setting("last_operator", self.operator.text().strip())

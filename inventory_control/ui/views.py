@@ -47,7 +47,7 @@ class DashboardView(BaseView):
         open_part: Callable[[str], None],
         open_history: Callable[[str], None],
     ) -> None:
-        super().__init__("Dashboard", "Fast actions first. Important warnings visible. No hunting.")
+        super().__init__("Dashboard")
         grid = QGridLayout()
         grid.setSpacing(16)
         self.root.addLayout(grid)
@@ -66,7 +66,7 @@ class DashboardView(BaseView):
             card.layout.addWidget(metric)
             grid.addWidget(card, 0, i)
 
-        actions = Card("Quick Actions", "One clear path into each common job.")
+        actions = Card("Quick Actions")
         action_row = QHBoxLayout()
         for text, screen, obj in [
             ("Receive Stock", "receive", "SuccessButton"),
@@ -86,9 +86,11 @@ class DashboardView(BaseView):
         self.recent_list = QListWidget()
         self.low_list.itemActivated.connect(lambda item: open_part(str(item.data(Qt.UserRole) or "")))
         self.recent_list.itemActivated.connect(lambda item: open_history(str(item.data(Qt.UserRole) or "")))
-        low_card = Card("Low Stock", "Items at or below minimum quantity. Double-click to open.")
+        low_card = Card("Low Stock")
+        self.low_list.setToolTip("Double-click or press Enter to open the part.")
         low_card.layout.addWidget(self.low_list)
-        recent_card = Card("Recent Activity", "Latest inventory movements. Double-click to open History.")
+        recent_card = Card("Recent Activity")
+        self.recent_list.setToolTip("Double-click or press Enter to open History.")
         recent_card.layout.addWidget(self.recent_list)
         grid.addWidget(low_card, 2, 0, 1, 1)
         grid.addWidget(recent_card, 2, 1, 1, 2)
@@ -122,13 +124,13 @@ class DashboardView(BaseView):
 
 class PartsView(BaseView):
     def __init__(self, toast: Callable[[str, str], None]) -> None:
-        super().__init__("Parts", "Create and find part records. Keep names consistent.")
+        super().__init__("Parts")
         self.toast = toast
         row = QHBoxLayout()
         row.setSpacing(16)
         self.root.addLayout(row)
 
-        form = Card("Add Part", "Enter the details for a new inventory part.")
+        form = Card("Add Part")
         self.part_number = QLineEdit()
         self.description = QLineEdit()
         self.minimum = QLineEdit("0")
@@ -157,7 +159,7 @@ class PartsView(BaseView):
         form.layout.addWidget(self.new_btn)
         row.addWidget(form, 1)
 
-        list_card = Card("Part List", "Search by number or description.")
+        list_card = Card("Part List")
         self.search = QLineEdit()
         self.search.textChanged.connect(self.refresh)
         self.show_inactive = QCheckBox("Show inactive parts")
@@ -328,13 +330,13 @@ class PartsView(BaseView):
 
 class BOMView(BaseView):
     def __init__(self, toast: Callable[[str, str], None]) -> None:
-        super().__init__("BOM", "Build nested part structures and verify component availability before shipping.")
+        super().__init__("BOM")
         self.toast = toast
         row = QHBoxLayout()
         row.setSpacing(16)
         self.root.addLayout(row)
 
-        builder = Card("BOM Builder", "Add direct components. Nested levels appear automatically in the visualizer.")
+        builder = Card("BOM Builder")
         self.parent_part = PartCombo()
         self.component_part = PartCombo()
         self.quantity_per = QLineEdit("1")
@@ -368,7 +370,7 @@ class BOMView(BaseView):
         builder.layout.addWidget(self.remove_component_btn)
         row.addWidget(builder, 1)
 
-        visual = Card("BOM Flowchart", "Follow each assembly to its materials. Colors show final-product build capacity.")
+        visual = Card("BOM Flowchart")
         self.visual_part = PartCombo()
         self.build_qty = QLineEdit("1")
         self.build_qty.setValidator(QIntValidator(1, 999999))
@@ -377,8 +379,10 @@ class BOMView(BaseView):
         self.location.setCurrentText("Stock")
         self.summary = QLabel()
         self.summary.setObjectName("FeedbackLabel")
-        self.capacity = QLabel("Select a product to see build capacity.")
+        self.summary.hide()
+        self.capacity = QLabel()
         self.capacity.setObjectName("BOMCapacity")
+        self.capacity.hide()
         self.flowchart = BOMFlowchart()
         chart_controls = QHBoxLayout()
         legend = QLabel(
@@ -531,14 +535,14 @@ class BOMView(BaseView):
         self.flowchart.clear_bom()
         self.requirements.setRowCount(0)
         if part_number not in STORE.parts or qty <= 0:
-            self.capacity.setText("Select a product to see build capacity.")
-            set_feedback(self.summary, "Choose a part and quantity.", "info")
+            self.capacity.hide()
+            set_feedback(self.summary, "")
             return
         try:
             availability = STORE.bom_availability(part_number, qty, location)
             self.flowchart.set_bom(availability.tree, availability.capacities)
         except ValueError as e:
-            self.capacity.setText("")
+            self.capacity.hide()
             set_feedback(self.summary, str(e), "error")
             return
 
@@ -548,6 +552,7 @@ class BOMView(BaseView):
             f"{availability.buildable:,} final products buildable at {location}  ·  "
             f"{level.title()}  ·  Limited by {', '.join(limiting)}"
         )
+        self.capacity.show()
         self.capacity.setProperty("level", level)
         self.capacity.style().unpolish(self.capacity)
         self.capacity.style().polish(self.capacity)
@@ -584,10 +589,10 @@ class BOMView(BaseView):
 
 class ReceiveView(BaseView):
     def __init__(self, toast: Callable[[str, str], None], operator_getter: Callable[[], str]) -> None:
-        super().__init__("Receive Stock", "Add inventory. Confirmation shows the new quantity.")
+        super().__init__("Receive Stock")
         self.toast = toast
         self.operator_getter = operator_getter
-        card = Card("Receive", "Select part, quantity, and location. Then receive.")
+        card = Card()
         self.root.addWidget(card)
         self.part = PartCombo()
         self.qty = QLineEdit()
@@ -597,10 +602,12 @@ class ReceiveView(BaseView):
         self.location.setCurrentText("Stock")
         self.lot = QLineEdit()
         self.reference = QLineEdit()
-        self.preview = QLabel("Choose a part and quantity.")
+        self.preview = QLabel()
         self.preview.setObjectName("HelpText")
-        self.result = QLabel("Complete the required fields to receive stock.")
+        self.preview.hide()
+        self.result = QLabel()
         self.result.setObjectName("FeedbackLabel")
+        self.result.hide()
         self.receive_btn = QPushButton("Receive Stock")
         self.receive_btn.setObjectName("SuccessButton")
         self.receive_btn.setMinimumHeight(50)
@@ -619,7 +626,7 @@ class ReceiveView(BaseView):
         lot_column = QVBoxLayout()
         reference_column = QVBoxLayout()
         add_field(lot_column, "Lot number", self.lot, required=True)
-        add_field(reference_column, "Reference", self.reference, hint="Optional.")
+        add_field(reference_column, "Reference (optional)", self.reference)
         lot_reference.addLayout(lot_column, 1)
         lot_reference.addLayout(reference_column, 1)
         card.layout.addLayout(lot_reference)
@@ -651,9 +658,10 @@ class ReceiveView(BaseView):
         valid = bool(pn and qty > 0 and self.lot.text().strip())
         self.receive_btn.setEnabled(valid)
         if not pn:
-            self.preview.setText("Select a valid part.")
+            self.preview.hide()
         else:
             self.preview.setText(f"Current at {loc}: {stock}  →  after receive: {stock + qty}")
+            self.preview.show()
 
     def receive(self) -> None:
         try:
@@ -678,10 +686,10 @@ class ReceiveView(BaseView):
 
 class ShipView(BaseView):
     def __init__(self, toast: Callable[[str, str], None], operator_getter: Callable[[], str]) -> None:
-        super().__init__("Ship Stock", "Deduct stock and create a simple shipment record.")
+        super().__init__("Ship Stock")
         self.toast = toast
         self.operator_getter = operator_getter
-        card = Card("Ship", "Negative inventory is blocked before the shipment is created.")
+        card = Card()
         self.root.addWidget(card)
         self.part = PartCombo()
         self.qty = QLineEdit()
@@ -694,8 +702,9 @@ class ShipView(BaseView):
         self.recipient = QLineEdit()
         self.carrier = QLineEdit()
         self.tracking = QLineEdit()
-        self.preview = QLabel("Choose a part and quantity.")
+        self.preview = QLabel()
         self.preview.setObjectName("HelpText")
+        self.preview.hide()
         self.component_lot_table = QTableWidget(0, 5)
         self.component_lot_table.setHorizontalHeaderLabels(
             ["Component", "Required", "Auto lot", "Allocated", "Lot stock"]
@@ -705,8 +714,9 @@ class ShipView(BaseView):
         self.component_lot_table.verticalHeader().setVisible(False)
         self.component_lot_table.setVisible(False)
         self._bom_plan: BOMShipmentPlan | None = None
-        self.result = QLabel("Complete the required fields to create a shipment.")
+        self.result = QLabel()
         self.result.setObjectName("FeedbackLabel")
+        self.result.hide()
         self.ship_btn = QPushButton("Review & Ship")
         self.ship_btn.setMinimumHeight(50)
         self.ship_btn.setEnabled(False)
@@ -723,7 +733,8 @@ class ShipView(BaseView):
         lot_recipient = QHBoxLayout()
         lot_column = QVBoxLayout()
         recipient_column = QVBoxLayout()
-        add_field(lot_column, "Lot", self.lot, required=True, hint="BOM lots are allocated below.")
+        add_field(lot_column, "Lot", self.lot, required=True)
+        self.lot.setToolTip("BOM component lots are allocated automatically and shown in the table below.")
         add_field(recipient_column, "Recipient / project", self.recipient, required=True)
         lot_recipient.addLayout(lot_column, 1)
         lot_recipient.addLayout(recipient_column, 1)
@@ -731,8 +742,8 @@ class ShipView(BaseView):
         shipping_details = QHBoxLayout()
         carrier_column = QVBoxLayout()
         tracking_column = QVBoxLayout()
-        add_field(carrier_column, "Carrier", self.carrier, hint="Optional.")
-        add_field(tracking_column, "Tracking number", self.tracking, hint="Optional.")
+        add_field(carrier_column, "Carrier (optional)", self.carrier)
+        add_field(tracking_column, "Tracking number (optional)", self.tracking)
         shipping_details.addLayout(carrier_column, 1)
         shipping_details.addLayout(tracking_column, 1)
         card.layout.addLayout(shipping_details)
@@ -769,8 +780,9 @@ class ShipView(BaseView):
         qty = int(self.qty.text() or 0)
         self.ship_btn.setEnabled(False)
         if not pn:
-            self.preview.setText("Select a valid part.")
+            self.preview.hide()
             return
+        self.preview.show()
         if pn in STORE.parts and qty > 0 and STORE.has_bom(pn):
             self.component_lot_table.setVisible(True)
             plan = STORE.prepare_bom_shipment(pn, qty, loc)
@@ -881,14 +893,14 @@ class ShipView(BaseView):
 
 class MoveAdjustView(BaseView):
     def __init__(self, toast: Callable[[str, str], None], operator_getter: Callable[[], str]) -> None:
-        super().__init__("Move / Adjust", "Move stock between locations or correct a physical count.")
+        super().__init__("Move / Adjust")
         self.toast = toast
         self.operator_getter = operator_getter
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
         self.root.addWidget(self.tabs)
 
-        move = Card("Move Stock", "Source decreases. Destination increases.")
+        move = Card()
         self.move_part = PartCombo()
         self.move_qty = QLineEdit()
         self.move_qty.setValidator(QIntValidator(1, 999999))
@@ -899,8 +911,9 @@ class MoveAdjustView(BaseView):
         self.move_to = QComboBox()
         self.move_to.addItems(STORE.locations)
         self.move_to.setCurrentText("Shipping Bench")
-        self.move_preview = QLabel("Select a part, lot, and quantity.")
+        self.move_preview = QLabel()
         self.move_preview.setObjectName("FeedbackLabel")
+        self.move_preview.hide()
         self.move_btn = QPushButton("Move Stock")
         self.move_btn.setMinimumHeight(50)
         self.move_btn.setEnabled(False)
@@ -914,7 +927,7 @@ class MoveAdjustView(BaseView):
         move.layout.addWidget(self.move_btn)
         self.tabs.addTab(move, "Move Stock")
 
-        adjust = Card("Adjust Count", "Requires a reason. Keeps the audit trail.")
+        adjust = Card()
         self.adjust_part = PartCombo()
         self.adjust_count = QLineEdit()
         self.adjust_count.setValidator(QIntValidator(0, 999999))
@@ -923,8 +936,9 @@ class MoveAdjustView(BaseView):
         self.adjust_location.setCurrentText("Stock")
         self.adjust_lot = QComboBox()
         self.reason = QLineEdit()
-        self.adjust_preview = QLabel("Select a part and enter the physical count.")
+        self.adjust_preview = QLabel()
         self.adjust_preview.setObjectName("FeedbackLabel")
+        self.adjust_preview.hide()
         self.adjust_btn = QPushButton("Review Count Correction")
         self.adjust_btn.setObjectName("SecondaryButton")
         self.adjust_btn.setMinimumHeight(50)
@@ -988,6 +1002,8 @@ class MoveAdjustView(BaseView):
                 f"{source}: {available} → {available - move_qty}; {target} receives {move_qty}.",
                 "info" if move_valid else "warning",
             )
+        else:
+            set_feedback(self.move_preview, "")
 
         adjust_part = self.adjust_part.part_number()
         adjust_lot = self.adjust_lot.currentText()
@@ -1007,6 +1023,8 @@ class MoveAdjustView(BaseView):
                 f"Current: {current}. New count: {new_count}. Adjustment: {diff:+d}.",
                 "warning" if diff else "info",
             )
+        else:
+            set_feedback(self.adjust_preview, "")
 
     def _fill_lots(self, combo: QComboBox, part_number: str, location: str) -> None:
         current = combo.currentText()
@@ -1077,7 +1095,7 @@ class MoveAdjustView(BaseView):
 
 class HistoryView(BaseView):
     def __init__(self) -> None:
-        super().__init__("History", "Trace inventory activity. No hidden changes.")
+        super().__init__("History")
         card = Card("Transactions")
         self.root.addWidget(card)
         filters = QHBoxLayout()
@@ -1190,7 +1208,7 @@ class HistoryView(BaseView):
 
 class SettingsView(BaseView):
     def __init__(self, toast: Callable[[str, str], None], operator_getter: Callable[[], str]) -> None:
-        super().__init__("Settings", "Import, export, and backup tools.")
+        super().__init__("Settings")
         self.toast = toast
         self.operator_getter = operator_getter
         self.service = ImportExportService(STORE)
@@ -1202,18 +1220,19 @@ class SettingsView(BaseView):
         grid.setSpacing(16)
         self.root.addLayout(grid)
 
-        export_card = Card("Export", "Write CSV snapshots to the exports folder.")
+        export_card = Card("Export")
         export_btn = QPushButton("Export All")
         export_btn.setObjectName("SecondaryButton")
         export_btn.setMinimumHeight(50)
         export_btn.clicked.connect(self.export_all)
-        self.export_summary = QLabel("No export yet.")
+        self.export_summary = QLabel()
         self.export_summary.setObjectName("HelpText")
+        self.export_summary.hide()
         export_card.layout.addWidget(export_btn)
         export_card.layout.addWidget(self.export_summary)
         grid.addWidget(export_card, 0, 0)
 
-        backup_card = Card("Backup", "Create a manual SQLite database backup.")
+        backup_card = Card("Backup")
         backup_btn = QPushButton("Create Backup")
         backup_btn.setObjectName("SecondaryButton")
         backup_btn.setMinimumHeight(50)
@@ -1225,7 +1244,7 @@ class SettingsView(BaseView):
         backup_card.layout.addWidget(self.backup_summary)
         grid.addWidget(backup_card, 0, 1)
 
-        import_card = Card("Import", "Preview row-level CSV issues before committing changes.")
+        import_card = Card("Import")
         import_buttons = QHBoxLayout()
         for label, kind in [
             ("Choose Parts CSV", "parts"),
@@ -1236,17 +1255,20 @@ class SettingsView(BaseView):
             btn.setMinimumHeight(44)
             btn.clicked.connect(lambda _, k=kind: self.choose_import(k))
             import_buttons.addWidget(btn)
-        self.preview_summary = QLabel("Choose a CSV to preview.")
+        self.preview_summary = QLabel()
         self.preview_summary.setObjectName("HelpText")
         self.preview_summary.setWordWrap(True)
-        self.selected_file = QLabel("No file selected.")
+        self.preview_summary.hide()
+        self.selected_file = QLabel()
         self.selected_file.setObjectName("Muted")
         self.selected_file.setWordWrap(True)
+        self.selected_file.hide()
         self.issue_table = QTableWidget(0, 4)
         self.issue_table.setHorizontalHeaderLabels(["Row", "Level", "Field", "Message"])
         self.issue_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.issue_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.issue_table.verticalHeader().setVisible(False)
+        self.issue_table.hide()
         self.commit_btn = QPushButton("Commit Import")
         self.commit_btn.setObjectName("SuccessButton")
         self.commit_btn.setMinimumHeight(50)
@@ -1259,7 +1281,7 @@ class SettingsView(BaseView):
         import_card.layout.addWidget(self.commit_btn)
         grid.addWidget(import_card, 1, 0, 1, 2)
 
-        folders_card = Card("Folders", "Open generated exports or database backups.")
+        folders_card = Card("Folders")
         folder_buttons = QHBoxLayout()
         exports_btn = QPushButton("Open Exports")
         backups_btn = QPushButton("Open Backups")
@@ -1276,6 +1298,7 @@ class SettingsView(BaseView):
         try:
             results = self.service.export_all()
             self.export_summary.setText(f"Exported {len(results)} files to {EXPORT_DIR}.")
+            self.export_summary.show()
             self.toast(f"Exported {len(results)} CSV files.", "success")
         except OSError as e:
             self.toast(f"Export failed: {e}", "error")
@@ -1287,7 +1310,10 @@ class SettingsView(BaseView):
         self.preview_kind = kind
         self.preview_path = path
         self.selected_file.setText(f"Selected file: {Path(path).name}")
+        self.selected_file.show()
         self.selected_file.setToolTip(path)
+        self.preview_summary.hide()
+        self._show_issues([])
         try:
             preview = {
                 "parts": self.service.preview_parts_import_csv,
@@ -1298,6 +1324,7 @@ class SettingsView(BaseView):
                 f"{kind.title()} preview: {preview.row_count} rows, {preview.valid_count} valid, "
                 f"{len(preview.errors)} errors, {len(preview.warnings)} warnings."
             )
+            self.preview_summary.show()
             self.preview_row_count = preview.row_count
             self.commit_btn.setEnabled(preview.can_import)
             self._show_issues(preview.errors + preview.warnings)
@@ -1333,6 +1360,7 @@ class SettingsView(BaseView):
             self.toast(f"Imported {result.rows_imported} {result.kind} rows.", "success")
             self.commit_btn.setEnabled(False)
             self.preview_summary.setText(f"Imported {result.rows_imported} rows. Backup: {result.backup_path}")
+            self.preview_summary.show()
         except ValueError as e:
             self.toast(str(e), "error")
 
@@ -1360,6 +1388,7 @@ class SettingsView(BaseView):
 
     def _show_issues(self, issues) -> None:
         self.issue_table.setRowCount(len(issues))
+        self.issue_table.setVisible(bool(issues))
         for row, issue in enumerate(issues):
             values = [str(issue.row_number), issue.level, issue.field, issue.message]
             for col, value in enumerate(values):

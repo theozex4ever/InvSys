@@ -121,9 +121,14 @@ def test_receive_uses_selected_parts_default_location(qtbot, blank_store, monkey
     view = ReceiveView(lambda *_: None, lambda: "alice")
     qtbot.addWidget(view)
 
+    assert view.preview.isHidden()
+    assert view.result.isHidden()
     view.part.setCurrentIndex(view.part.findData("ABC-1"))
 
     assert view.location.currentText() == "Receiving"
+    assert not view.preview.isHidden()
+    assert "Current at Receiving" in view.preview.text()
+    assert view.result.isHidden()
 
 
 def test_move_and_adjust_are_separate_task_tabs(qtbot, blank_store, monkeypatch):
