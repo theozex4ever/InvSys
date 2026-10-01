@@ -5,3 +5,6 @@ __pycache__/
 data/
 backups/
 logs/
+build/
+dist/
+*.spec

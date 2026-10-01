@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from inventory_control.config import APP_NAME
-from inventory_control.store import STORE
+from inventory_control.ui.store import STORE
 from inventory_control.ui.views import (
     BOMView,
     DashboardView,

@@ -1085,6 +1085,3 @@ class InventoryStore:
             row.tracking_number,
             consumed,
         )
-
-
-STORE = InventoryStore(db_path=None, seed=False)

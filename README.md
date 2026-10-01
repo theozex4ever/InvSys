@@ -110,6 +110,26 @@ No database setup required — default locations (`Receiving`, `Stock`, `Shippin
 
 ---
 
+## Optional Live Desktop Frontend
+
+The new pywebview shell provides a live Attention first dashboard and parts
+catalog: search/filter/sort, create parts, inspect lot/location stock, and remember
+operator/theme choices. It uses the existing InventoryStore and SQLite schema.
+Other workflows remain in the original PySide6 application.
+
+```bash
+pip install -r requirements-desktop.txt
+npm ci --prefix frontend
+npm run build --prefix frontend
+python inventory_desktop.py --database /tmp/invsys-review/inventory.db
+```
+
+Omit `--database` to use the existing operational data and startup backups.
+Built assets load offline without a frontend development server or HTTP server.
+See [desktop launch, scope, package smoke, and validation](docs/frontend/desktop.md).
+
+---
+
 ## Database
 
 The app stores data locally at `data/inventory.db`. Startup backups are written to `backups/inventory-YYYYMMDD-HHMMSS.db`, with the latest 20 backups retained.
