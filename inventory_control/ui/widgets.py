@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from inventory_control.store import STORE
+from inventory_control.ui.store import STORE
 
 
 class Card(QFrame):

@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 from inventory_control.backup import backup_database
 from inventory_control.config import BACKUP_DIR, DB_PATH, EXPORT_DIR
 from inventory_control.import_export import ImportExportService
-from inventory_control.store import STORE
+from inventory_control.ui.store import STORE
 from inventory_control.models import BOMShipmentPlan
 from inventory_control.ui.bom_flowchart import BOMFlowchart, capacity_level
 from inventory_control.ui.widgets import BaseView, Card, PartCombo, add_field, set_feedback
