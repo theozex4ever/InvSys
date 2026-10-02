@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "check": "tsc --noEmit",
-    "build": "npm run check && vite build && node scripts/build-html.mjs"
+    "build": "npm run check && npm run build:assets",
+    "build:assets": "vite build && node scripts/build-html.mjs"
   },
   "dependencies": {
     "lucide": "^1.49.0"
