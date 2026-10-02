@@ -45,7 +45,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
         feedback(mode, action === 'completed' ? 'Completion verified. Start another entry when ready.' : 'You verified no matching operation. Review the preserved draft before submitting.');
         if (action === 'completed') {
           const submitted = states[mode].submitted!; const context = states[mode].context!;
-          const text = `Verified ${mode === 'receive' ? 'receipt' : 'shipment'} of ${submitted.quantity} × ${submitted.part_number}, lot ${submitted.lot_number}, at ${submitted.location}. Current location stock: ${context.part.location_balances[submitted.location] ?? 0}; total stock: ${context.part.quantity}.${mode === 'ship' ? ` Shipment numbers reviewed: ${states[mode].recoveredNumbers.join(', ') || 'No new shipment records; investigate in History.'}` : ''}`;
+          const text = `Verified ${mode === 'receive' ? 'receipt' : 'shipment'} of ${submitted.quantity} × ${submitted.part_number}, ${submitted.lot_number ? `lot ${submitted.lot_number}` : 'automatic component lots'}, at ${submitted.location}. Current location stock: ${context.part.location_balances[submitted.location] ?? 0}; total stock: ${context.part.quantity}.${mode === 'ship' ? ` Shipment numbers reviewed: ${states[mode].recoveredNumbers.join(', ') || 'No new shipment records; investigate in History.'}` : ''}`;
           control<HTMLElement>(mode, 'result').innerHTML = `<div class="status success">${esc(text)}${mode === 'ship' ? ' <button class="btn" data-another>Ship another</button>' : ''}</div>`;
           if (mode === 'receive') clearEntry(mode); else states[mode].completed = true;
           toast(text);

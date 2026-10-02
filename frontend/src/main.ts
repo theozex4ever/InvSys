@@ -122,7 +122,7 @@ function detailHTML(part: PartDetail) {
 ${[['Total stock', part.quantity], ['Minimum quantity', part.minimum_quantity], ['Default location', part.location]].map(([label, value]) => `<div class="detail-pair"><span>${label}</span><strong>${esc(value)}</strong></div>`).join('')}
 <h3>Stock by location</h3>${Object.entries(part.location_balances).map(([location, qty]) => `<div class="detail-pair"><span>${esc(location)}</span><strong>${qty}</strong></div>`).join('') || status('No locations.')}
 <h3>Lot balances</h3>${part.balances.length ? `<div class="table-wrap"><table><thead><tr><th>Lot</th><th>Location</th><th class="num">Stock</th></tr></thead><tbody>${part.balances.map(b => `<tr><td>${esc(b.lot_number)}</td><td>${esc(b.location)}</td><td class="num">${b.quantity}</td></tr>`).join('')}</tbody></table></div>` : status('No lots received yet.')}
-<div class="stock-context-actions"><button class="btn primary" data-stock="receive" data-number="${esc(part.part_number)}">Receive stock</button> <button class="btn" data-stock="ship" data-number="${esc(part.part_number)}">Ship stock</button></div><div class="system-note">Editing and deactivation remain available in the original application.</div></div>`;
+<div class="stock-context-actions"><button class="btn primary" data-stock="receive" data-number="${esc(part.part_number)}">Receive stock</button> <button class="btn" data-stock="ship" data-number="${esc(part.part_number)}">Ship stock</button> <button class="btn" data-part-history="${esc(part.part_number)}">View History</button></div><div class="system-note">Editing and deactivation remain available in the original application.</div></div>`;
 }
 async function openPart(number: string, focus: HTMLElement | null = document.activeElement as HTMLElement) {
   selected = number;
@@ -168,6 +168,11 @@ document.addEventListener('click', event => {
 $('#drawer-data').onclick = event => {
   const target = (event.target as HTMLElement).closest<HTMLElement>('button');
   if (target?.id === 'retry-detail') void openPart(selected, returnFocus);
+  if (target?.dataset.partHistory && api) {
+    $<HTMLDialogElement>('#drawer').close(); navigate('history', false);
+    void history.open(target.dataset.partHistory);
+    $('#history-query').focus();
+  }
   if (target?.dataset.stock && api) {
     const mode = target.dataset.stock as 'receive' | 'ship';
     $<HTMLDialogElement>('#drawer').close(); navigate(mode, false); void stock.open(mode, target.dataset.number);

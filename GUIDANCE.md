@@ -5,7 +5,7 @@
 > **Status clarification (2026-10-02):** This guidance was captured with the approved
 > Phase 0 prototype and is being added to `main` after the first production desktop
 > slice landed. Its phase sequence describes the migration plan; the progress table
-> below records the Phase 0 baseline, not current implementation status. Consult
+> below records current delivered scope, including partial phases. Consult
 > [desktop scope and validation](docs/frontend/desktop.md), current code and tests,
 > and merged PRs for delivered behavior. The
 > [approved design decisions](docs/frontend/phase0-design.md) remain the visual reference.
@@ -2530,27 +2530,27 @@ That combination is the goal.
 
 ---
 
-## Migration Progress — Phase 0 Baseline
+## Migration Progress — 2026-10-02
 
-This table records status at prototype approval on 2026-09-30. It does not mean
-the phases marked Not Started are still unimplemented; see the status clarification
-at the top of this document and current desktop documentation before planning work.
+Issues #7–#10 deliver and validate the bounded working prototype in parent #6.
+Complete below means the described slice is delivered; broader phase goals remain
+explicit where incomplete. See [acceptance and remaining gaps](docs/frontend/prototype-acceptance.md).
 
 | Phase | Goal | Status |
 |---|---|---|
 | 0 | Static visual prototype | Complete |
-| 1 | pywebview + bridge | Not Started |
-| 2 | Dashboard | Not Started |
-| 3 | Parts | Not Started |
-| 4 | History | Not Started |
-| 5 | Receive | Not Started |
+| 1 | pywebview + typed bridge, local assets, basic Linux package proof | Complete |
+| 2 | Live Attention first dashboard and workspace links | Complete |
+| 3 | Parts search/create/details delivered; editing/deactivation deferred | In Progress |
+| 4 | Searchable immutable History and persisted shipment/component trace | Complete |
+| 5 | Real lot receiving, drafts, refresh, and recovery | Complete |
 | 6 | Move + Adjust | Not Started |
-| 7 | Ship + BOM shipment | Not Started |
+| 7 | Standard and nested BOM review/shipment with recovery | Complete |
 | 8 | Interactive BOM Explorer | Not Started |
-| 9 | Command Search | Not Started |
-| 10 | Settings / Import / Export / Backup | Not Started |
+| 9 | Part search shortcut delivered; command search deferred | In Progress |
+| 10 | Operator/theme and startup backup delivered; operational utilities deferred | In Progress |
 | 11 | PySide6 retirement | Not Started |
-| 12 | Hardening | Not Started |
+| 12 | Scripted native/keyboard/layout acceptance delivered; release hardening deferred | In Progress |
 
 Phase 0 design decisions: `docs/frontend/phase0-design.md`.
 Prototype run and review instructions: `frontend/README.md` on the preserved

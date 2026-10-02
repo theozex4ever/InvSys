@@ -2,13 +2,15 @@
 
 import logging
 import time
+from pathlib import Path
 from typing import Any
 
 
 class DesktopSmoke:
-    def __init__(self) -> None:
+    def __init__(self, captures: Path) -> None:
         self.error: str | None = None
         self.stock_result: dict[str, Any] | None = None
+        self.captures = captures
 
     def run(self, window: Any) -> None:
         def wait(script: str) -> None:
@@ -60,6 +62,13 @@ class DesktopSmoke:
                 raise RuntimeError("Desktop page overflows horizontally.")
             self._stock_workflows(window, wait)
             self._bom_history_workflows(window, wait)
+            self._history_read_recovery(window, wait)
+            self._part_history_navigation(window, wait)
+            self._refresh_reads(window, wait)
+            self._bom_transport_recovery(window, wait)
+            from inventory_control.desktop_smoke_ui import check_ui
+
+            check_ui(window, wait, self.captures, self.bom_part)
             print(
                 "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
                 flush=True,
@@ -69,6 +78,164 @@ class DesktopSmoke:
             self.error = str(error)
         finally:
             window.destroy()
+
+    def _history_read_recovery(self, window: Any, wait: Any) -> None:
+        """A failed immutable read must offer recovery inside the open drawer."""
+        run = window.evaluate_js
+        run("""
+            window.smokeHistoryDetail = window.smokeAPI.history_detail;
+            window.smokeAPI.history_detail = async () => ({ok:false, error:{code:'INTERNAL', message:'Read unavailable'}});
+            document.querySelector('#dashboard-data [data-history-id]').click();
+        """)
+        wait(
+            "document.querySelector('#history-detail').textContent.includes('Read unavailable')"
+        )
+        if not run("!!document.querySelector('#history-detail [data-retry-detail]')"):
+            raise RuntimeError("Failed History detail has no explicit retry action.")
+        run("""
+            window.smokeAPI.history_detail = window.smokeHistoryDetail;
+            document.querySelector('#history-detail [data-retry-detail]').click();
+        """)
+        wait(
+            "document.querySelector('#history-detail').textContent.includes(window.smokeBOMNumber)"
+        )
+        run("document.querySelector('#history-close').click()")
+        print(
+            "Desktop smoke: failed History read and explicit drawer retry passed.",
+            flush=True,
+        )
+
+    def _part_history_navigation(self, window: Any, wait: Any) -> None:
+        run = window.evaluate_js
+        run("""
+            document.querySelector('#global-search').click();
+            document.querySelector('#query').value='DESKTOP-SMOKE';
+            document.querySelector('#query').dispatchEvent(new Event('input'));
+        """)
+        wait("!!document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]')")
+        run("document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]').click()")
+        wait(
+            "document.querySelector('#drawer-data').textContent.includes('Lot balances')"
+        )
+        if not run("!!document.querySelector('#drawer-data [data-part-history]')"):
+            raise RuntimeError("Part details have no contextual History action.")
+        run("document.querySelector('#drawer-data [data-part-history]').click()")
+        wait(
+            "!document.querySelector('#history').hidden && document.querySelector('#history-data tbody')"
+        )
+        if not run(
+            "document.querySelector('#history-query').value==='DESKTOP-SMOKE' && document.querySelector('#history-type').value==='' && !document.querySelector('#drawer').open"
+        ):
+            raise RuntimeError(
+                "Part History action did not adopt the part and clear prior filters."
+            )
+        print(
+            "Desktop smoke: part details open current filtered History passed.",
+            flush=True,
+        )
+
+    def _refresh_reads(self, window: Any, wait: Any) -> None:
+        """Explicit refresh observes writes from another operator without losing filters."""
+        run = window.evaluate_js
+        run("""
+            window.smokeAPI.receive({part_number:'DESKTOP-SMOKE', quantity:1, location:'Stock', lot_number:'REFRESH', operator:'Other', reference:'REFRESH', notes:''}).then(r => { window.smokeRefreshResult=r.data; });
+        """)
+        wait("window.smokeRefreshResult")
+        run("document.querySelector('#history-refresh').click()")
+        wait("document.querySelector('#history-data').textContent.includes('REFRESH')")
+        if not run("document.querySelector('#history-query').value==='DESKTOP-SMOKE'"):
+            raise RuntimeError("History refresh lost the part filter.")
+        run("document.querySelector('[data-page=parts]').click()")
+        wait("document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]')")
+        run("document.querySelector('#parts .refresh').click()")
+        wait("document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]')")
+        if not run(
+            "Number(document.querySelector('#parts-data tbody tr td.num').textContent)===window.smokeRefreshResult.part.quantity && document.querySelector('#query').value==='DESKTOP-SMOKE'"
+        ):
+            raise RuntimeError(
+                "Catalog refresh did not show current stock and retain search."
+            )
+        run(
+            "document.querySelector('[data-page=dashboard]').click(); document.querySelector('#dashboard .refresh').click()"
+        )
+        wait(
+            "document.querySelector('#dashboard-data').textContent.includes('Other · Lot REFRESH')"
+        )
+        self.stock_result = run("window.smokeRefreshResult")
+        print(
+            "Desktop smoke: explicit History/catalog/dashboard refresh after external receipt passed.",
+            flush=True,
+        )
+
+    def _bom_transport_recovery(self, window: Any, wait: Any) -> None:
+        run = window.evaluate_js
+        run("""
+            window.smokeAPI.receive({part_number:window.smokeBOMLeaf, quantity:7, location:'Stock', lot_number:'RECOVERY', operator:'Desktop smoke', reference:'RECOVERY', notes:''}).then(r => { window.smokeRecoveryMaterial=r.ok; });
+            document.querySelector('[data-page=ship]').click(); document.querySelector('#ship-result [data-another]').click();
+        """)
+        wait(
+            "window.smokeRecoveryMaterial && !document.querySelector('#ship-submit').disabled"
+        )
+        run(
+            "document.querySelector('#ship-quantity').value='1'; document.querySelector('#ship-recipient').value='Uncertain BOM customer'; document.querySelector('#ship-form').requestSubmit()"
+        )
+        wait("document.querySelector('#ship-confirmation').open")
+        run("""
+            window.smokeShipBOM=window.smokeAPI.ship_bom; window.smokeBOMCalls=0;
+            window.smokeAPI.ship_bom=async fields => { window.smokeBOMCalls++; await window.smokeShipBOM(fields); throw new Error('Lost BOM response'); };
+            document.querySelector('#ship-confirm-submit').click(); document.querySelector('#ship-confirm-submit').click();
+        """)
+        wait(
+            "document.querySelector('#ship-error').textContent.includes('Completion is uncertain') && !document.querySelector('#ship-confirmation').open"
+        )
+        if not run(
+            "window.smokeBOMCalls===1 && document.querySelector('#ship-submit').disabled && document.querySelector('#ship-recipient').value==='Uncertain BOM customer'"
+        ):
+            raise RuntimeError(
+                "Uncertain BOM did not lock its preserved draft or suppress duplicate clicks."
+            )
+        run("""
+            window.smokeAPI.ship_bom=window.smokeShipBOM;
+            window.smokeRecoveryContext=window.smokeAPI.stock_context;
+            window.smokeAPI.stock_context=async () => { throw new Error('Recovery read unavailable'); };
+            document.querySelector('#ship-recovery [data-recovery=read]').click();
+        """)
+        wait(
+            "document.querySelector('#ship-recovery').textContent.includes('Completion remains uncertain')"
+        )
+        if not run(
+            "document.querySelector('#ship-submit').disabled && !document.querySelector('#ship-recovery [data-recovery=completed]')"
+        ):
+            raise RuntimeError(
+                "Failed reconciliation unlocked uncertain BOM submission."
+            )
+        run("""
+            window.smokeAPI.stock_context=window.smokeRecoveryContext;
+            document.querySelector('[data-page=parts]').click(); document.querySelector('[data-page=ship]').click();
+            document.querySelector('#ship-recovery [data-recovery=read]').click();
+        """)
+        wait("document.querySelector('#ship-recovery [data-recovery=completed]')")
+        if not run(
+            "document.querySelector('#ship-recovery').textContent.includes('component snapshots') && document.querySelector('#ship-recovery').textContent.includes('Consumed 7') && window.smokeBOMCalls===1"
+        ):
+            raise RuntimeError(
+                "BOM reconciliation did not expose persisted consumption without retrying."
+            )
+        run(
+            "document.querySelector('#ship-recovery [data-recovery=completed]').click()"
+        )
+        wait(
+            "document.querySelector('#ship-result').textContent.includes('Verified shipment of 1')"
+        )
+        run(
+            "window.smokeAPI.stock_context(window.smokeBOMPart).then(r => { return window.smokeAPI.shipment_detail(r.data.shipments[0].shipment_number); }).then(r => { window.smokeRecoveredBOM=r.data; });"
+        )
+        wait("window.smokeRecoveredBOM")
+        self.recovered_bom_result = run("window.smokeRecoveredBOM")
+        print(
+            "Desktop smoke: uncertain BOM response, failed recovery read, preserved draft and snapshot reconciliation without retry passed.",
+            flush=True,
+        )
 
     def _stock_workflows(self, window: Any, wait: Any) -> None:
         """Exercise real writes, drafts, review, and lost-response recovery."""

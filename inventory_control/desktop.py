@@ -72,7 +72,7 @@ def main() -> int:
         if args.smoke_check:
             from inventory_control.desktop_smoke import DesktopSmoke
 
-            smoke = DesktopSmoke()
+            smoke = DesktopSmoke(database.parent / "smoke-captures")
             smoke.prepare_bom(store)
             webview.start(smoke.run, window, gui="qt", http_server=False)
             if smoke.error:
@@ -95,11 +95,16 @@ def main() -> int:
         try:
             bridge = InventoryBridge(reopened)
             if (
-                bridge.preferences()["data"]["operator"] != "Desktop smoke"
+                bridge.preferences()["data"]
+                != {"operator": "Desktop smoke", "theme": "dark"}
                 or not bridge.part_detail("DESKTOP-SMOKE")["ok"]
                 or bridge.stock_context("DESKTOP-SMOKE")["data"] != smoke.stock_result
                 or bridge.shipment_detail(smoke.bom_result["shipment_number"])["data"]
                 != smoke.bom_result
+                or bridge.shipment_detail(
+                    smoke.recovered_bom_result["shipment_number"]
+                )["data"]
+                != smoke.recovered_bom_result
                 or bridge.part_detail(smoke.bom_part)["data"]["quantity"] != 10
                 or bridge.part_detail(smoke.bom_sub)["data"]["quantity"] != 10
                 or bridge.part_detail(smoke.bom_leaf)["data"]["quantity"] != 8
