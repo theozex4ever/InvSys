@@ -183,6 +183,8 @@ Executed against disposable SQLite databases and built local frontend assets:
   is pending; the retained smoke command includes this regression check.
 - Native recovery checks verify persistent received quantity/current stock and
   reviewed shipment numbers after recovery details are closed.
+- Native operator-edit regression: a delayed availability read still enables
+  shipment review, while a delayed preview is cancelled and requires fresh review.
 - Native UI probe: dashboard and part-context actions, a non-Stock default location,
   refreshed drafts, BOM submission blocking, real Qt Tab/Shift+Tab focus trapping,
   Escape and focus restoration passed. Both themes at 1366 × 768, 1920 × 1080,
