@@ -12,6 +12,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     ship: { pending: false, uncertain: false, completed: false, version: 0, context: null as StockContext | null, submitted: null as Receipt | ShipmentRequest | null, before: 0, beforeShipments: 0, recoveredNumbers: [] as string[], reconciled: false },
   };
   let preview: ShipmentPreview | null = null;
+  let previewVersion = 0;
   let active: Mode | null = null;
   const control = <T extends HTMLElement>(mode: Mode, name: string) => document.querySelector<T>(`#${mode}-${name}`)!;
   const form = (mode: Mode) => control<HTMLFormElement>(mode, 'form');
@@ -136,12 +137,12 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     if (state.pending || state.uncertain || state.completed || !state.context || (mode === 'ship' && state.context.has_bom)) return;
     let fields: Receipt | ShipmentRequest;
     try { fields = request(mode); } catch (error) { feedback(mode, message(error), true); return; }
-    state.pending = true; const version = ++state.version; lock(mode); feedback(mode, mode === 'receive' ? 'Receiving…' : 'Reading shipment review…');
+    state.pending = true; const version = ++state.version; const reviewVersion = previewVersion; lock(mode); feedback(mode, mode === 'receive' ? 'Receiving…' : 'Reading shipment review…');
     let mutationStarted = false;
     try {
       if (mode === 'ship') {
         const result = await read(getAPI().preview_ship(fields as ShipmentRequest));
-        if (version !== state.version || active !== 'ship') return;
+        if (version !== state.version || reviewVersion !== previewVersion || active !== 'ship') return;
         state.context = result.context; preview = result;
         const r = result.request;
         document.querySelector('#ship-confirm-data')!.innerHTML = pair('Part', r.part_number) + pair('Location / lot', `${r.location} / ${r.lot_number}`) + pair('Quantity', r.quantity) + pair('Recipient', r.recipient) + pair('Operator', r.operator) + pair('Carrier', r.carrier || '—') + pair('Tracking', r.tracking || '—') + pair('Reference', r.reference || '—') + pair('Selected-lot stock', result.lot_stock) + pair('Total location stock', result.location_stock) + pair('Lot remaining after shipment', result.remaining) + '<p class="help">Confirmation creates a real shipment. Python rechecks available stock at submission.</p>';
@@ -157,11 +158,11 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
         clearEntry(mode); feedback(mode, 'Ready for the next receipt.'); toast(text); void changed();
       }
     } catch (error) {
-      if (mode === 'ship' && version !== state.version) return;
+      if (mode === 'ship' && (version !== state.version || reviewVersion !== previewVersion)) return;
       if (mutationStarted) ambiguous(mode, error); else feedback(mode, `${message(error)} No stock submission was sent.`, true);
     } finally {
       state.pending = false; lock(mode); renderReview(mode);
-      if (mode === 'ship' && version !== state.version) {
+      if (mode === 'ship' && (version !== state.version || reviewVersion !== previewVersion)) {
         feedback(mode, 'Previous review cancelled. Review current availability before submitting.');
         if (active === 'ship') void refresh(mode);
       }
@@ -220,6 +221,6 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
       await refresh(mode, !!number);
     },
     leave() { active = null; ++states.ship.version; preview = null; if (dialog().open && !states.ship.pending) dialog().close(); },
-    operatorChanged() { ++states.ship.version; preview = null; if (dialog().open && !states.ship.pending) dialog().close(); renderReview('receive'); renderReview('ship'); },
+    operatorChanged() { ++previewVersion; preview = null; if (dialog().open && !states.ship.pending) dialog().close(); renderReview('receive'); renderReview('ship'); },
   };
 }

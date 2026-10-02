@@ -136,6 +136,28 @@ class DesktopSmoke:
         )
         wait("!document.querySelector('#ship-submit').disabled")
         run("""
+            window.smokeContext = window.smokeAPI.stock_context;
+            window.smokeAPI.stock_context = async part => {
+                const result = await window.smokeContext(part);
+                return await new Promise(resolve => { window.smokeReleaseContext = () => resolve(result); });
+            };
+            document.querySelector('#ship-refresh').click();
+        """)
+        wait("typeof window.smokeReleaseContext === 'function'")
+        run("""
+            document.querySelector('#operator').value='Desktop smoke edited';
+            document.querySelector('#operator').dispatchEvent(new Event('input'));
+            window.smokeReleaseContext(); window.smokeAPI.stock_context = window.smokeContext;
+        """)
+        wait("!document.querySelector('#ship-submit').disabled")
+        require(
+            "document.querySelector('#ship-review').textContent.includes('DESKTOP-SMOKE')",
+            "operator edit preserves pending availability read",
+        )
+        run(
+            "document.querySelector('#operator').value='Desktop smoke'; document.querySelector('#operator').dispatchEvent(new Event('input'))"
+        )
+        run("""
             document.querySelector('#ship-lot_number').value='SMOKE-A';
             document.querySelector('#ship-quantity').value='2147483647';
             document.querySelector('#ship-recipient').value='Smoke customer';
@@ -166,6 +188,21 @@ class DesktopSmoke:
             };
             document.querySelector('#ship-form').requestSubmit();
         """)
+        wait("typeof window.smokeReleasePreview === 'function'")
+        run("""
+            document.querySelector('#operator').value='Desktop smoke edited';
+            document.querySelector('#operator').dispatchEvent(new Event('input'));
+            window.smokeReleasePreview(); window.smokeReleasePreview = null;
+        """)
+        wait("!document.querySelector('#ship-submit').disabled")
+        require(
+            "!document.querySelector('#ship-confirmation').open",
+            "operator edit invalidates pending shipment preview",
+        )
+        run(
+            "document.querySelector('#operator').value='Desktop smoke'; document.querySelector('#operator').dispatchEvent(new Event('input'))"
+        )
+        run("document.querySelector('#ship-form').requestSubmit()")
         wait("typeof window.smokeReleasePreview === 'function'")
         run("""
             document.querySelector('[data-page=dashboard]').click();
