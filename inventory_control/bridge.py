@@ -185,3 +185,141 @@ class InventoryBridge:
             return self._detail(number)
 
         return self._respond(create)
+
+    def _stock_context(self, part_number: Any) -> dict[str, Any]:
+        part = self._detail(part_number)
+        number = part["part_number"]
+        return {
+            "part": part,
+            "locations": self._store.locations,
+            "has_bom": bool(self._store.bom_children(number)),
+            "transactions": [
+                asdict(tx)
+                for tx in self._store.transactions
+                if tx.part_number == number
+            ],
+            "shipments": [
+                asdict(shipment)
+                for shipment in self._store.shipments
+                if shipment.part_number == number
+            ],
+        }
+
+    def stock_context(self, part_number: Any) -> dict[str, Any]:
+        """Current stock and audit records for reviewing or reconciling a draft."""
+        return self._respond(lambda: self._stock_context(part_number))
+
+    def _stock_request(self, request: Any, optional: set[str]) -> dict[str, Any]:
+        fields = self._request(
+            request,
+            {
+                "part_number",
+                "quantity",
+                "location",
+                "lot_number",
+                "operator",
+            }
+            | optional,
+        )
+        values = {
+            key: self._text(fields.get(key), label)
+            for key, label in (
+                ("part_number", "Part number"),
+                ("location", "Location"),
+                ("lot_number", "Lot"),
+                ("operator", "Operator"),
+            )
+        }
+        quantity = fields.get("quantity")
+        if type(quantity) is not int or not 0 < quantity <= 2**31 - 1:
+            raise ValueError(
+                "Quantity must be a whole number between 1 and 2147483647."
+            )
+        values["quantity"] = quantity
+        values["part_number"] = values["part_number"].upper()
+        values["lot_number"] = values["lot_number"].upper()
+        self._detail(values["part_number"])
+        for key in optional:
+            values[key] = self._text(
+                fields.get(key, ""), key.capitalize(), required=False
+            )
+        return values
+
+    def receive(self, request: Any) -> dict[str, Any]:
+        def receive() -> dict[str, Any]:
+            fields = self._stock_request(request, {"reference", "notes"})
+            self._store.receive(
+                fields["part_number"],
+                fields["quantity"],
+                fields["location"],
+                fields["lot_number"],
+                fields["operator"],
+                reference=fields["reference"],
+                notes=fields["notes"],
+            )
+            return self._stock_context(fields["part_number"])
+
+        return self._respond(receive)
+
+    def _ship_request(self, request: Any) -> dict[str, Any]:
+        fields = self._stock_request(
+            request, {"recipient", "carrier", "tracking", "reference"}
+        )
+        if not fields["recipient"]:
+            raise ValueError("Recipient required.")
+        if self._store.bom_children(fields["part_number"]):
+            raise ValueError(
+                "BOM shipping is unavailable here. Use the original application to review allocations."
+            )
+        return fields
+
+    def preview_ship(self, request: Any) -> dict[str, Any]:
+        def preview() -> dict[str, Any]:
+            fields = self._ship_request(request)
+            context = self._stock_context(fields["part_number"])
+            if not context["part"]["active"]:
+                raise ValueError("Part is inactive. Reactivate it before shipping.")
+            if fields["location"] not in context["locations"]:
+                raise ValueError("Invalid location.")
+            lots = self._store.lots_for_part(fields["part_number"])
+            if fields["lot_number"] not in {lot.lot_number for lot in lots}:
+                raise BridgeError("NOT_FOUND", "Lot not found.")
+            stock = self._store.stock_at(
+                fields["part_number"], fields["location"], fields["lot_number"]
+            )
+            if fields["quantity"] > stock:
+                raise ValueError(
+                    f"Not enough stock in selected lot. Available: {stock}, requested: {fields['quantity']}."
+                )
+            return {
+                "request": fields,
+                "lot_stock": stock,
+                "location_stock": self._store.stock_at(
+                    fields["part_number"], fields["location"]
+                ),
+                "remaining": stock - fields["quantity"],
+                "context": context,
+            }
+
+        return self._respond(preview)
+
+    def ship(self, request: Any) -> dict[str, Any]:
+        def ship() -> dict[str, Any]:
+            fields = self._ship_request(request)
+            number = self._store.ship(
+                fields["part_number"],
+                fields["quantity"],
+                fields["location"],
+                fields["recipient"],
+                fields["operator"],
+                lot_number=fields["lot_number"],
+                carrier=fields["carrier"],
+                tracking=fields["tracking"],
+                reference=fields["reference"],
+            )
+            return {
+                "shipment_number": number,
+                "context": self._stock_context(fields["part_number"]),
+            }
+
+        return self._respond(ship)

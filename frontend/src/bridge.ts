@@ -17,6 +17,17 @@ export interface Search {
   sort: 'part_number' | 'description' | 'quantity' | 'minimum_quantity'; descending: boolean;
 }
 export interface NewPart { part_number: string; description: string; minimum_quantity: number; location: string }
+export interface Receipt {
+  part_number: string; quantity: number; location: string; lot_number: string;
+  operator: string; reference: string; notes: string;
+}
+export interface ShipmentRequest extends Omit<Receipt, 'notes'> { recipient: string; carrier: string; tracking: string }
+export interface Shipment {
+  shipment_number: string; timestamp: string; part_number: string; quantity: number;
+  recipient: string; carrier: string; tracking_number: string;
+}
+export interface StockContext { part: PartDetail; locations: string[]; has_bom: boolean; transactions: Activity[]; shipments: Shipment[] }
+export interface ShipmentPreview { request: ShipmentRequest; lot_stock: number; location_stock: number; remaining: number; context: StockContext }
 export type Response<T> = { ok: true; data: T } | { ok: false; error: { code: 'VALIDATION' | 'DUPLICATE' | 'NOT_FOUND' | 'INTERNAL'; message: string } };
 interface API {
   dashboard(): Promise<Response<Dashboard>>;
@@ -27,6 +38,10 @@ interface API {
   search_parts(search: Search): Promise<Response<Part[]>>;
   part_detail(number: string): Promise<Response<PartDetail>>;
   create_part(part: NewPart): Promise<Response<PartDetail>>;
+  stock_context(number: string): Promise<Response<StockContext>>;
+  receive(request: Receipt): Promise<Response<StockContext>>;
+  preview_ship(request: ShipmentRequest): Promise<Response<ShipmentPreview>>;
+  ship(request: ShipmentRequest): Promise<Response<{ shipment_number: string; context: StockContext }>>;
 }
 declare global { interface Window { pywebview?: { api: API } } }
 export class RequestError extends Error {
@@ -36,7 +51,7 @@ export function ready(): Promise<API> {
   return new Promise((resolve, reject) => {
     const loaded = () => {
       const api = window.pywebview?.api;
-      if (api && ['dashboard', 'preferences', 'save_operator', 'save_theme', 'locations', 'search_parts', 'part_detail', 'create_part'].every(method => typeof api[method as keyof API] === 'function')) { cleanup(); resolve(api); }
+      if (api && ['dashboard', 'preferences', 'save_operator', 'save_theme', 'locations', 'search_parts', 'part_detail', 'create_part', 'stock_context', 'receive', 'preview_ship', 'ship'].every(method => typeof api[method as keyof API] === 'function')) { cleanup(); resolve(api); }
     };
     const cleanup = () => { clearTimeout(timer); window.removeEventListener('pywebviewready', loaded); };
     const timer = setTimeout(() => {

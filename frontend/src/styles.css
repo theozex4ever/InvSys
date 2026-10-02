@@ -202,3 +202,12 @@ dialog.drawer { margin: 0 0 0 auto; height: 100dvh; max-height: 100dvh; width: m
 @media (max-width: 720px) { .app-shell { grid-template-columns: 70px minmax(0,1fr); } .sidebar { padding: 20px 6px; } .brand { padding: 0 6px 24px; } .brand > div:last-child, .nav-button span, .nav-group, .local-status { display: none; } .nav-button { justify-content: center; padding: 12px; } main { padding: 22px 16px; } .stats, .form-grid { grid-template-columns: 1fr; } .header-actions { gap: 8px; } .operator { padding-left: 8px; } .operator input { width: 100px; } .page-heading { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 .dashboard-grid { align-items: start; }
+.stock-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.stock-layout h2 { margin-bottom: 18px; }
+.stock-layout .form-grid { margin-bottom: 22px; }
+.stock-layout .help { color: var(--secondary); margin: 14px 0; line-height: 1.6; }
+.stock-context-actions { margin-top: 24px; }
+.stock-toast { position: fixed; bottom: 24px; right: 24px; z-index: 100; max-width: min(480px, calc(100vw - 48px)); padding: 18px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); }
+#receive-result:not(:empty), #ship-result:not(:empty) { margin-bottom: 20px; }
+.recovery-records .status { overflow-wrap: anywhere; }
+@media (max-width: 1050px) { .stock-layout { grid-template-columns: 1fr; } }

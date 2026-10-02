@@ -96,6 +96,7 @@ def main() -> int:
             if (
                 bridge.preferences()["data"]["operator"] != "Desktop smoke"
                 or not bridge.part_detail("DESKTOP-SMOKE")["ok"]
+                or bridge.stock_context("DESKTOP-SMOKE")["data"] != smoke.stock_result
             ):
                 print("Desktop smoke failed: restart persistence.", file=sys.stderr)
                 return 1

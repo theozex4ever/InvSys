@@ -1,8 +1,10 @@
 # Live desktop dashboard and catalog
 
-Issue [#7](https://github.com/theozex4ever/InvSys/issues/7) implements the first
-slice of [#6](https://github.com/theozex4ever/InvSys/issues/6), using
-[approved layout A](phase0-design.md). This is not the full frontend migration.
+Issues [#7](https://github.com/theozex4ever/InvSys/issues/7) and
+[#8](https://github.com/theozex4ever/InvSys/issues/8) implement dashboard/catalog
+and receiving/standard shipping slices of
+[#6](https://github.com/theozex4ever/InvSys/issues/6), using
+[approved layout A](phase0-design.md). The full frontend migration remains in progress.
 
 ## Launch
 
@@ -36,8 +38,9 @@ python inventory_desktop.py --database /tmp/invsys-smoke/inventory.db --smoke-ch
 An explicit database keeps backups and `logs/desktop.log` beside that database.
 Importing the bridge does not initialize the original application's shared store.
 The smoke command saves operator `Desktop smoke`, creates `DESKTOP-SMOKE` if
-absent, inspects its drawer, exits, and verifies persistence through a reopened
-store. Use a disposable file: these are real writes. Repeat the command to check
+absent, inspects its drawer, receives lots, ships standard stock, and exercises
+drafts, repeat entry, shortages, duplicate clicks, and lost-response reconciliation.
+It verifies the complete stock/audit result through a reopened store. Use a disposable file: these are real writes. Repeat the command to check
 startup backups and restart reads. No seed inventory is inserted by the launcher.
 
 Built assets load directly over `file://` with `http_server=False`. An explicit
@@ -75,24 +78,50 @@ Available: live dashboard counts/low-stock/activity, header operator save,
 remembered light/dark choice, catalog search/filter/sort, part creation, and
 read-only drawer with fields and lot/location balances. Low-stock entries open
 live parts; the attention panel shows five entries and links to all low-stock
-parts. Active and low-stock indicators are separate. The frontend never computes
+parts. Active and low-stock indicators are separate. Receive and standard Ship
+open from navigation, dashboard actions, and part details, adopting the selected
+part's default location. Receipt success retains part/location/notes and clears
+quantity/lot/reference. Shipment confirmation shows selected-lot stock separately
+from location stock, quantity, recipient, operator, optional details, and the
+actual lot remaining. Success shows the generated shipment number and requires
+Ship another. Both use persistent results and a temporary toast. The frontend never computes
 stock or invents catalog fields.
 
-Receive/Ship, Move/Adjust, BOM tooling, History inspection, part editing and
+Move/Adjust, BOM shipping and tooling, History inspection, part editing and
 activation, location administration, and operational Settings are deferred and
 identified in the shell/drawer. Dashboard activity has no pretend History links.
 Continue those workflows in the original application.
 
-The bridge exposes only dashboard, preferences, save operator/theme, locations,
-part search/detail/create. It validates input shapes/types before using the store
+The bridge exposes dashboard, preferences, save operator/theme, locations,
+part search/detail/create, stock context, receive, standard shipment preview,
+and standard ship. Stock context contains current part/lot/location balances,
+BOM presence, and that part's immutable transactions and shipments for recovery. It validates input shapes/types before using the store
 and returns `{ok: true, data}` or `{ok: false, error: {code, message}}`. Stable
 codes: `VALIDATION`, `DUPLICATE`, `NOT_FOUND`, `INTERNAL`. Unexpected exceptions
 are logged and return a safe message. Private helpers, store/session access,
-SQL, arbitrary settings, and stock updates are not exposed. Requests from this
+SQL, arbitrary settings, and generic balance writes are not exposed. Requests from this
 window are serialized; cross-process transactional behavior remains the store's
 existing behavior. No schema or inventory rules changed.
 
-## Validation record (2026-10-01)
+## Drafts and uncertain submissions
+
+Drafts stay in the mounted forms for this session. Returning refreshes current
+availability and invalidates any prior shipment review. Input is locked while a
+mutation is pending; no mutation is automatically retried. If its response is
+lost or Python reports an unexpected failure, preserve the submitted request and
+lock further submissions. Read current stock and the audit records added since
+the pre-submit read. Compare quantity, lot, location, operator, reference, receipt
+notes, and shipment details before explicitly verifying completion or unlocking
+an operation that did not complete. A failed recovery read keeps the draft locked.
+
+Reconciliation is operator-assisted: other operators/processes can produce similar
+records, and a stock total cannot prove completion. There is no durable request
+identifier, automatic deduplication, or new cross-process concurrency guarantee.
+Use the original application's History for broader investigation. Do not unlock
+and repeat an entry whose completion is still uncertain. BOM parents are blocked
+by both the form and the bridge until reviewed BOM shipment integration arrives.
+
+## Issue #7 validation record (2026-10-01)
 
 Automated integration checks use the agreed public bridge boundary against real
 temporary SQLite files. They cover dashboard/empty reads, setting persistence,
@@ -134,3 +163,37 @@ Final executed results:
   a startup backup containing the saved operator.
 - Two-axis code review: Standards **0 remaining findings**, Spec **0 remaining
   findings** after fixing uncertain-create identity and stale read handling.
+
+## Issue #8 validation record (2026-10-01)
+
+Executed against disposable SQLite databases and built local frontend assets:
+
+- Full offscreen regression gate: **282 passed** (9.83 s), including the original
+  store and PySide6 UI tests and 67 new public bridge stock scenarios.
+- Focused bridge gate after review: **74 passed** (3.94 s).
+- Strict TypeScript check and Vite production build: passed.
+- Ruff lint and format checks for changed Python modules/tests: passed.
+- Extended native `--smoke-check`: passed receipt repeat entry/reset, preserved
+  notes, receipt/ship drafts, selected-lot shortage, real shipment confirmation,
+  success/Ship another, duplicate clicks, lost responses after committed receipt
+  and shipment, failure before sending a receipt, explicit audit reconciliation,
+  and complete stock/transaction/shipment equality after reopening the database.
+- Native delayed-preview probe reproduced a late confirmation after navigation.
+  The fixed workflow rejects it, including leaving and returning while the preview
+  is pending; the retained smoke command includes this regression check.
+- Native recovery checks verify persistent received quantity/current stock and
+  reviewed shipment numbers after recovery details are closed.
+- Native operator-edit regression: a delayed availability read still enables
+  shipment review, while a delayed preview is cancelled and requires fresh review.
+- Native UI probe: dashboard and part-context actions, a non-Stock default location,
+  refreshed drafts, BOM submission blocking, real Qt Tab/Shift+Tab focus trapping,
+  Escape and focus restoration passed. Both themes at 1366 × 768, 1920 × 1080,
+  800 × 650, and 640 × 480 had no horizontal page overflow. Receive captures were
+  visually inspected; small windows use vertical scrolling to reach the actions.
+- Two-axis review: Standards **0 remaining findings**; Spec **0 remaining findings**
+  after the preview freshness and persistent recovery-feedback fixes.
+
+The native UI probe used the real pywebview/Qt WebEngine shell, rather than a
+new browser test framework. Broader human operator acceptance, Windows/macOS
+packaging, and exhaustive accessibility checks remain follow-up work. Issue #8
+adds standard stock workflows; BOM shipment integration and History remain deferred.
