@@ -10,6 +10,10 @@ npm run check
 npm run build
 ```
 
+`npm run build` checks types and then builds the assets. CI runs `npm run check`
+and `npm run build:assets` as separate steps so failures are easy to identify
+without checking types twice.
+
 Node must satisfy the locked Vite release's engine requirement (Node 20.19+ or
 22.12+). Development uses `npm run dev`, but a normal browser has no Python
 bridge: it deliberately shows an unavailable-connection state. Use the desktop
