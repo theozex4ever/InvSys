@@ -9,7 +9,18 @@ export interface Activity {
   operator: string; lot_number: string; location_from: string; location_to: string;
   reference: string; notes: string;
 }
-export interface Dashboard { active_parts: number; low_stock: Part[]; shipment_count: number; activity: Activity[] }
+export interface HistoryRecord extends Activity { transaction_id: number; shipment_number: string }
+export interface HistorySearch { query: string; tx_type: string; page: number }
+export interface HistoryResults { records: HistoryRecord[]; types: string[]; total: number; matching: number; page: number }
+export interface Consumption { part_number: string; lot_number: string; location: string; quantity: number }
+export interface ShipmentDetail extends Shipment { reference: string; consumed_components: Consumption[]; transactions: HistoryRecord[] }
+export interface HistoryDetail { transaction: HistoryRecord; shipment: ShipmentDetail | null }
+export interface BOMRequirement { part_number: string; description: string; quantity_required: number; stock_available: number; shortage: number }
+export interface BOMLine { part_number: string; lot_number: string; location: string; quantity_required: number; quantity_allocated: number; lot_stock: number }
+export interface BOMPlan { part_number: string; quantity: number; location: string; requirements: BOMRequirement[]; lines: BOMLine[]; ready: boolean }
+export type BOMRequest = Omit<ShipmentRequest, 'lot_number'>;
+export interface BOMPreview { request: BOMRequest; plan: BOMPlan; review_id: string; buildable: number; context: StockContext }
+export interface Dashboard { active_parts: number; low_stock: Part[]; shipment_count: number; activity: HistoryRecord[] }
 export type Theme = 'light' | 'dark';
 export interface Preferences { operator: string; theme: Theme }
 export interface Search {
@@ -28,8 +39,13 @@ export interface Shipment {
 }
 export interface StockContext { part: PartDetail; locations: string[]; has_bom: boolean; transactions: Activity[]; shipments: Shipment[] }
 export interface ShipmentPreview { request: ShipmentRequest; lot_stock: number; location_stock: number; remaining: number; context: StockContext }
-export type Response<T> = { ok: true; data: T } | { ok: false; error: { code: 'VALIDATION' | 'DUPLICATE' | 'NOT_FOUND' | 'INTERNAL'; message: string } };
+export type Response<T> = { ok: true; data: T } | { ok: false; error: { code: 'VALIDATION' | 'DUPLICATE' | 'NOT_FOUND' | 'INTERNAL' | 'PLAN_CHANGED'; message: string } };
 interface API {
+  history(search: HistorySearch): Promise<Response<HistoryResults>>;
+  history_detail(id: number): Promise<Response<HistoryDetail>>;
+  shipment_detail(number: string): Promise<Response<ShipmentDetail>>;
+  preview_bom_ship(request: BOMRequest): Promise<Response<BOMPreview>>;
+  ship_bom(request: BOMRequest & { review_id: string }): Promise<Response<{ shipment_number: string; context: StockContext }>>;
   dashboard(): Promise<Response<Dashboard>>;
   preferences(): Promise<Response<Preferences>>;
   save_operator(operator: string): Promise<Response<Preferences>>;
@@ -51,7 +67,7 @@ export function ready(): Promise<API> {
   return new Promise((resolve, reject) => {
     const loaded = () => {
       const api = window.pywebview?.api;
-      if (api && ['dashboard', 'preferences', 'save_operator', 'save_theme', 'locations', 'search_parts', 'part_detail', 'create_part', 'stock_context', 'receive', 'preview_ship', 'ship'].every(method => typeof api[method as keyof API] === 'function')) { cleanup(); resolve(api); }
+      if (api && ['dashboard', 'preferences', 'save_operator', 'save_theme', 'locations', 'search_parts', 'part_detail', 'create_part', 'stock_context', 'receive', 'preview_ship', 'ship', 'history', 'history_detail', 'shipment_detail', 'preview_bom_ship', 'ship_bom'].every(method => typeof api[method as keyof API] === 'function')) { cleanup(); resolve(api); }
     };
     const cleanup = () => { clearTimeout(timer); window.removeEventListener('pywebviewready', loaded); };
     const timer = setTimeout(() => {

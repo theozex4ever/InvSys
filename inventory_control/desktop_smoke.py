@@ -59,6 +59,7 @@ class DesktopSmoke:
             ):
                 raise RuntimeError("Desktop page overflows horizontally.")
             self._stock_workflows(window, wait)
+            self._bom_history_workflows(window, wait)
             print(
                 "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
                 flush=True,
@@ -362,5 +363,152 @@ class DesktopSmoke:
         self.stock_result = run("window.smokeFinal")
         print(
             "Desktop smoke: receipt repeat entry, drafts, shipment confirmation/shortage, double clicks and transport reconciliation passed.",
+            flush=True,
+        )
+
+    def prepare_bom(self, store: Any) -> None:
+        """Prepare existing definitions through InventoryStore in the disposable smoke DB."""
+        suffix = str(time.time_ns())
+        self.bom_part = f"DESKTOP-BOM-{suffix}"
+        self.bom_sub = f"DESKTOP-SUB-{suffix}"
+        self.bom_leaf = f"DESKTOP-LEAF-{suffix}"
+        for number in (self.bom_part, self.bom_sub, self.bom_leaf):
+            store.add_part(number, "Disposable nested BOM smoke", minimum_quantity=20)
+        store.add_bom_component(self.bom_part, self.bom_sub, 2)
+        store.add_bom_component(self.bom_sub, self.bom_leaf, 3)
+        store.add_bom_component(self.bom_part, self.bom_leaf, 1)
+        store.receive(self.bom_part, 10, "Stock", "PARENT", "Setup")
+        store.receive(self.bom_sub, 10, "Stock", "INTERMEDIATE", "Setup")
+        store.receive(self.bom_leaf, 5, "Stock", "A", "Setup")
+        store.receive(self.bom_leaf, 15, "Stock", "B", "Setup")
+        self.bom_result: dict[str, Any] | None = None
+
+    def _bom_history_workflows(self, window: Any, wait: Any) -> None:
+        import json
+
+        run = window.evaluate_js
+
+        def require(script: str, label: str) -> None:
+            if not run(script):
+                raise RuntimeError(f"Desktop BOM/History smoke failed: {label}")
+
+        run(
+            f"window.smokeBOMPart={json.dumps(self.bom_part)}; window.smokeBOMLeaf={json.dumps(self.bom_leaf)};"
+        )
+        run(
+            "document.querySelector('[data-page=ship]').click(); document.querySelector('#ship-result [data-another]').click()"
+        )
+        wait("!document.querySelector('#ship-submit').disabled")
+        run(
+            "document.querySelector('#ship-part_number').value=window.smokeBOMPart; document.querySelector('#ship-part_number').dispatchEvent(new Event('change'))"
+        )
+        wait(
+            "!document.querySelector('#ship-submit').disabled && document.querySelector('#ship-lot_number').disabled"
+        )
+        run(
+            "document.querySelector('#ship-quantity').value='3'; document.querySelector('#ship-recipient').value='BOM customer'; document.querySelector('#ship-form').requestSubmit()"
+        )
+        wait(
+            "document.querySelector('#ship-error').textContent.includes('Component shortage')"
+        )
+        require(
+            "!document.querySelector('#ship-confirmation').open && document.querySelector('#ship-review').textContent.includes('Blocked')",
+            "shortage does not submit",
+        )
+        run(
+            "document.querySelector('#ship-quantity').value='2'; document.querySelector('#ship-form').requestSubmit()"
+        )
+        wait("document.querySelector('#ship-confirmation').open")
+        require(
+            "document.querySelector('#ship-confirm-data').textContent.includes('14') && document.querySelector('#ship-confirm-data').textContent.includes('Leaf lot allocations') && document.querySelectorAll('#ship-confirm-data tbody').item(1).children.length === 2",
+            "shared leaf and multiple lots review",
+        )
+        run(
+            "window.smokeAPI.receive({part_number: window.smokeBOMLeaf, quantity:2, location:'Stock', lot_number:'0', operator:'Other', reference:'STALE', notes:''}).then(r=>{window.smokeBOMChanged=r.ok;});"
+        )
+        wait("window.smokeBOMChanged")
+        run(
+            "document.querySelector('#ship-confirm-submit').click(); document.querySelector('#ship-confirm-submit').click()"
+        )
+        wait(
+            "document.querySelector('#ship-error').textContent.includes('Allocation changed. Nothing was shipped.') && !document.querySelector('#ship-confirmation').open"
+        )
+        require(
+            "document.querySelector('#ship-quantity').value === '2' && document.querySelector('#ship-recipient').value === 'BOM customer' && document.querySelectorAll('#ship-review tbody').item(1).children.length === 3",
+            "stale rejection retains draft and refreshes allocations",
+        )
+        run(
+            "window.smokeAPI.history({query:window.smokeBOMPart,tx_type:'SHIP_BOM'}).then(r=>{window.smokeBOMRejected=r.data.records.length===0;});"
+        )
+        wait("window.smokeBOMRejected")
+        run("document.querySelector('#ship-form').requestSubmit()")
+        wait("document.querySelector('#ship-confirmation').open")
+        run(
+            "document.querySelector('#ship-confirm-submit').click(); document.querySelector('#ship-confirm-submit').click()"
+        )
+        wait(
+            "document.querySelector('#ship-result').textContent.includes('BOM customer') && !document.querySelector('#ship-confirmation').open"
+        )
+        run(
+            "window.smokeBOMNumber=document.querySelector('#ship-result [data-shipment]').dataset.shipment; document.querySelector('#ship-result [data-shipment]').click()"
+        )
+        wait(
+            "document.querySelector('#history-detail').textContent.includes('Persisted component consumption')"
+        )
+        require(
+            "document.querySelector('#history-detail').textContent.includes(window.smokeBOMPart) && document.querySelector('#history-detail tbody').children.length === 3",
+            "success immediately exposes persisted snapshots",
+        )
+        run(
+            "document.querySelector('#history-close').click(); document.querySelector('[data-page=history]').click(); document.querySelector('#history-query').value=window.smokeBOMNumber; document.querySelector('#history-query').dispatchEvent(new Event('input'))"
+        )
+        wait("document.querySelectorAll('#history-data tbody tr').length === 4")
+        run(
+            "document.querySelector('#history-type').value='BOM_CONSUME'; document.querySelector('#history-type').dispatchEvent(new Event('change'))"
+        )
+        wait("document.querySelectorAll('#history-data tbody tr').length === 3")
+        run(
+            "window.smokeHistoryButton=document.querySelector('#history-data [data-history-id]'); window.smokeHistoryButton.focus(); window.smokeHistoryY=scrollY; window.smokeHistoryButton.click()"
+        )
+        wait(
+            "document.querySelector('#history-detail').textContent.includes('BOM_CONSUME')"
+        )
+        require(
+            "document.querySelector('#history-detail').textContent.includes('Desktop smoke') && document.querySelector('#history-detail').textContent.includes('Used by')",
+            "read-only record contains operator and notes",
+        )
+        run(
+            "document.querySelector('#history-close').focus(); document.querySelector('#history-drawer').dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',shiftKey:true,bubbles:true,cancelable:true}))"
+        )
+        require(
+            "document.querySelector('#history-drawer').contains(document.activeElement)",
+            "drawer focus trap",
+        )
+        run(
+            "document.querySelector('#history-drawer').dispatchEvent(new Event('cancel',{cancelable:true})); document.querySelector('#history-drawer').close()"
+        )
+        require(
+            "document.querySelector('#history-query').value===window.smokeBOMNumber && document.querySelector('#history-type').value==='BOM_CONSUME' && document.activeElement===window.smokeHistoryButton && scrollY===window.smokeHistoryY",
+            "drawer preserves filters, position and focus",
+        )
+        run("document.querySelector('[data-page=dashboard]').click()")
+        wait("document.querySelector('#dashboard-data [data-history-id]')")
+        run(
+            "window.smokeDashboardID=document.querySelector('#dashboard-data [data-history-id]').dataset.historyId; document.querySelector('#dashboard-data [data-history-id]').click()"
+        )
+        wait(
+            "document.querySelector('#history-detail').textContent.includes('SHIP_BOM')"
+        )
+        require(
+            "document.querySelector('#history-detail').textContent.includes(window.smokeBOMNumber)",
+            "dashboard opens matching history record",
+        )
+        run(
+            "document.querySelector('#history-close').click(); window.smokeAPI.shipment_detail(window.smokeBOMNumber).then(r=>{window.smokeBOMFinal=r.data;});"
+        )
+        wait("window.smokeBOMFinal")
+        self.bom_result = run("window.smokeBOMFinal")
+        print(
+            "Desktop smoke: BOM shortage, multi-lot review, stale rejection/reconfirmation, snapshots, History search/type/drawer and dashboard links passed.",
             flush=True,
         )

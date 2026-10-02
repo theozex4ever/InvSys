@@ -116,10 +116,11 @@ No database setup required — default locations (`Receiving`, `Stock`, `Shippin
 
 The new pywebview shell provides a live Attention first dashboard and parts
 catalog: search/filter/sort, create parts, inspect lot/location stock, receive real
-lots, and review and ship standard stock. Drafts survive session navigation;
-results and audit records survive restart. It uses the existing InventoryStore
-and SQLite schema and remembers operator/theme choices. BOM shipping and other
-workflows remain in the original PySide6 application.
+lots, review and ship standard stock or existing nested BOM parents, and search
+History with persisted shipment/component traceability. Drafts survive session
+navigation; results and audit records survive restart. It uses the existing InventoryStore
+and SQLite schema and remembers operator/theme choices. BOM editing/exploration
+and other workflows remain in the original PySide6 application.
 
 ```bash
 pip install -r requirements-desktop.txt

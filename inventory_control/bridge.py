@@ -3,10 +3,11 @@
 import logging
 from collections.abc import Callable
 from dataclasses import asdict
+from secrets import token_urlsafe
 from threading import RLock
 from typing import Any
 
-from inventory_control.models import Part
+from inventory_control.models import BOMShipmentPlan, Part
 from inventory_control.store import InventoryStore
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ class InventoryBridge:
         # pywebview calls may run on separate threads; serialize this app's requests.
         self._store = store
         self._lock = RLock()
+        self._bom_reviews: dict[str, tuple[dict[str, Any], BOMShipmentPlan]] = {}
 
     def _respond(self, operation: Callable[[], Any]) -> dict[str, Any]:
         try:
@@ -58,7 +60,7 @@ class InventoryBridge:
                 "active_parts": sum(p.active for p in self._store.parts.values()),
                 "low_stock": [self._part(p, low_numbers) for p in low_parts],
                 "shipment_count": len(self._store.shipments),
-                "activity": [asdict(tx) for tx in self._store.transactions[:8]],
+                "activity": self._store.history_records(limit=8),
             }
 
         return self._respond(read)
@@ -164,6 +166,49 @@ class InventoryBridge:
     def locations(self) -> dict[str, Any]:
         return self._respond(lambda: self._store.locations)
 
+    def history(self, request: Any) -> dict[str, Any]:
+        def read() -> dict[str, Any]:
+            fields = self._request(request, {"query", "tx_type", "page"})
+            query = self._text(fields.get("query", ""), "Search", required=False)
+            tx_type = self._text(
+                fields.get("tx_type", ""), "Transaction type", required=False
+            )
+            page = fields.get("page", 0)
+            if type(page) is not int or not 0 <= page <= 2**31 - 1:
+                raise ValueError("History page must be a nonnegative whole number.")
+            return self._store.search_history(query, tx_type, page)
+
+        return self._respond(read)
+
+    def _shipment_detail(self, shipment_number: Any) -> dict[str, Any]:
+        number = self._text(shipment_number, "Shipment number").upper()
+        detail = self._store.shipment_detail(number)
+        if detail is None:
+            raise BridgeError("NOT_FOUND", "Shipment not found.")
+        return detail
+
+    def shipment_detail(self, shipment_number: Any) -> dict[str, Any]:
+        return self._respond(lambda: self._shipment_detail(shipment_number))
+
+    def history_detail(self, transaction_id: Any) -> dict[str, Any]:
+        def read() -> dict[str, Any]:
+            if type(transaction_id) is not int or transaction_id < 1:
+                raise ValueError("Transaction ID must be a positive whole number.")
+            transaction = next(
+                iter(self._store.history_records(transaction_id=transaction_id)),
+                None,
+            )
+            if transaction is None:
+                raise BridgeError("NOT_FOUND", "History record not found.")
+            return {
+                "transaction": transaction,
+                "shipment": self._shipment_detail(transaction["shipment_number"])
+                if transaction["shipment_number"]
+                else None,
+            }
+
+        return self._respond(read)
+
     def create_part(self, request: Any) -> dict[str, Any]:
         def create() -> dict[str, Any]:
             fields = self._request(
@@ -209,7 +254,9 @@ class InventoryBridge:
         """Current stock and audit records for reviewing or reconciling a draft."""
         return self._respond(lambda: self._stock_context(part_number))
 
-    def _stock_request(self, request: Any, optional: set[str]) -> dict[str, Any]:
+    def _stock_request(
+        self, request: Any, optional: set[str], require_lot: bool = True
+    ) -> dict[str, Any]:
         fields = self._request(
             request,
             {
@@ -226,7 +273,7 @@ class InventoryBridge:
             for key, label in (
                 ("part_number", "Part number"),
                 ("location", "Location"),
-                ("lot_number", "Lot"),
+                *([("lot_number", "Lot")] if require_lot else []),
                 ("operator", "Operator"),
             )
         }
@@ -237,7 +284,8 @@ class InventoryBridge:
             )
         values["quantity"] = quantity
         values["part_number"] = values["part_number"].upper()
-        values["lot_number"] = values["lot_number"].upper()
+        if require_lot:
+            values["lot_number"] = values["lot_number"].upper()
         self._detail(values["part_number"])
         for key in optional:
             values[key] = self._text(
@@ -317,6 +365,99 @@ class InventoryBridge:
                 tracking=fields["tracking"],
                 reference=fields["reference"],
             )
+            return {
+                "shipment_number": number,
+                "context": self._stock_context(fields["part_number"]),
+            }
+
+        return self._respond(ship)
+
+    def _bom_request(self, request: Any) -> dict[str, Any]:
+        fields = self._request(
+            request,
+            {
+                "part_number",
+                "quantity",
+                "location",
+                "operator",
+                "recipient",
+                "carrier",
+                "tracking",
+                "reference",
+            },
+        )
+        # BOM parents are phantom assemblies; there is no parent lot selection.
+        values = self._stock_request(
+            fields, {"recipient", "carrier", "tracking", "reference"}, require_lot=False
+        )
+        if not values["recipient"]:
+            raise ValueError("Recipient required.")
+        if not self._store.bom_children(values["part_number"]):
+            raise ValueError(
+                "This part has no BOM. Review a standard shipment instead."
+            )
+        return values
+
+    def preview_bom_ship(self, request: Any) -> dict[str, Any]:
+        def preview() -> dict[str, Any]:
+            fields = self._bom_request(request)
+            plan = self._store.prepare_bom_shipment(
+                fields["part_number"], fields["quantity"], fields["location"]
+            )
+            availability = self._store.bom_availability(
+                fields["part_number"], fields["quantity"], fields["location"]
+            )
+            review_id = ""
+            if plan.ready:
+                review_id = token_urlsafe(24)
+                # Reviews are session-local capabilities, bounded to avoid unbounded reads.
+                if len(self._bom_reviews) >= 128:
+                    del self._bom_reviews[next(iter(self._bom_reviews))]
+                self._bom_reviews[review_id] = (fields, plan)
+            serialized = asdict(plan)
+            serialized["requirements"] = list(serialized["requirements"])
+            serialized["lines"] = list(serialized["lines"])
+            return {
+                "request": dict(fields),
+                "plan": serialized,
+                "review_id": review_id,
+                "buildable": availability.buildable,
+                "context": self._stock_context(fields["part_number"]),
+            }
+
+        return self._respond(preview)
+
+    def ship_bom(self, request: Any) -> dict[str, Any]:
+        def ship() -> dict[str, Any]:
+            if not isinstance(request, dict):
+                raise ValueError("Invalid request fields.")
+            fields = self._bom_request(
+                {key: value for key, value in request.items() if key != "review_id"}
+            )
+            review_id = self._text(request.get("review_id", ""), "BOM review")
+            review = self._bom_reviews.get(review_id)
+            if review is None or review[0] != fields:
+                raise ValueError(
+                    "Review this BOM shipment before confirming. The review is missing, expired, or does not match the draft."
+                )
+            # A used/rejected review cannot authorize another submission.
+            del self._bom_reviews[review_id]
+            try:
+                number = self._store.ship(
+                    fields["part_number"],
+                    fields["quantity"],
+                    fields["location"],
+                    fields["recipient"],
+                    fields["operator"],
+                    carrier=fields["carrier"],
+                    tracking=fields["tracking"],
+                    reference=fields["reference"],
+                    expected_bom_plan=review[1],
+                )
+            except ValueError as error:
+                if str(error).startswith("BOM lot allocation changed"):
+                    raise BridgeError("PLAN_CHANGED", str(error)) from error
+                raise
             return {
                 "shipment_number": number,
                 "context": self._stock_context(fields["part_number"]),

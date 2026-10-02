@@ -73,6 +73,7 @@ def main() -> int:
             from inventory_control.desktop_smoke import DesktopSmoke
 
             smoke = DesktopSmoke()
+            smoke.prepare_bom(store)
             webview.start(smoke.run, window, gui="qt", http_server=False)
             if smoke.error:
                 logging.getLogger(__name__).error(
@@ -97,6 +98,11 @@ def main() -> int:
                 bridge.preferences()["data"]["operator"] != "Desktop smoke"
                 or not bridge.part_detail("DESKTOP-SMOKE")["ok"]
                 or bridge.stock_context("DESKTOP-SMOKE")["data"] != smoke.stock_result
+                or bridge.shipment_detail(smoke.bom_result["shipment_number"])["data"]
+                != smoke.bom_result
+                or bridge.part_detail(smoke.bom_part)["data"]["quantity"] != 10
+                or bridge.part_detail(smoke.bom_sub)["data"]["quantity"] != 10
+                or bridge.part_detail(smoke.bom_leaf)["data"]["quantity"] != 8
             ):
                 print("Desktop smoke failed: restart persistence.", file=sys.stderr)
                 return 1
