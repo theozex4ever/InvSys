@@ -1,5 +1,7 @@
 # Inventory Control
 
+[![CI](https://github.com/theozex4ever/InvSys/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/theozex4ever/InvSys/actions/workflows/ci.yml)
+
 A local-first desktop inventory management application built with Python and PySide6. Designed to replace scattered Excel sheets for small operations — parts tracking, stock movement, and shipping records in a single, auditable application.
 
 ---
@@ -129,6 +131,64 @@ python inventory_desktop.py --database /tmp/invsys-review/inventory.db
 Omit `--database` to use the existing operational data and startup backups.
 Built assets load offline without a frontend development server or HTTP server.
 See [desktop launch, scope, package smoke, and validation](docs/frontend/desktop.md).
+
+---
+
+## Continuous integration
+
+[CI](.github/workflows/ci.yml) runs on every pull request and push to `main`.
+It can also be started manually from GitHub's **Actions → CI → Run workflow**
+once the workflow exists on the default branch.
+
+The initial gate runs two independent jobs on Ubuntu 24.04: **Python CI** with
+Python 3.12 and **Frontend CI** with Node.js 22. Both jobs run on every trigger
+and can execute in parallel, so a failure in one does not prevent the other
+from reporting its result.
+
+- Ruff checks Python syntax and likely runtime errors. The small rule set in
+  `ruff.toml` deliberately leaves broader style cleanup for later.
+- pytest runs the existing service, SQLite, bridge, and Qt UI tests. Qt uses
+  the offscreen platform so these tests do not need a desktop display.
+- `npm ci` installs the locked frontend dependencies. Separate steps run strict
+  TypeScript checking (`npm run check`) and build the local HTML, JavaScript,
+  and CSS (`npm run build:assets`). Local `npm run build` runs both commands.
+- A smoke check confirms all three built asset files are present and nonempty.
+
+Run the same checks locally from the repository root, using a virtual environment:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+python -m ruff check .
+QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 python -m pytest
+npm ci --prefix frontend
+npm run build --prefix frontend
+test -s frontend/dist/index.html
+test -s frontend/dist/app.js
+test -s frontend/dist/style.css
+```
+
+These commands use a Bash-compatible shell. On Ubuntu, if Qt reports missing
+shared libraries, install `libegl1`, `libopengl0`, and `libxkbcommon0`, as CI does.
+The optional pywebview GUI launch and installer packaging remain manual checks;
+see [desktop validation](docs/frontend/desktop.md).
+
+To verify the workflow itself before expanding it:
+
+1. Push this branch and open a pull request against `main`. Check that **Python
+   CI** and **Frontend CI** appear and all steps pass; open any step to read its log.
+2. On a disposable test branch with a pull request, add `tests/test_ci_probe.py`
+   containing `def test_ci_probe(): assert False`, then commit and push. Confirm
+   **Run Python and Qt tests** fails and **Python CI** turns red, while
+   **Frontend CI** still runs independently.
+3. Remove the probe, commit, and push again. Confirm the check returns to green.
+   Keep the deliberately failing probe out of `main`.
+
+The badge above shows the latest `main` result and links to the run history for
+portfolio viewers. CI reports failures; enforcing a passing check before merging
+requires a separate GitHub branch rule that requires both jobs to pass. This
+workflow requires no project secrets and does not deploy or publish the app.
 
 ---
 
