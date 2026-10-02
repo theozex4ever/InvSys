@@ -7,6 +7,10 @@ receiving/standard shipping, and nested BOM shipping/History slices of
 [#6](https://github.com/theozex4ever/InvSys/issues/6), using
 [approved layout A](phase0-design.md). The full frontend migration remains in progress.
 
+Issue [#10](https://github.com/theozex4ever/InvSys/issues/10) validates this complete
+working slice. See [current acceptance results, repeatable native checks, and
+remaining migration gaps](prototype-acceptance.md).
+
 ## Launch
 
 Install Python dependencies in your environment and build the frontend:
@@ -46,6 +50,14 @@ BOM, reviews a multi-lot allocation, rejects shortage and stale allocation,
 reconfirms, and inspects History and component snapshots.
 It verifies the complete stock/audit result through a reopened store. Use a disposable file: these are real writes. Repeat the command to check
 startup backups and restart reads. No seed inventory is inserted by the launcher.
+
+The retained smoke also exercises contextual part-to-History navigation, failed
+History detail retry, explicit refresh after another operator's receipt, and
+uncertain BOM reconciliation, including a failed recovery read. It uses real Qt
+keyboard events for all four dialogs and captures five pages and dialogs in both
+themes at four sizes to `smoke-captures/` beside the database. On Linux, use
+`QT_API=pyside6 QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion`
+to select PySide6 and exercise reduced-motion behavior.
 
 Built assets load directly over `file://` with `http_server=False`. An explicit
 file URI avoids pywebview automatically starting a server for a bare local path

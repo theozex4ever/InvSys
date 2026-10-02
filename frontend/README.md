@@ -1,7 +1,7 @@
 # InvSys desktop frontend
 
 This is the live dashboard/catalog, Receive, standard and nested BOM Ship, and
-History slice for issues #7, #8, and #9, based on approved layout A.
+History slice for issues #7–#10, based on approved layout A.
 The reference remains on `prototype/invsys-phase0`; fixture workflows are not
 included here. Python InventoryStore owns stock, low-stock status, and persistence.
 
@@ -65,3 +65,6 @@ restores table/page position. Both themes use visible keyboard focus and reduced
 motion styles. Operator and explicit theme choice use existing Python settings.
 
 See [desktop launch and validation](../docs/frontend/desktop.md).
+See [complete prototype acceptance and remaining gaps](../docs/frontend/prototype-acceptance.md).
+Part details have a contextual View History action; a failed transaction or
+shipment detail read offers Retry details inside the open drawer.

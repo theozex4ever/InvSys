@@ -132,6 +132,9 @@ python inventory_desktop.py --database /tmp/invsys-review/inventory.db
 Omit `--database` to use the existing operational data and startup backups.
 Built assets load offline without a frontend development server or HTTP server.
 See [desktop launch, scope, package smoke, and validation](docs/frontend/desktop.md).
+The complete working slice has [repeatable native acceptance checks and a
+remaining-gap record](docs/frontend/prototype-acceptance.md), including both
+shipment types, keyboard/layout checks, and restart persistence.
 
 ---
 

@@ -10,6 +10,7 @@ export function historyWorkflow(getAPI: () => API) {
   const search = { query: '', tx_type: '', page: 0 };
   let version = 0, detailVersion = 0, selected: number | null = null;
   let returnFocus: HTMLElement | null = null;
+  let detailID: number | string | null = null;
   let pagePosition = { x: 0, y: 0, tableX: 0 };
   let position = { x: 0, y: 0, tableX: 0 };
   const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
@@ -24,8 +25,15 @@ export function historyWorkflow(getAPI: () => API) {
     }
   };
   $('#history-close').onclick = () => dialog().close();
+  $('#history-detail').onclick = event => {
+    if ((event.target as HTMLElement).closest('[data-retry-detail]') && detailID !== null) {
+      $('#history-close').focus();
+      void inspect(detailID, returnFocus ?? $('#history-refresh'));
+    }
+  };
   dialog().addEventListener('close', () => {
     ++detailVersion;
+    detailID = null;
     const target = returnFocus?.isConnected ? returnFocus : document.querySelector<HTMLElement>(`#history [data-history-id="${selected}"]`) ?? $('#history-refresh');
     target.focus({ preventScroll: true }); window.scrollTo(position.x, position.y); restore(position);
   });
@@ -60,6 +68,7 @@ export function historyWorkflow(getAPI: () => API) {
   }
   async function inspect(id: number | string, origin: HTMLElement) {
     const current = ++detailVersion;
+    detailID = id;
     if (!dialog().open) { returnFocus = origin; position = remember(); dialog().showModal(); }
     if (typeof id === 'number') {
       selected = id;
@@ -70,7 +79,14 @@ export function historyWorkflow(getAPI: () => API) {
       const api = getAPI();
       const html = typeof id === 'number' ? await read(api.history_detail(id)).then(d => transaction(d.transaction) + (d.shipment ? shipment(d.shipment) : '<p>No linked shipment.</p>')) : await read(api.shipment_detail(id)).then(shipment);
       if (current === detailVersion && dialog().open) { $('#history-detail').innerHTML = html; dialog().scrollTop = 0; }
-    } catch (error) { if (current === detailVersion && dialog().open) $('#history-detail').innerHTML = status(message(error), true); }
+    } catch (error) { if (current === detailVersion && dialog().open) $('#history-detail').innerHTML = status(message(error), true) + '<button class="btn" data-retry-detail>Retry details</button>'; }
   }
-  return { load, inspect, open: () => load(pagePosition), leave: () => { pagePosition = remember(); } };
+  return { load, inspect, open: (partNumber?: string) => {
+    if (partNumber) {
+      search.query = partNumber; search.tx_type = ''; search.page = 0;
+      $<HTMLInputElement>('#history-query').value = partNumber; $<HTMLSelectElement>('#history-type').value = '';
+      pagePosition = { x: 0, y: 0, tableX: 0 };
+    }
+    return load(pagePosition);
+  }, leave: () => { pagePosition = remember(); } };
 }
