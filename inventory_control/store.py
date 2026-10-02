@@ -1,8 +1,9 @@
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -104,6 +105,115 @@ class InventoryStore:
 
     def subscribe(self, callback: Callable[[], None]) -> None:
         self._subscribers.append(callback)
+
+    def _history_record(
+        self, row: InventoryTransactionRecord, shipment_number: str | None
+    ) -> dict[str, Any]:
+        return {
+            **asdict(self._transaction_dto(row)),
+            "transaction_id": row.id,
+            "shipment_number": shipment_number or "",
+        }
+
+    def history_records(
+        self,
+        transaction_id: int | None = None,
+        shipment_number: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Detached audit reads using persisted row IDs and shipment foreign keys."""
+        with self.session_factory() as session:
+            query = (
+                select(InventoryTransactionRecord, ShipmentRecord.shipment_number)
+                .outerjoin(
+                    ShipmentRecord,
+                    InventoryTransactionRecord.shipment_id == ShipmentRecord.id,
+                )
+                .order_by(desc(InventoryTransactionRecord.id))
+            )
+            if transaction_id is not None:
+                query = query.where(InventoryTransactionRecord.id == transaction_id)
+            if shipment_number is not None:
+                query = query.where(ShipmentRecord.shipment_number == shipment_number)
+            if limit is not None:
+                query = query.limit(limit)
+            return [
+                self._history_record(row, number)
+                for row, number in session.execute(query)
+            ]
+
+    def search_history(self, query: str, tx_type: str, page: int) -> dict[str, Any]:
+        """Filter before paging so older matches stay accessible without unbounded DTOs."""
+        with self.session_factory() as session:
+            statement = (
+                select(InventoryTransactionRecord, ShipmentRecord.shipment_number)
+                .join(PartRecord, InventoryTransactionRecord.part_id == PartRecord.id)
+                .outerjoin(LotRecord, InventoryTransactionRecord.lot_id == LotRecord.id)
+                .outerjoin(
+                    ShipmentRecord,
+                    InventoryTransactionRecord.shipment_id == ShipmentRecord.id,
+                )
+            )
+            if query:
+                statement = statement.where(
+                    or_(
+                        *(
+                            func.lower(column).contains(query.lower(), autoescape=True)
+                            for column in (
+                                PartRecord.part_number,
+                                LotRecord.lot_number,
+                                InventoryTransactionRecord.operator,
+                                InventoryTransactionRecord.reference,
+                                ShipmentRecord.shipment_number,
+                                ShipmentRecord.reference,
+                            )
+                        )
+                    )
+                )
+            if tx_type:
+                statement = statement.where(
+                    InventoryTransactionRecord.tx_type == tx_type
+                )
+            matching = session.scalar(
+                select(func.count()).select_from(statement.subquery())
+            )
+            records = session.execute(
+                statement.order_by(desc(InventoryTransactionRecord.id))
+                .offset(page * 50)
+                .limit(50)
+            )
+            return {
+                "records": [
+                    self._history_record(row, number) for row, number in records
+                ],
+                "types": list(
+                    session.scalars(
+                        select(InventoryTransactionRecord.tx_type)
+                        .distinct()
+                        .order_by(InventoryTransactionRecord.tx_type)
+                    )
+                ),
+                "total": session.scalar(
+                    select(func.count()).select_from(InventoryTransactionRecord)
+                ),
+                "matching": matching,
+                "page": page,
+            }
+
+    def shipment_detail(self, shipment_number: str) -> dict[str, Any] | None:
+        with self.session_factory() as session:
+            row = session.scalar(
+                select(ShipmentRecord).where(
+                    ShipmentRecord.shipment_number == shipment_number
+                )
+            )
+            if row is None:
+                return None
+            return {
+                **asdict(self._shipment_dto(row)),
+                "reference": row.reference,
+                "transactions": self.history_records(shipment_number=shipment_number),
+            }
 
     def notify(self) -> None:
         for callback in self._subscribers:

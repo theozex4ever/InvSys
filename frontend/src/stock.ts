@@ -1,4 +1,4 @@
-import { read, RequestError, type ready, type Receipt, type ShipmentRequest, type ShipmentPreview, type StockContext } from './bridge';
+import { read, RequestError, type ready, type Receipt, type ShipmentRequest, type ShipmentPreview, type BOMPreview, type StockContext } from './bridge';
 
 type Mode = 'receive' | 'ship';
 type API = Awaited<ReturnType<typeof ready>>;
@@ -11,7 +11,8 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     receive: { pending: false, uncertain: false, completed: false, version: 0, context: null as StockContext | null, submitted: null as Receipt | ShipmentRequest | null, before: 0, beforeShipments: 0, recoveredNumbers: [] as string[], reconciled: false },
     ship: { pending: false, uncertain: false, completed: false, version: 0, context: null as StockContext | null, submitted: null as Receipt | ShipmentRequest | null, before: 0, beforeShipments: 0, recoveredNumbers: [] as string[], reconciled: false },
   };
-  let preview: ShipmentPreview | null = null;
+  let preview: ShipmentPreview | BOMPreview | null = null;
+  let bomReview: BOMPreview | null = null;
   let previewVersion = 0;
   let active: Mode | null = null;
   const control = <T extends HTMLElement>(mode: Mode, name: string) => document.querySelector<T>(`#${mode}-${name}`)!;
@@ -24,9 +25,10 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
   };
   const field = (mode: Mode, name: string, label: string, required = false, select = false, number = false) => `<div class="field ${name === 'part_number' || name === 'lot_number' || name === 'recipient' || name === 'notes' ? 'full' : ''}"><label for="${mode}-${name}">${label}${required ? ' <span class="required">*</span>' : ''}</label>${select ? `<select id="${mode}-${name}" name="${name}" ${required ? 'required' : ''}><option value="">Select…</option></select>` : `<input id="${mode}-${name}" name="${name}" ${required ? 'required' : ''} ${number ? 'type="number" min="1" max="2147483647" step="1"' : ''}>`}</div>`;
   for (const mode of ['receive', 'ship'] as const) {
-    document.querySelector('main')!.insertAdjacentHTML('beforeend', `<section id="${mode}" hidden><div class="page-heading"><div><h1>${mode === 'receive' ? 'Receive' : 'Ship'} stock</h1><p>${mode === 'receive' ? 'Record a receipt. Keep every lot traceable.' : 'Review the selected lot before inventory leaves.'}</p></div><button class="btn" id="${mode}-refresh" disabled>Refresh availability</button></div><div id="${mode}-result" role="status" aria-live="polite"></div><div class="stock-layout"><form id="${mode}-form" class="panel panel-body"><h2>Select inventory</h2><div class="form-grid">${field(mode, 'part_number', 'Part', true, true)}${field(mode, 'location', mode === 'receive' ? 'Receive into' : 'Ship from', true, true)}${field(mode, 'quantity', 'Quantity', true, false, true)}${field(mode, 'lot_number', 'Lot number', true, mode === 'ship')}</div><h2>${mode === 'receive' ? 'Receipt' : 'Shipment'} details</h2><div class="form-grid">${mode === 'receive' ? field(mode, 'reference', 'Reference') + field(mode, 'notes', 'Notes') : field(mode, 'recipient', 'Recipient / project', true) + field(mode, 'carrier', 'Carrier') + field(mode, 'tracking', 'Tracking number') + field(mode, 'reference', 'Reference')}</div><p class="help">Operator identity comes from the visible header. Enter your name before submitting.</p><div id="${mode}-error" role="alert" aria-live="polite"></div><button id="${mode}-submit" class="btn primary" disabled>${mode === 'receive' ? 'Receive stock' : 'Review shipment'}</button></form><div class="panel"><div class="panel-head"><h2>Current stock and review</h2></div><div id="${mode}-review" class="panel-body">Select a part to read current inventory.</div><div id="${mode}-recovery" class="panel-body" hidden></div></div></div></section>`);
+    document.querySelector('main')!.insertAdjacentHTML('beforeend', `<section id="${mode}" hidden><div class="page-heading"><div><h1>${mode === 'receive' ? 'Receive' : 'Ship'} stock</h1><p>${mode === 'receive' ? 'Record a receipt. Keep every lot traceable.' : 'Review stock or component lot allocations before inventory leaves.'}</p></div><button class="btn" id="${mode}-refresh" disabled>Refresh availability</button></div><div id="${mode}-result" role="status" aria-live="polite"></div><div class="stock-layout"><form id="${mode}-form" class="panel panel-body"><h2>Select inventory</h2><div class="form-grid">${field(mode, 'part_number', 'Part', true, true)}${field(mode, 'location', mode === 'receive' ? 'Receive into' : 'Ship from', true, true)}${field(mode, 'quantity', 'Quantity', true, false, true)}${field(mode, 'lot_number', 'Lot number', true, mode === 'ship')}</div><h2>${mode === 'receive' ? 'Receipt' : 'Shipment'} details</h2><div class="form-grid">${mode === 'receive' ? field(mode, 'reference', 'Reference') + field(mode, 'notes', 'Notes') : field(mode, 'recipient', 'Recipient / project', true) + field(mode, 'carrier', 'Carrier') + field(mode, 'tracking', 'Tracking number') + field(mode, 'reference', 'Reference')}</div><p class="help">Operator identity comes from the visible header. Enter your name before submitting.</p><div id="${mode}-error" role="alert" aria-live="polite"></div><button id="${mode}-submit" class="btn primary" disabled>${mode === 'receive' ? 'Receive stock' : 'Review shipment'}</button></form><div class="panel"><div class="panel-head"><h2>Current stock and review</h2></div><div id="${mode}-review" class="panel-body">Select a part to read current inventory.</div><div id="${mode}-recovery" class="panel-body" hidden></div></div></div></section>`);
     form(mode).addEventListener('submit', event => { event.preventDefault(); void submit(mode); });
-    form(mode).addEventListener('input', () => { if (mode === 'ship') preview = null; renderReview(mode); });
+    const edited = () => { if (mode === 'ship') { preview = null; bomReview = null; } renderReview(mode); };
+    form(mode).addEventListener('input', edited); form(mode).addEventListener('change', edited);
     control<HTMLSelectElement>(mode, 'part_number').addEventListener('change', () => { void refresh(mode, true); });
     control<HTMLSelectElement>(mode, 'location').addEventListener('change', () => { renderLots(mode); renderReview(mode); });
     control<HTMLButtonElement>(mode, 'refresh').onclick = () => { void refresh(mode); };
@@ -66,8 +68,13 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     const state = states[mode];
     const blocked = state.pending || state.uncertain || state.completed;
     form(mode).querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach(field => { field.disabled = blocked; });
-    control<HTMLButtonElement>(mode, 'submit').disabled = blocked || !state.context || (mode === 'ship' && state.context.has_bom) || !state.context.part.active;
+    control<HTMLButtonElement>(mode, 'submit').disabled = blocked || !state.context || !state.context.part.active;
     control<HTMLButtonElement>(mode, 'refresh').disabled = state.pending;
+    if (mode === 'ship') {
+      const lot = control<HTMLSelectElement>(mode, 'lot_number');
+      lot.disabled = blocked || !!state.context?.has_bom; lot.required = !state.context?.has_bom;
+      lot.closest<HTMLElement>('.field')!.hidden = !!state.context?.has_bom;
+    }
   }
   function renderLots(mode: Mode) {
     if (mode !== 'ship') return;
@@ -77,16 +84,19 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     if (saved && !lots.some(b => b.lot_number === saved)) select.insertAdjacentHTML('beforeend', `<option value="${esc(saved)}">${esc(saved)} · unavailable</option>`);
     select.value = saved;
   }
+  function allocations(review: BOMPreview) {
+    return pair('BOM build capacity at this location', review.buildable) + pair('Requested shipment readiness', review.plan.ready ? 'Ready' : 'Blocked — component shortage') + `<h3>Aggregated leaf requirements</h3><div class="table-wrap"><table><thead><tr><th>Material</th><th class="num">Required</th><th class="num">Available</th><th class="num">Shortage</th></tr></thead><tbody>${review.plan.requirements.map(r => `<tr><td>${esc(r.part_number)}<br>${esc(r.description)}</td><td class="num">${r.quantity_required}</td><td class="num">${r.stock_available}</td><td class="num">${r.shortage}</td></tr>`).join('')}</tbody></table></div><h3>Leaf lot allocations</h3><div class="table-wrap"><table><thead><tr><th>Material</th><th>Lot / Location</th><th class="num">Consume</th><th class="num">Lot stock</th></tr></thead><tbody>${review.plan.lines.map(line => `<tr><td>${esc(line.part_number)}</td><td>${esc(line.lot_number)}<br>${esc(line.location)}</td><td class="num">${line.quantity_allocated}</td><td class="num">${line.lot_stock}</td></tr>`).join('')}</tbody></table></div><p class="help">Parent and intermediate assembly stock stays unchanged. Only these leaf lots are consumed.</p>`;
+  }
   function renderReview(mode: Mode) {
     const context = states[mode].context;
     const location = value(mode, 'location'), lot = value(mode, 'lot_number');
     const lotStock = context?.part.balances.find(b => b.location === location && b.lot_number === lot)?.quantity ?? 0;
-    control<HTMLElement>(mode, 'review').innerHTML = context ? `${pair('Part', context.part.part_number)}<p class="description">${esc(context.part.description)}</p>${pair('Location', location)}${pair('Total location stock', context.part.location_balances[location] ?? 0)}${mode === 'ship' ? pair('Selected lot', lot || 'Select a lot') + pair('Selected-lot availability', lotStock) : ''}${pair('Quantity requested', value(mode, 'quantity') || 'Enter quantity')}${pair('Operator', operator() || 'Name required in header')}<p class="help">${mode === 'ship' ? 'Review shipment reads current stock and shows the exact stock impact before confirmation.' : 'Stock is revalidated by Python when receiving.'}</p>${!context.part.active ? '<div class="status error">This part is inactive. Use the original application to reactivate it.</div>' : ''}${mode === 'ship' && context.has_bom ? '<div class="status error">BOM shipping is unavailable here. Use the original application to review component lot allocations.</div>' : ''}` : 'Select a part to read current inventory.';
+    control<HTMLElement>(mode, 'review').innerHTML = context ? `${pair('Part', context.part.part_number)}<p class="description">${esc(context.part.description)}</p>${pair('Location', location)}${pair('Total location stock', context.part.location_balances[location] ?? 0)}${mode === 'ship' && !context.has_bom ? pair('Selected lot', lot || 'Select a lot') + pair('Selected-lot availability', lotStock) : ''}${pair('Quantity requested', value(mode, 'quantity') || 'Enter quantity')}${pair('Operator', operator() || 'Name required in header')}<p class="help">${mode === 'ship' ? 'Review shipment reads current stock and shows the exact stock impact before confirmation.' : 'Stock is revalidated by Python when receiving.'}</p>${!context.part.active ? '<div class="status error">This part is inactive. Use the original application to reactivate it.</div>' : ''}${pair('Part stock status', context.part.low_stock ? 'Low stock' : 'Above minimum')}${mode === 'ship' && context.has_bom ? states.ship.completed ? '<p class="help">Shipment complete. Inspect shipment for consumed leaf lots, or use Ship another.</p>' : bomReview ? allocations(bomReview) : '<p class="help">BOM parent selected. Review shipment to read current leaf requirements, build capacity, and lot allocations.</p>' : ''}` : 'Select a part to read current inventory.';
   }
   async function refresh(mode: Mode, adoptLocation = false) {
     const state = states[mode];
     if (state.pending || state.uncertain) return;
-    const version = ++state.version; preview = null;
+    const version = ++state.version; preview = null; bomReview = null;
     state.context = null; lock(mode);
     control<HTMLElement>(mode, 'review').textContent = 'Reading current stock…';
     try {
@@ -120,7 +130,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
   }
   function clearEntry(mode: Mode) {
     for (const name of mode === 'receive' ? ['quantity', 'lot_number', 'reference'] : ['quantity', 'lot_number', 'reference', 'recipient', 'carrier', 'tracking']) control<HTMLInputElement | HTMLSelectElement>(mode, name).value = '';
-    if (mode === 'ship') preview = null; renderReview(mode);
+    if (mode === 'ship') { preview = null; bomReview = null; } renderReview(mode);
   }
   function ambiguous(mode: Mode, error: unknown) {
     const state = states[mode];
@@ -129,23 +139,28 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     if (state.uncertain) {
       const submitted = state.submitted!;
       const recovery = control<HTMLElement>(mode, 'recovery'); recovery.hidden = false;
-      recovery.innerHTML = `<h3>Verify uncertain ${mode === 'receive' ? 'receipt' : 'shipment'}</h3>${pair('Submitted part', submitted.part_number)}${pair('Lot / location', `${submitted.lot_number} / ${submitted.location}`)}${pair('Quantity / operator', `${submitted.quantity} / ${submitted.operator}`)}${pair('Reference', submitted.reference || '—')}${'notes' in submitted ? pair('Notes', submitted.notes || '—') : pair('Recipient', submitted.recipient) + pair('Carrier', submitted.carrier || '—') + pair('Tracking', submitted.tracking || '—')}<button class="btn" data-recovery="read">Read current stock and audit</button><div class="recovery-records"></div>`;
+      recovery.innerHTML = `<h3>Verify uncertain ${mode === 'receive' ? 'receipt' : 'shipment'}</h3>${pair('Submitted part', submitted.part_number)}${pair('Lot / location', `${submitted.lot_number || 'Automatic component lots'} / ${submitted.location}`)}${mode === 'ship' && bomReview ? allocations(bomReview) : ''}${pair('Quantity / operator', `${submitted.quantity} / ${submitted.operator}`)}${pair('Reference', submitted.reference || '—')}${'notes' in submitted ? pair('Notes', submitted.notes || '—') : pair('Recipient', submitted.recipient) + pair('Carrier', submitted.carrier || '—') + pair('Tracking', submitted.tracking || '—')}<button class="btn" data-recovery="read">Read current stock and audit</button><div class="recovery-records"></div>`;
     }
   }
   async function submit(mode: Mode) {
     const state = states[mode];
-    if (state.pending || state.uncertain || state.completed || !state.context || (mode === 'ship' && state.context.has_bom)) return;
+    if (state.pending || state.uncertain || state.completed || !state.context) return;
     let fields: Receipt | ShipmentRequest;
     try { fields = request(mode); } catch (error) { feedback(mode, message(error), true); return; }
     state.pending = true; const version = ++state.version; const reviewVersion = previewVersion; lock(mode); feedback(mode, mode === 'receive' ? 'Receiving…' : 'Reading shipment review…');
     let mutationStarted = false;
     try {
       if (mode === 'ship') {
-        const result = await read(getAPI().preview_ship(fields as ShipmentRequest));
+        const { lot_number: _lot, ...bomFields } = fields as ShipmentRequest;
+        const result = state.context.has_bom ? await read(getAPI().preview_bom_ship(bomFields)) : await read(getAPI().preview_ship(fields as ShipmentRequest));
         if (version !== state.version || reviewVersion !== previewVersion || active !== 'ship') return;
         state.context = result.context; preview = result;
+        if ('plan' in result) {
+          bomReview = result;
+          if (!result.plan.ready) { preview = null; feedback(mode, 'Component shortage. No shipment was sent. Replenish stock and review again.', true); return; }
+        }
         const r = result.request;
-        document.querySelector('#ship-confirm-data')!.innerHTML = pair('Part', r.part_number) + pair('Location / lot', `${r.location} / ${r.lot_number}`) + pair('Quantity', r.quantity) + pair('Recipient', r.recipient) + pair('Operator', r.operator) + pair('Carrier', r.carrier || '—') + pair('Tracking', r.tracking || '—') + pair('Reference', r.reference || '—') + pair('Selected-lot stock', result.lot_stock) + pair('Total location stock', result.location_stock) + pair('Lot remaining after shipment', result.remaining) + '<p class="help">Confirmation creates a real shipment. Python rechecks available stock at submission.</p>';
+        document.querySelector('#ship-confirm-data')!.innerHTML = pair('Part', r.part_number) + pair('Location / lot', `${r.location} / ${'lot_number' in r ? r.lot_number : 'Automatic component lots'}`) + pair('Quantity', r.quantity) + pair('Recipient', r.recipient) + pair('Operator', r.operator) + pair('Carrier', r.carrier || '—') + pair('Tracking', r.tracking || '—') + pair('Reference', r.reference || '—') + ('plan' in result ? allocations(result) : pair('Selected-lot stock', result.lot_stock) + pair('Total location stock', result.location_stock) + pair('Lot remaining after shipment', result.remaining)) + '<p class="help">Confirmation creates a real shipment. Python rechecks available stock at submission.</p>';
         feedback(mode, 'Current shipment review is ready. Confirm or cancel.'); dialog().showModal();
       } else {
         const before = await read(getAPI().stock_context(fields.part_number));
@@ -174,17 +189,29 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     if (operator().trim() !== preview.request.operator) {
       dialog().close(); feedback('ship', 'Operator changed. Review the shipment again.', true); return;
     }
-    const fields = { ...preview.request };
+    const reviewed = preview;
+    const fields: ShipmentRequest = { ...reviewed.request, lot_number: 'lot_number' in reviewed.request ? reviewed.request.lot_number : '' };
     state.before = preview.context.transactions.length; state.beforeShipments = preview.context.shipments.length; state.submitted = fields;
     state.pending = true; ++state.version; lock('ship');
     document.querySelector<HTMLButtonElement>('#ship-confirm-submit')!.disabled = true;
     document.querySelector<HTMLButtonElement>('#ship-cancel')!.disabled = true;
     try {
-      const result = await read(getAPI().ship(fields)); state.context = result.context; state.completed = true;
-      const text = `Shipped ${fields.quantity} × ${fields.part_number} to ${fields.recipient}. Shipment ${result.shipment_number}. Updated total stock: ${result.context.part.quantity}.`;
-      control<HTMLElement>('ship', 'result').innerHTML = `<div class="status success">${esc(text)} <button class="btn" data-another>Ship another</button></div>`;
+      const result = 'plan' in reviewed ? await read(getAPI().ship_bom({ ...reviewed.request, review_id: reviewed.review_id })) : await read(getAPI().ship(fields)); state.context = result.context; state.completed = true;
+      const text = `Shipped ${fields.quantity} × ${fields.part_number} to ${fields.recipient}. Shipment ${result.shipment_number}. ${'plan' in reviewed ? 'Parent stock unchanged; leaf consumption recorded in History.' : `Updated total stock: ${result.context.part.quantity}.`}`;
+      bomReview = null;
+      control<HTMLElement>('ship', 'result').innerHTML = `<div class="status success">${esc(text)} <button class="btn" data-another>Ship another</button> <button class="btn" data-shipment="${esc(result.shipment_number)}">Inspect shipment</button></div>`;
       feedback('ship', 'Shipment complete. Use Ship another to begin the next entry.'); toast(text); void changed();
-    } catch (error) { ambiguous('ship', error); }
+    } catch (error) {
+      ambiguous('ship', error);
+      if (error instanceof RequestError && error.code === 'PLAN_CHANGED') {
+        preview = null;
+        try {
+          const { lot_number: _lot, ...draft } = fields;
+          bomReview = await read(getAPI().preview_bom_ship(draft)); state.context = bomReview.context;
+          feedback('ship', 'Allocation changed. Nothing was shipped. Updated allocations are shown below. Review shipment again to confirm the new plan.', true);
+        } catch (refreshError) { bomReview = null; feedback('ship', `${message(error)} ${message(refreshError)} Refresh availability and review again.`, true); }
+      }
+    }
     finally {
       state.pending = false; dialog().close(); lock('ship'); renderReview('ship');
       document.querySelector<HTMLButtonElement>('#ship-confirm-submit')!.disabled = false;
@@ -199,9 +226,11 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     records.textContent = 'Reading authoritative stock and audit…'; lock(mode);
     try {
       const context = await read(getAPI().stock_context(state.submitted.part_number)); state.context = context;
-      state.recoveredNumbers = context.shipments.slice(0, Math.max(0, context.shipments.length - state.beforeShipments)).map(s => s.shipment_number);
+      state.recoveredNumbers = mode === 'ship' ? context.shipments.slice(0, Math.max(0, context.shipments.length - state.beforeShipments)).map(s => s.shipment_number) : [];
+      const shipmentDetails = await Promise.all(state.recoveredNumbers.map(number => read(getAPI().shipment_detail(number))));
+      const snapshots = shipmentDetails.map(s => `<h3>${esc(s.shipment_number)} component snapshots</h3>${s.consumed_components.map(c => `<div class="status">${esc(c.part_number)} · ${esc(c.lot_number)} · ${esc(c.location)} · Consumed ${c.quantity}</div>`).join('')}<button class="btn" data-shipment="${esc(s.shipment_number)}">Inspect shipment</button>`).join('');
       const recent = context.transactions.slice(0, Math.max(0, context.transactions.length - state.before));
-      records.innerHTML = `${pair('Current total stock', context.part.quantity)}<h3>Audit records added since review</h3>${recent.length ? recent.map(tx => `<div class="status">${esc(tx.timestamp)} · ${esc(tx.tx_type)} · ${tx.quantity_change} · ${esc(tx.lot_number)} · ${esc(tx.location_from || tx.location_to)} · ${esc(tx.operator)} · ${esc(tx.reference)} · ${esc(tx.notes)}</div>`).join('') : '<p>No new audit records were found.</p>'}<h3>Recent shipments for this part</h3>${context.shipments.slice(0, 10).map(s => `<div class="status">${esc(s.shipment_number)} · ${esc(s.timestamp)} · ${s.quantity} · ${esc(s.recipient)} · ${esc(s.carrier)} · ${esc(s.tracking_number)}</div>`).join('') || '<p>No shipments.</p>'}<p class="help">Other operators may also have recorded stock. Compare the submitted entry with the records; stock totals alone cannot prove completion. No request is retried automatically.</p><button class="btn" data-recovery="completed">I verified completion</button> <button class="btn" data-recovery="absent">I verified it did not complete — unlock draft</button>`;
+      records.innerHTML = `${pair('Current total stock', context.part.quantity)}<h3>Audit records added since review</h3>${recent.length ? recent.map(tx => `<div class="status">${esc(tx.timestamp)} · ${esc(tx.tx_type)} · ${tx.quantity_change} · ${esc(tx.lot_number)} · ${esc(tx.location_from || tx.location_to)} · ${esc(tx.operator)} · ${esc(tx.reference)} · ${esc(tx.notes)}</div>`).join('') : '<p>No new audit records were found.</p>'}<h3>Recent shipments for this part</h3>${context.shipments.slice(0, 10).map(s => `<div class="status">${esc(s.shipment_number)} · ${esc(s.timestamp)} · ${s.quantity} · ${esc(s.recipient)} · ${esc(s.carrier)} · ${esc(s.tracking_number)}</div>`).join('') || '<p>No shipments.</p>'}${snapshots}<p class="help">Other operators may also have recorded stock. Compare the submitted entry with the records; stock totals alone cannot prove completion. No request is retried automatically.</p><button class="btn" data-recovery="completed">I verified completion</button> <button class="btn" data-recovery="absent">I verified it did not complete — unlock draft</button>`;
       state.reconciled = true; renderReview(mode);
     } catch (error) { records.textContent = `${message(error)} Completion remains uncertain. Read again before taking action.`; }
     finally { state.pending = false; lock(mode); }

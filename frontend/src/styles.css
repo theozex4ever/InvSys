@@ -211,3 +211,8 @@ dialog.drawer { margin: 0 0 0 auto; height: 100dvh; max-height: 100dvh; width: m
 #receive-result:not(:empty), #ship-result:not(:empty) { margin-bottom: 20px; }
 .recovery-records .status { overflow-wrap: anywhere; }
 @media (max-width: 1050px) { .stock-layout { grid-template-columns: 1fr; } }
+tbody tr.selected { background: var(--accent-soft); }
+.activity-item { grid-template-columns: max-content minmax(0, 1fr) auto; }
+.stock-layout h3 { margin: 22px 0 12px; }
+#history-data td, #history-detail td { overflow-wrap: anywhere; }
+#history-data .table-footer { flex-wrap: wrap; gap: 12px; }
