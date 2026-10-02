@@ -1,9 +1,10 @@
 import './styles.css';
-import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw } from 'lucide';
+import { stockWorkflows } from './stock';
+import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine } from 'lucide';
 import { ready, read, RequestError, type Search, type Part, type PartDetail, type Dashboard } from './bridge';
 
 const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw } });
+const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine } });
 const icon = (name: string) => `<i data-lucide="${name}" aria-hidden="true"></i>`;
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete the request.';
@@ -11,7 +12,7 @@ const status = (text: string, error = false) => `<div class="status ${error ? 'e
 const badges = (part: Part) => `<span class="badge ${part.active ? 'good' : 'neutral'}">${part.active ? 'Active' : 'Inactive'}</span> ${part.low_stock ? '<span class="badge warn">Low stock</span>' : ''}`;
 const search: Search = { query: '', status: 'all', low_stock: false, sort: 'part_number', descending: false };
 let api: Awaited<ReturnType<typeof ready>>;
-let page: 'dashboard' | 'parts' = 'dashboard';
+let page: 'dashboard' | 'parts' | 'receive' | 'ship' = 'dashboard';
 let searchVersion = 0;
 let dashboardVersion = 0;
 let detailVersion = 0;
@@ -26,7 +27,7 @@ let theme: 'light' | 'dark' = 'light';
 
 $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar" aria-label="Main navigation">
 <div class="brand"><div class="brand-mark">${icon('boxes')}</div><div><strong>INVSYS</strong><small>INVENTORY CONTROL</small></div></div>
-<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button></nav>
+<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button></nav>
 <div class="sidebar-bottom"><button id="theme" class="nav-button" disabled aria-label="Switch to dark mode">${icon('moon')}<span>Dark mode</span></button><div class="local-status">LOCAL-FIRST · SQLITE</div></div></aside>
 <div class="workspace"><header class="topbar"><div class="breadcrumb">Workspace / <strong id="page-name">Dashboard</strong></div>
 <div class="header-actions"><button id="global-search" class="btn">Search parts</button><form id="operator-form" class="operator"><div><label for="operator">Operator</label><input id="operator" name="operator" placeholder="Your name" disabled></div><button id="save-operator" class="btn small" disabled>Save</button></form></div></header>
@@ -45,6 +46,7 @@ $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar" aria-label=
 <div class="field full"><label for="location">Default location <span class="required">*</span></label><select id="location" name="location" required></select></div></div>
 <div id="create-error" role="alert"></div><button id="create-submit" class="btn primary">Create part</button></form></dialog>`;
 icons();
+const stock = stockWorkflows(() => api, () => $<HTMLInputElement>('#operator').value, async () => { await Promise.all([loadParts(), loadDashboard()]); }, text => { notice(text); const element = document.createElement('div'); element.className = 'stock-toast'; element.setAttribute('role', 'status'); element.textContent = text; document.body.append(element); setTimeout(() => element.remove(), 5000); });
 
 // Native dialog focus can otherwise escape into the Qt browser chrome on Tab.
 for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
@@ -64,14 +66,15 @@ function notice(text: string, error = false) {
   $('#notice').className = error ? 'alert error' : 'alert success';
 }
 function navigate(next: typeof page, refresh = true) {
+  if ((page === 'receive' || page === 'ship') && page !== next) stock.leave();
   page = next;
-  $('#dashboard').hidden = next !== 'dashboard'; $('#parts').hidden = next !== 'parts';
-  $('#page-name').textContent = next === 'dashboard' ? 'Dashboard' : 'Parts';
+  for (const name of ['dashboard', 'parts', 'receive', 'ship']) $(`#${name}`).hidden = name !== next;
+  $('#page-name').textContent = next.charAt(0).toUpperCase() + next.slice(1);
   document.querySelectorAll<HTMLElement>('[data-page]').forEach(button => {
     button.classList.toggle('active', button.dataset.page === next);
     if (button.dataset.page === next) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
-  if (api && refresh) void (next === 'dashboard' ? loadDashboard() : loadParts());
+  if (api && refresh) { if (next === 'receive' || next === 'ship') void stock.open(next); else void (next === 'dashboard' ? loadDashboard() : loadParts()); }
 }
 async function loadDashboard() {
   const version = ++dashboardVersion;
@@ -81,7 +84,7 @@ async function loadDashboard() {
     if (version !== dashboardVersion) return;
     $('#dashboard-data').innerHTML = `<div class="dashboard-grid"><div class="panel"><div class="panel-head"><div><h2>Needs attention</h2><p>Active parts at or below their minimum stock.</p></div><span class="badge warn">${data.low_stock.length} low</span></div>
 ${data.low_stock.length ? data.low_stock.slice(0, 5).map(p => `<div class="attention-row"><div><button class="part-id" data-part="${esc(p.part_number)}">${esc(p.part_number)}</button><div class="part-description description">${esc(p.description)}</div></div><div class="stock-meter"><strong>${p.quantity}</strong> / ${p.minimum_quantity} min</div><span aria-hidden="true">→</span></div>`).join('') : status('No low-stock parts.')} ${data.low_stock.length > 5 ? '<div class="panel-body"><button class="text-link" data-low-stock>View all low-stock parts →</button></div>' : ''}</div>
-<div class="panel"><div class="panel-head"><h2>Quick actions</h2></div><div class="panel-body"><button class="btn primary" data-new>Create a part</button><div class="system-note">Receive, Ship, Move, Adjust, BOM, History, catalog editing, and operational Settings are deferred in this slice. Use the original application for these workflows.</div></div></div></div>
+<div class="panel"><div class="panel-head"><h2>Quick actions</h2></div><div class="panel-body"><button class="btn primary" data-page="receive">Receive stock</button> <button class="btn primary" data-page="ship">Ship stock</button> <button class="btn" data-new>Create a part</button><div class="system-note">Move, Adjust, BOM shipping and tooling, History inspection, catalog editing, and operational Settings are deferred in this slice. Use the original application for these workflows.</div></div></div></div>
 <div class="stats" style="margin-top:24px"><div class="panel stat"><div class="stat-title">Active parts</div><div class="stat-value">${data.active_parts}</div></div><div class="panel stat warning"><div class="stat-title">Low-stock parts</div><div class="stat-value">${data.low_stock.length}</div></div><div class="panel stat"><div class="stat-title">Recorded shipments</div><div class="stat-value">${data.shipment_count}</div></div></div>
 <div class="panel activity-panel"><div class="panel-head"><h2>Recent activity</h2><span class="muted">History inspection is deferred</span></div>${data.activity.length ? data.activity.map(tx => `<div class="activity-item"><span class="badge">${esc(tx.tx_type)}</span><div><strong>${esc(tx.part_number)} · ${tx.quantity_change > 0 ? '+' : ''}${tx.quantity_change}</strong><p>${esc(tx.operator)} · Lot ${esc(tx.lot_number || '—')} · ${esc(tx.location_from || tx.location_to)}</p></div><time>${esc(tx.timestamp)}</time></div>`).join('') : status('No inventory activity yet.')}</div>`;
   } catch (error) { if (version === dashboardVersion) $('#dashboard-data').innerHTML = status(message(error), true); }
@@ -116,7 +119,7 @@ function detailHTML(part: PartDetail) {
 ${[['Total stock', part.quantity], ['Minimum quantity', part.minimum_quantity], ['Default location', part.location]].map(([label, value]) => `<div class="detail-pair"><span>${label}</span><strong>${esc(value)}</strong></div>`).join('')}
 <h3>Stock by location</h3>${Object.entries(part.location_balances).map(([location, qty]) => `<div class="detail-pair"><span>${esc(location)}</span><strong>${qty}</strong></div>`).join('') || status('No locations.')}
 <h3>Lot balances</h3>${part.balances.length ? `<div class="table-wrap"><table><thead><tr><th>Lot</th><th>Location</th><th class="num">Stock</th></tr></thead><tbody>${part.balances.map(b => `<tr><td>${esc(b.lot_number)}</td><td>${esc(b.location)}</td><td class="num">${b.quantity}</td></tr>`).join('')}</tbody></table></div>` : status('No lots received yet.')}
-<div class="system-note">Receive, Ship, editing, and deactivation are available in the original application. These actions are deferred here.</div></div>`;
+<div class="stock-context-actions"><button class="btn primary" data-stock="receive" data-number="${esc(part.part_number)}">Receive stock</button> <button class="btn" data-stock="ship" data-number="${esc(part.part_number)}">Ship stock</button></div><div class="system-note">Editing and deactivation remain available in the original application.</div></div>`;
 }
 async function openPart(number: string, focus: HTMLElement | null = document.activeElement as HTMLElement) {
   selected = number;
@@ -157,7 +160,15 @@ $('#app').addEventListener('click', event => {
   }
   if (target.classList.contains('refresh') && api) void (page === 'dashboard' ? loadDashboard() : loadParts());
 });
-$('#drawer-data').onclick = event => { if ((event.target as HTMLElement).id === 'retry-detail') void openPart(selected, returnFocus); };
+$('#drawer-data').onclick = event => {
+  const target = (event.target as HTMLElement).closest<HTMLElement>('button');
+  if (target?.id === 'retry-detail') void openPart(selected, returnFocus);
+  if (target?.dataset.stock && api) {
+    const mode = target.dataset.stock as 'receive' | 'ship';
+    $<HTMLDialogElement>('#drawer').close(); navigate(mode, false); void stock.open(mode, target.dataset.number);
+  }
+};
+$('#operator').addEventListener('input', () => stock.operatorChanged());
 $('#global-search').onclick = () => { navigate('parts'); $('#query').focus(); };
 document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open]')) { event.preventDefault(); $('#global-search').click(); } });
 let debounce: ReturnType<typeof setTimeout>;
@@ -232,6 +243,7 @@ async function start() {
     $('#location').innerHTML = locations.map(l => `<option ${l === 'Stock' ? 'selected' : ''}>${esc(l)}</option>`).join('');
     document.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button[disabled], input[disabled]').forEach(control => { control.disabled = false; });
     await Promise.all([loadDashboard(), loadParts()]);
+    if (page === 'receive' || page === 'ship') await stock.open(page);
   } catch (error) {
     notice(message(error), true);
     $('#dashboard-data').innerHTML = status(message(error), true);
