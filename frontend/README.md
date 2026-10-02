@@ -1,7 +1,7 @@
 # InvSys desktop frontend
 
-This is the live dashboard/catalog and Receive/standard Ship slice for issues #7
-and #8, based on approved layout A.
+This is the live dashboard/catalog, Receive, standard and nested BOM Ship, and
+History slice for issues #7, #8, and #9, based on approved layout A.
 The reference remains on `prototype/invsys-phase0`; fixture workflows are not
 included here. Python InventoryStore owns stock, low-stock status, and persistence.
 
@@ -36,8 +36,21 @@ catalog to reconcile against an authoritative part read before resubmission.
 Receive and Ship forms retain drafts during session navigation and refresh current
 availability on return. Receive keeps part/location/notes after success and clears
 quantity/lot/reference. Standard Ship reads a fresh selected-lot review before
-confirmation, then requires Ship another after success. BOM shipping is explicitly
-unavailable here and rejected by Python.
+confirmation, then requires Ship another after success. Existing nested BOM
+parents use Python-generated aggregated leaf requirements and lot allocations,
+including multiple lots for one material. Confirmation requires a matching
+session-local review token. A shortage or changed allocation leaves inventory and
+audit records unchanged; changed allocations preserve the draft, show a refreshed
+plan, and require another explicit review and confirmation. Parent and intermediate
+assembly stock stays unchanged. BOM editing and exploration remain in the original
+PySide6 application.
+
+History searches real transactions by part, lot, operator, or shipment reference,
+with visible search/type filters and pagination. Its read-only drawer uses
+persisted transaction IDs and shipment links, and displays durable per-lot
+component consumption snapshots. Dashboard activity and shipment success open
+the corresponding audit details. History refreshes on entry, revisit, and after
+mutations while preserving filters, selection, and table position.
 
 An uncertain stock submission locks its preserved draft. Read current stock and
 audit records for the submitted part, compare the saved request with the records,
