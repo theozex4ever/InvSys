@@ -1,11 +1,13 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import Select, desc, func, or_, select
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, joinedload, sessionmaker
 
 from inventory_control.db import create_inventory_engine, create_session_factory
 from inventory_control.migrations import bootstrap_database
@@ -105,6 +107,210 @@ class InventoryStore:
 
     def subscribe(self, callback: Callable[[], None]) -> None:
         self._subscribers.append(callback)
+
+    @contextmanager
+    def _read_snapshot(self) -> Iterator[Session]:
+        with self.session_factory() as session:
+            # SQLite's legacy transaction mode does not BEGIN on SELECT. Keep
+            # quantities and audit reads on one snapshot, even with other writers.
+            session.connection().exec_driver_sql("BEGIN")
+            yield session
+
+    def _part_summaries(
+        self, session: Session, part_number: str | None = None
+    ) -> list[dict[str, Any]]:
+        statement = (
+            select(
+                PartRecord, func.coalesce(func.sum(InventoryBalanceRecord.quantity), 0)
+            )
+            .outerjoin(
+                InventoryBalanceRecord, InventoryBalanceRecord.part_id == PartRecord.id
+            )
+            .options(joinedload(PartRecord.default_location))
+            .group_by(PartRecord.id)
+            .order_by(PartRecord.part_number)
+        )
+        if part_number is not None:
+            statement = statement.where(PartRecord.part_number == part_number)
+        return [
+            {
+                **asdict(self._part_dto(part)),
+                "quantity": int(quantity),
+                "low_stock": bool(
+                    part.active
+                    and part.minimum_quantity > 0
+                    and quantity <= part.minimum_quantity
+                ),
+            }
+            for part, quantity in session.execute(statement)
+        ]
+
+    def search_parts(
+        self,
+        query: str = "",
+        *,
+        status: str = "all",
+        low_stock: bool = False,
+        sort: str = "part_number",
+        descending: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Catalog quantities and status from one snapshot, with Unicode search."""
+        query = query.casefold()
+        with self._read_snapshot() as session:
+            parts = self._part_summaries(session)
+        # Retain Python casefold and tuple ordering used by the desktop catalog;
+        # SQLite's default case-insensitive matching has different Unicode rules.
+        parts = [
+            part
+            for part in parts
+            if (
+                query in part["part_number"].casefold()
+                or query in part["description"].casefold()
+            )
+            and (status == "all" or part["active"] == (status == "active"))
+            and (not low_stock or part["low_stock"])
+        ]
+        return sorted(
+            parts,
+            key=lambda part: (
+                part[sort].casefold() if isinstance(part[sort], str) else part[sort],
+                part["part_number"],
+            ),
+            reverse=descending,
+        )
+
+    def _transaction_statement(self) -> Select[tuple[InventoryTransactionRecord]]:
+        return (
+            select(InventoryTransactionRecord)
+            .options(
+                joinedload(InventoryTransactionRecord.part),
+                joinedload(InventoryTransactionRecord.lot),
+                joinedload(InventoryTransactionRecord.location_from),
+                joinedload(InventoryTransactionRecord.location_to),
+            )
+            .order_by(desc(InventoryTransactionRecord.id))
+        )
+
+    def dashboard(self) -> dict[str, Any]:
+        """Dashboard counts, low stock, and recent activity at one committed state."""
+        with self._read_snapshot() as session:
+            parts = self._part_summaries(session)
+            activity = session.execute(
+                self._transaction_statement()
+                .add_columns(ShipmentRecord.shipment_number)
+                .outerjoin(
+                    ShipmentRecord,
+                    InventoryTransactionRecord.shipment_id == ShipmentRecord.id,
+                )
+                .limit(8)
+            )
+            return {
+                "active_parts": sum(part["active"] for part in parts),
+                "low_stock": [part for part in parts if part["low_stock"]],
+                "shipment_count": session.scalar(
+                    select(func.count()).select_from(ShipmentRecord)
+                ),
+                "activity": [
+                    self._history_record(row, number) for row, number in activity
+                ],
+            }
+
+    def _active_locations(self, session: Session) -> list[str]:
+        return list(
+            session.scalars(
+                select(LocationRecord.name)
+                .where(LocationRecord.active.is_(True))
+                .order_by(LocationRecord.id)
+            )
+        )
+
+    def _read_part_detail(
+        self, session: Session, part_number: str, locations: list[str]
+    ) -> dict[str, Any] | None:
+        parts = self._part_summaries(session, part_number)
+        if not parts:
+            return None
+        balances = [
+            dict(
+                part_number=part_number,
+                location=location,
+                lot_number=lot,
+                quantity=quantity,
+            )
+            for location, lot, quantity in session.execute(
+                select(
+                    LocationRecord.name,
+                    LotRecord.lot_number,
+                    InventoryBalanceRecord.quantity,
+                )
+                .select_from(InventoryBalanceRecord)
+                .join(InventoryBalanceRecord.part)
+                .join(InventoryBalanceRecord.location)
+                .join(InventoryBalanceRecord.lot)
+                .where(PartRecord.part_number == part_number)
+                .order_by(LocationRecord.name, LotRecord.lot_number)
+            )
+        ]
+        location_balances = dict.fromkeys(locations, 0)
+        for balance in balances:
+            location = balance["location"]
+            location_balances[location] = (
+                location_balances.get(location, 0) + balance["quantity"]
+            )
+        return {
+            **parts[0],
+            "balances": balances,
+            "location_balances": location_balances,
+        }
+
+    def part_detail(self, part_number: str) -> dict[str, Any] | None:
+        """Detached Part stock, including zero lots and stock at inactive locations."""
+        number = self._normalize_part_number(part_number)
+        with self._read_snapshot() as session:
+            return self._read_part_detail(
+                session, number, self._active_locations(session)
+            )
+
+    def stock_context(self, part_number: str) -> dict[str, Any] | None:
+        """One Part's stock and complete audit history from the same snapshot."""
+        number = self._normalize_part_number(part_number)
+        with self._read_snapshot() as session:
+            locations = self._active_locations(session)
+            part = self._read_part_detail(session, number, locations)
+            if part is None:
+                return None
+            transactions = session.scalars(
+                self._transaction_statement()
+                .join(InventoryTransactionRecord.part)
+                .where(PartRecord.part_number == number)
+            )
+            shipments = session.scalars(
+                select(ShipmentRecord)
+                .join(ShipmentRecord.part)
+                .where(PartRecord.part_number == number)
+                .options(
+                    joinedload(ShipmentRecord.part),
+                    joinedload(ShipmentRecord.components).joinedload(
+                        ShipmentComponentRecord.part
+                    ),
+                    joinedload(ShipmentRecord.components).joinedload(
+                        ShipmentComponentRecord.lot
+                    ),
+                    joinedload(ShipmentRecord.components).joinedload(
+                        ShipmentComponentRecord.location
+                    ),
+                )
+                .order_by(desc(ShipmentRecord.id))
+            ).unique()
+            return {
+                "part": part,
+                "locations": locations,
+                "has_bom": self._has_bom(session, number),
+                "transactions": [
+                    asdict(self._transaction_dto(row)) for row in transactions
+                ],
+                "shipments": [asdict(self._shipment_dto(row)) for row in shipments],
+            }
 
     def _history_record(
         self, row: InventoryTransactionRecord, shipment_number: str | None

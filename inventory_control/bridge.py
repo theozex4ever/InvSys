@@ -7,7 +7,7 @@ from secrets import token_urlsafe
 from threading import RLock
 from typing import Any
 
-from inventory_control.models import BOMShipmentPlan, Part
+from inventory_control.models import BOMShipmentPlan
 from inventory_control.store import InventoryStore
 
 logger = logging.getLogger(__name__)
@@ -44,26 +44,8 @@ class InventoryBridge:
                 },
             }
 
-    def _part(self, part: Part, low_stock: set[str]) -> dict[str, Any]:
-        number = part.part_number
-        return {
-            **asdict(part),
-            "quantity": self._store.total_stock(number),
-            "low_stock": number in low_stock,
-        }
-
     def dashboard(self) -> dict[str, Any]:
-        def read() -> dict[str, Any]:
-            low_parts = self._store.low_stock()
-            low_numbers = {part.part_number for part in low_parts}
-            return {
-                "active_parts": sum(p.active for p in self._store.parts.values()),
-                "low_stock": [self._part(p, low_numbers) for p in low_parts],
-                "shipment_count": len(self._store.shipments),
-                "activity": self._store.history_records(limit=8),
-            }
-
-        return self._respond(read)
+        return self._respond(self._store.dashboard)
 
     def _text(self, value: Any, label: str, required: bool = True) -> str:
         if not isinstance(value, str):
@@ -125,40 +107,18 @@ class InventoryBridge:
                 or type(descending) is not bool
             ):
                 raise ValueError("Invalid catalog filter or sort.")
-            low_numbers = {p.part_number for p in self._store.low_stock()}
-            parts = [
-                self._part(p, low_numbers)
-                for p in self._store.parts.values()
-                if query in p.part_number.casefold()
-                or query in p.description.casefold()
-            ]
-            parts = [
-                p
-                for p in parts
-                if (status == "all" or p["active"] == (status == "active"))
-                and (not low or p["low_stock"])
-            ]
-            return sorted(
-                parts,
-                key=lambda p: (
-                    p[sort].casefold() if isinstance(p[sort], str) else p[sort],
-                    p["part_number"],
-                ),
-                reverse=descending,
+            return self._store.search_parts(
+                query, status=status, low_stock=low, sort=sort, descending=descending
             )
 
         return self._respond(search)
 
     def _detail(self, part_number: Any) -> dict[str, Any]:
         number = self._text(part_number, "Part number").upper()
-        part = self._store.parts.get(number)
+        part = self._store.part_detail(number)
         if part is None:
             raise BridgeError("NOT_FOUND", "Part not found.")
-        return {
-            **self._part(part, {p.part_number for p in self._store.low_stock()}),
-            "location_balances": self._store.balances.get(number, {}),
-            "balances": [asdict(b) for b in self._store.lot_balances(number)],
-        }
+        return part
 
     def part_detail(self, part_number: Any) -> dict[str, Any]:
         return self._respond(lambda: self._detail(part_number))
@@ -232,23 +192,11 @@ class InventoryBridge:
         return self._respond(create)
 
     def _stock_context(self, part_number: Any) -> dict[str, Any]:
-        part = self._detail(part_number)
-        number = part["part_number"]
-        return {
-            "part": part,
-            "locations": self._store.locations,
-            "has_bom": bool(self._store.bom_children(number)),
-            "transactions": [
-                asdict(tx)
-                for tx in self._store.transactions
-                if tx.part_number == number
-            ],
-            "shipments": [
-                asdict(shipment)
-                for shipment in self._store.shipments
-                if shipment.part_number == number
-            ],
-        }
+        number = self._text(part_number, "Part number").upper()
+        context = self._store.stock_context(number)
+        if context is None:
+            raise BridgeError("NOT_FOUND", "Part not found.")
+        return context
 
     def stock_context(self, part_number: Any) -> dict[str, Any]:
         """Current stock and audit records for reviewing or reconciling a draft."""

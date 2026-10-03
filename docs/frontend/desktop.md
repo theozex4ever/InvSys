@@ -118,8 +118,25 @@ and returns `{ok: true, data}` or `{ok: false, error: {code, message}}`. Stable
 codes: `VALIDATION`, `DUPLICATE`, `NOT_FOUND`, `INTERNAL`, and `PLAN_CHANGED` for a rejected BOM allocation. Unexpected exceptions
 are logged and return a safe message. Private helpers, store/session access,
 SQL, arbitrary settings, and generic balance writes are not exposed. Requests from this
-window are serialized; cross-process transactional behavior remains the store's
-existing behavior. No schema or inventory rules changed.
+window are serialized.
+
+InventoryStore owns the catalog, dashboard, Part detail, and stock-context read
+modules. Each of these reads uses an explicit SQLite read transaction so its
+quantities, status, and included audit records describe one committed database
+state, even when another application writes during the read. The next request
+sees subsequent commits. The bridge validates requests and translates errors;
+it does not assemble these results from separate store reads.
+
+Catalog quantities are aggregated together. Part detail and stock context query
+the selected Part's balances and audit records directly. Stock context retains
+that Part's complete transaction and shipment lists, newest first, because
+uncertain-submission recovery depends on their lengths. Response size still
+grows with that Part's own history. Catalog search retains Python's Unicode
+case folding and the existing sort order.
+
+The read snapshot does not reserve stock or authorize a later shipment; mutations
+still validate at submission. The original PySide6 screens retain their existing
+read paths. No schema or inventory rules changed.
 
 ## Drafts and uncertain submissions
 
@@ -134,7 +151,8 @@ an operation that did not complete. A failed recovery read keeps the draft locke
 
 Reconciliation is operator-assisted: other operators/processes can produce similar
 records, and a stock total cannot prove completion. There is no durable request
-identifier, automatic deduplication, or new cross-process concurrency guarantee.
+identifier or automatic deduplication. Consistent stock-context reads do not add
+a cross-process guarantee for mutation deduplication or completion detection.
 Use History to inspect shipment transactions and per-lot component snapshots. Do not unlock
 and repeat an entry whose completion is still uncertain.
 
