@@ -1,10 +1,12 @@
 """Regression tests for inventory UI safety and responsive behavior."""
 
+import pytest
 from PySide6.QtWidgets import QLabel, QMessageBox, QScrollArea, QTabWidget
 
 import inventory_control.ui.main_window as main_window_module
 import inventory_control.ui.views as views_module
 import inventory_control.ui.widgets as widgets_module
+from inventory_control.store import InventoryStore
 from inventory_control.ui.main_window import MainWindow
 from inventory_control.ui.bom_flowchart import BOMFlowchart, capacity_level
 from inventory_control.ui.views import (
@@ -17,6 +19,55 @@ from inventory_control.ui.views import (
     ShipView,
 )
 from inventory_control.ui.widgets import BaseView, PartCombo
+
+
+@pytest.mark.parametrize("notify_deactivation", [False, True])
+def test_blocked_bom_draft_does_not_fail_receipt(qtbot, tmp_path, monkeypatch, notify_deactivation):
+    store = InventoryStore(tmp_path / "inventory.db", seed=False)
+    store.add_part("P", "Component")
+    store.add_part("KIT", "Kit")
+    store.add_bom_component("KIT", "P", 1)
+    store.receive("P", 2, "Stock", "L1", "setup")
+    monkeypatch.setattr(widgets_module, "STORE", store)
+    monkeypatch.setattr(views_module, "STORE", store)
+    shipment = ShipView(lambda *_: None, lambda: "alice")
+    qtbot.addWidget(shipment)
+    shipment.part.setCurrentIndex(shipment.part.findData("KIT"))
+    shipment.qty.setText("1")
+    shipment.recipient.setText("Acme")
+    assert shipment.ship_btn.isEnabled()
+    assert shipment.component_lot_table.rowCount() == 1
+
+    toasts = []
+    receipt = ReceiveView(lambda *args: toasts.append(args), lambda: "alice")
+    qtbot.addWidget(receipt)
+    receipt.part.setCurrentIndex(receipt.part.findData("KIT"))
+    receipt.qty.setText("3")
+    receipt.lot.setText("KIT-L1")
+    receipt.reference.setText("delivery")
+    store.set_part_active("P", False, notify=notify_deactivation)
+    receipt.receive()
+
+    assert store.stock_at("KIT", "Stock", "KIT-L1") == 3
+    receipts = [tx for tx in store.transactions if tx.part_number == "KIT" and tx.tx_type == "RECEIVE"]
+    assert len(receipts) == 1
+    assert receipts[0].quantity_change == 3
+    assert toasts[-1][1] == "success"
+    assert "Received 3 of KIT" in receipt.result.text()
+    assert receipt.qty.text() == receipt.lot.text() == receipt.reference.text() == ""
+    assert not receipt.receive_btn.isEnabled()
+    assert "Blocked:" in shipment.preview.text()
+    assert "Part P is inactive" in shipment.preview.text()
+    assert not shipment.ship_btn.isEnabled()
+    assert shipment._bom_plan is None
+    assert shipment.component_lot_table.rowCount() == 0
+    assert shipment.qty.text() == "1"
+    assert shipment.recipient.text() == "Acme"
+
+    store.set_part_active("P", True)
+    assert shipment.ship_btn.isEnabled()
+    assert shipment.component_lot_table.rowCount() == 1
+    store.engine.dispose()
 
 
 def test_part_combo_starts_visibly_and_logically_unselected(qtbot, blank_store, monkeypatch):

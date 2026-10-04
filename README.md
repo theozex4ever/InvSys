@@ -64,6 +64,11 @@ inventory_control/
 
 **Service boundary:** `InventoryStore` is now a SQLite-backed facade. The UI still calls store methods and never writes database rows directly.
 
+Store notifications refresh subscribed views after mutations commit. A failed
+observer is logged without rejecting the committed operation or stopping other
+observers. Shipment drafts with ineligible BOM components display a blocked
+preview until the eligibility issue is resolved.
+
 ---
 
 ## Key Design Decisions
