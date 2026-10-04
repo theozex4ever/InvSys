@@ -141,6 +141,55 @@ def test_move_and_adjust_are_separate_task_tabs(qtbot, blank_store, monkeypatch)
     assert [view.tabs.tabText(index) for index in range(view.tabs.count())] == ["Move Stock", "Adjust Count"]
 
 
+def test_adjust_can_correct_a_fully_shipped_lot(qtbot, blank_store, monkeypatch):
+    blank_store.add_part("ABC-1", "Widget")
+    blank_store.receive("ABC-1", 5, "Stock", "LOT-1", "setup")
+    blank_store.ship("ABC-1", 5, "Stock", "Acme", "alice", "LOT-1")
+    monkeypatch.setattr(widgets_module, "STORE", blank_store)
+    monkeypatch.setattr(views_module, "STORE", blank_store)
+    view = MoveAdjustView(lambda *_: None, lambda: "alice")
+    qtbot.addWidget(view)
+    view.tabs.setCurrentIndex(1)
+    view.adjust_part.setCurrentIndex(view.adjust_part.findData("ABC-1"))
+    view.move_part.setCurrentIndex(view.move_part.findData("ABC-1"))
+    view.move_qty.setText("1")
+
+    assert blank_store.stock_at("ABC-1", "Stock", "LOT-1") == 0
+    assert view.adjust_lot.currentText() == "LOT-1"
+    assert view.move_lot.count() == 0
+    assert view.move_btn.isEnabled() is False
+
+    view.adjust_count.setText("2")
+    assert view.adjust_btn.isEnabled() is False
+    view.reason.setText("   ")
+    assert view.adjust_btn.isEnabled() is False
+    view.reason.setText("Found two units")
+    assert view.adjust_btn.isEnabled() is True
+    view.adjust_count.clear()
+    assert view.adjust_btn.isEnabled() is False
+    view.adjust_count.setText("2")
+    view.adjust_lot.setCurrentIndex(-1)
+    assert view.adjust_btn.isEnabled() is False
+    view.adjust_lot.setCurrentIndex(view.adjust_lot.findText("LOT-1"))
+    assert view.adjust_btn.isEnabled() is True
+    assert "Adjustment: +2" in view.adjust_preview.text()
+
+    transaction_count = len(blank_store.transactions)
+    view.adjust_btn.click()
+
+    assert blank_store.stock_at("ABC-1", "Stock", "LOT-1") == 2
+    assert len(blank_store.transactions) == transaction_count + 1
+    corrections = [tx for tx in blank_store.transactions if tx.tx_type == "COUNT_CORRECTION"]
+    assert len(corrections) == 1
+    correction = corrections[0]
+    assert correction.quantity_change == 2
+    assert correction.part_number == "ABC-1"
+    assert correction.lot_number == "LOT-1"
+    assert correction.reference == "Found two units"
+    assert correction.operator == "alice"
+    assert view.move_lot.currentText() == "LOT-1"
+
+
 def test_history_filters_across_operator_and_type(qtbot, blank_store, monkeypatch):
     blank_store.add_part("ABC-1", "Widget")
     blank_store.receive("ABC-1", 5, "Stock", "LOT-1", "alice")

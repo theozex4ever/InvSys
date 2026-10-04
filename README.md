@@ -208,6 +208,8 @@ Lot numbers are required when receiving stock. Opening inventory should be enter
 
 Shipping a single part, moving, and adjusting stock operate against a selected lot. For BOM shipments, the app automatically allocates each required leaf material from positive-stock lots in lot-number order. The operator reviews those allocations before shipping; if they change before submission, the shipment is blocked until the updated allocation is reviewed.
 
+Adjust Count includes existing zero-stock lots at the selected location, so found stock can be recorded as a count correction. Move Stock offers only lots with positive stock at the source.
+
 ## Database Schema
 
 The core tables are:
