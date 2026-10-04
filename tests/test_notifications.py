@@ -39,6 +39,32 @@ need to know that it WAS called.
 
 import pytest
 
+from inventory_control.store import InventoryStore
+
+
+@pytest.mark.parametrize("error_type", [ValueError, RuntimeError])
+def test_failed_observer_does_not_reject_committed_receipt(tmp_path, caplog, error_type):
+    store = InventoryStore(tmp_path / "inventory.db", seed=False)
+    store.add_part("ABC-1", "Widget")
+    observed_stock = []
+
+    def failing_observer():
+        raise error_type("Refresh failed")
+
+    store.subscribe(failing_observer)
+    store.subscribe(lambda: observed_stock.append(store.stock_at("ABC-1", "Stock")))
+    store.receive("ABC-1", 5, "Stock", "LOT-1", "alice")
+
+    assert observed_stock == [5]
+    assert "Refresh failed" in caplog.text
+    assert caplog.records[0].exc_info is not None
+    store.engine.dispose()
+    reopened = InventoryStore(tmp_path / "inventory.db", seed=False)
+    assert reopened.stock_at("ABC-1", "Stock", "LOT-1") == 5
+    assert len(reopened.transactions) == 1
+    assert reopened.transactions[0].tx_type == "RECEIVE"
+    reopened.engine.dispose()
+
 
 # ---------------------------------------------------------------------------
 # Helper used throughout this module

@@ -2,6 +2,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime
+import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
@@ -38,6 +39,8 @@ from inventory_control.orm import (
     ShipmentRecord,
     SettingRecord,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ShipmentReviewNotFound(ValueError):
@@ -498,7 +501,11 @@ class InventoryStore:
 
     def notify(self) -> None:
         for callback in self._subscribers:
-            callback()
+            try:
+                callback()
+            except Exception:
+                # Refresh failures must not make committed mutations look rejected.
+                logger.exception("Inventory observer refresh failed: %r", callback)
 
     def get_setting(self, key: str, default: str = "") -> str:
         with self.session_factory() as session:

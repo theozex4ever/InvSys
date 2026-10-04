@@ -784,8 +784,12 @@ class ShipView(BaseView):
             return
         self.preview.show()
         if pn in STORE.parts and qty > 0 and STORE.has_bom(pn):
+            try:
+                plan = STORE.prepare_bom_shipment(pn, qty, loc)
+            except ValueError as e:
+                self.preview.setText(f"Blocked: {e}")
+                return
             self.component_lot_table.setVisible(True)
-            plan = STORE.prepare_bom_shipment(pn, qty, loc)
             self._bom_plan = plan
             self._show_component_lots(plan)
             shortages = [req for req in plan.requirements if req.shortage > 0]
