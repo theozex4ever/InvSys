@@ -96,8 +96,10 @@ read-only drawer with fields and lot/location balances. Low-stock entries open
 live parts; the attention panel shows five entries and links to all low-stock
 parts. Active and low-stock indicators are separate. Receive and standard Ship
 open from navigation, dashboard actions, and part details, adopting the selected
-part's default location. Receipt success retains part/location/notes and clears
-quantity/lot/reference. Shipment confirmation shows selected-lot stock separately
+part's default location. Confirmed receipt success retains part/location and clears
+quantity/lot/reference/notes, including operator-verified completion after an
+uncertain response. Validation failure, unresolved uncertainty, and navigation
+preserve draft Notes. Shipment confirmation shows selected-lot stock separately
 from location stock, quantity, recipient, operator, optional details, and the
 actual lot remaining. Success shows the generated shipment number and requires
 Ship another. Both use persistent results and a temporary toast. The frontend never computes

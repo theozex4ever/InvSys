@@ -34,8 +34,10 @@ uncertain create preserves entries and requires closing and refreshing the
 catalog to reconcile against an authoritative part read before resubmission.
 
 Receive and Ship forms retain drafts during session navigation and refresh current
-availability on return. Receive keeps part/location/notes after success and clears
-quantity/lot/reference. Standard Ship reads a fresh selected-lot review before
+availability on return. Receive keeps part/location after confirmed success and
+clears quantity/lot/reference/notes, including operator-verified completion after
+an uncertain response. Validation failure and unresolved uncertainty preserve
+the draft notes. Standard Ship reads a fresh selected-lot review before
 confirmation, then requires Ship another after success. Existing nested BOM
 parents use Python-generated aggregated leaf requirements and lot allocations,
 including multiple lots for one material. Confirmation requires a matching
