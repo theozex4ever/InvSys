@@ -814,9 +814,6 @@ class InventoryStore:
                 raise ValueError("Part has no BOM.")
             return self._prepare_bom_shipment(session, part, qty, loc)
 
-    def bom_can_ship(self, part_number: str, qty: int, location: str) -> bool:
-        return all(req.shortage == 0 for req in self.bom_availability(part_number, qty, location).requirements)
-
     def total_stock(self, part_number: str) -> int:
         part_number = self._normalize_part_number(part_number)
         with self.session_factory() as session:

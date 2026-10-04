@@ -1,6 +1,7 @@
 # Inventory Control Quality Gate
 
-Run the automated gate before starting the database migration:
+Run the Python and Qt test suite before opening a pull request. The full gate,
+including lint and the frontend checks, is listed in `CLAUDE.md`.
 
 ```bash
 QT_QPA_PLATFORM=offscreen pytest
