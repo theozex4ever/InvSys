@@ -8,7 +8,7 @@ from threading import RLock
 from typing import Any
 
 from inventory_control.models import BOMShipmentPlan
-from inventory_control.store import InventoryStore
+from inventory_control.store import InventoryStore, ShipmentReviewNotFound
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,8 @@ class InventoryBridge:
                 return {"ok": True, "data": operation()}
         except BridgeError as error:
             return {"ok": False, "error": {"code": error.code, "message": str(error)}}
+        except ShipmentReviewNotFound as error:
+            return {"ok": False, "error": {"code": "NOT_FOUND", "message": str(error)}}
         except ValueError as error:
             return {"ok": False, "error": {"code": "VALIDATION", "message": str(error)}}
         except Exception:
@@ -203,7 +205,12 @@ class InventoryBridge:
         return self._respond(lambda: self._stock_context(part_number))
 
     def _stock_request(
-        self, request: Any, optional: set[str], require_lot: bool = True
+        self,
+        request: Any,
+        optional: set[str],
+        require_lot: bool = True,
+        *,
+        check_inventory: bool = True,
     ) -> dict[str, Any]:
         fields = self._request(
             request,
@@ -234,7 +241,8 @@ class InventoryBridge:
         values["part_number"] = values["part_number"].upper()
         if require_lot:
             values["lot_number"] = values["lot_number"].upper()
-        self._detail(values["part_number"])
+        if check_inventory:
+            self._detail(values["part_number"])
         for key in optional:
             values[key] = self._text(
                 fields.get(key, ""), key.capitalize(), required=False
@@ -257,13 +265,17 @@ class InventoryBridge:
 
         return self._respond(receive)
 
-    def _ship_request(self, request: Any) -> dict[str, Any]:
+    def _ship_request(
+        self, request: Any, *, check_inventory: bool = True
+    ) -> dict[str, Any]:
         fields = self._stock_request(
-            request, {"recipient", "carrier", "tracking", "reference"}
+            request,
+            {"recipient", "carrier", "tracking", "reference"},
+            check_inventory=check_inventory,
         )
         if not fields["recipient"]:
             raise ValueError("Recipient required.")
-        if self._store.bom_children(fields["part_number"]):
+        if check_inventory and self._store.bom_children(fields["part_number"]):
             raise ValueError(
                 "BOM shipping is unavailable here. Use the original application to review allocations."
             )
@@ -271,31 +283,14 @@ class InventoryBridge:
 
     def preview_ship(self, request: Any) -> dict[str, Any]:
         def preview() -> dict[str, Any]:
-            fields = self._ship_request(request)
-            context = self._stock_context(fields["part_number"])
-            if not context["part"]["active"]:
-                raise ValueError("Part is inactive. Reactivate it before shipping.")
-            if fields["location"] not in context["locations"]:
-                raise ValueError("Invalid location.")
-            lots = self._store.lots_for_part(fields["part_number"])
-            if fields["lot_number"] not in {lot.lot_number for lot in lots}:
-                raise BridgeError("NOT_FOUND", "Lot not found.")
-            stock = self._store.stock_at(
-                fields["part_number"], fields["location"], fields["lot_number"]
+            fields = self._ship_request(request, check_inventory=False)
+            review = self._store.review_standard_shipment(
+                fields["part_number"],
+                fields["quantity"],
+                fields["location"],
+                fields["lot_number"],
             )
-            if fields["quantity"] > stock:
-                raise ValueError(
-                    f"Not enough stock in selected lot. Available: {stock}, requested: {fields['quantity']}."
-                )
-            return {
-                "request": fields,
-                "lot_stock": stock,
-                "location_stock": self._store.stock_at(
-                    fields["part_number"], fields["location"]
-                ),
-                "remaining": stock - fields["quantity"],
-                "context": context,
-            }
+            return {"request": fields, **asdict(review)}
 
         return self._respond(preview)
 
@@ -320,7 +315,9 @@ class InventoryBridge:
 
         return self._respond(ship)
 
-    def _bom_request(self, request: Any) -> dict[str, Any]:
+    def _bom_request(
+        self, request: Any, *, check_inventory: bool = True
+    ) -> dict[str, Any]:
         fields = self._request(
             request,
             {
@@ -336,11 +333,14 @@ class InventoryBridge:
         )
         # BOM parents are phantom assemblies; there is no parent lot selection.
         values = self._stock_request(
-            fields, {"recipient", "carrier", "tracking", "reference"}, require_lot=False
+            fields,
+            {"recipient", "carrier", "tracking", "reference"},
+            require_lot=False,
+            check_inventory=check_inventory,
         )
         if not values["recipient"]:
             raise ValueError("Recipient required.")
-        if not self._store.bom_children(values["part_number"]):
+        if check_inventory and not self._store.bom_children(values["part_number"]):
             raise ValueError(
                 "This part has no BOM. Review a standard shipment instead."
             )
@@ -348,13 +348,11 @@ class InventoryBridge:
 
     def preview_bom_ship(self, request: Any) -> dict[str, Any]:
         def preview() -> dict[str, Any]:
-            fields = self._bom_request(request)
-            plan = self._store.prepare_bom_shipment(
+            fields = self._bom_request(request, check_inventory=False)
+            review = self._store.review_bom_shipment(
                 fields["part_number"], fields["quantity"], fields["location"]
             )
-            availability = self._store.bom_availability(
-                fields["part_number"], fields["quantity"], fields["location"]
-            )
+            plan = review.plan
             review_id = ""
             if plan.ready:
                 review_id = token_urlsafe(24)
@@ -369,8 +367,8 @@ class InventoryBridge:
                 "request": dict(fields),
                 "plan": serialized,
                 "review_id": review_id,
-                "buildable": availability.buildable,
-                "context": self._stock_context(fields["part_number"]),
+                "buildable": review.buildable,
+                "context": review.context,
             }
 
         return self._respond(preview)
