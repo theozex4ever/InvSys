@@ -1,5 +1,70 @@
 target-version = "py312"
+line-length = 100
 
 [lint]
-# Start with syntax and likely runtime errors; expand the rules as legacy code is cleaned up.
-select = ["E9", "F63", "F7", "F82"]
+# Not enabled: DTZ. Timestamps are local wall-clock time by design (operator-facing
+# audit trail); moving to aware datetimes is a data migration, not a lint fix.
+# Each family is on because it catches a class of defect, not for style points.
+select = [
+  "F",    # pyflakes: undefined names, unused imports/variables
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "I",    # import order (deterministic diffs)
+  "B",    # bugbear: likely bugs and design problems
+  "S",    # bandit: security smells (SQL built from strings, subprocess, eval...)
+  "BLE",  # blind `except Exception` that hides failures
+  "UP",   # pyupgrade to the 3.12 baseline
+  "SIM",  # simplifications
+  "C4",   # comprehension correctness
+  "PIE",  # misc. lints
+  "RET",  # return-statement consistency
+  "PT",   # pytest style and pitfalls
+  "PERF", # performance anti-patterns
+  "N",    # naming
+  "A",    # shadowed builtins
+  "ARG",  # unused arguments
+  "PTH",  # pathlib over os.path
+  "TRY",  # exception-handling anti-patterns
+  "T20",  # stray print()
+  "ERA",  # commented-out code
+  "LOG",  # logging pitfalls
+  "G",    # logging format strings
+  "ISC",  # implicit string concatenation
+  "PGH",  # blanket noqa / type: ignore
+  "PLE",  # pylint errors
+  "PLW",  # pylint warnings
+  "TID",  # tidy imports
+  "RUF",  # ruff-specific checks, including unused noqa (RUF100)
+]
+ignore = [
+  "E501",   # the formatter owns line length; remaining long lines are strings
+  "TRY003", # domain rule: raise ValueError with a human-readable message
+  "RUF001", "RUF002", "RUF003", # intentional typography (×, –) in UI text
+  "ISC001", # conflicts with the formatter
+  "C408",   # dict(key=value) keyword style is used deliberately for request payloads
+  "TRY301", # raising inside try is the smoke probes' and dialogs' reporting pattern
+  "PERF401",# explicit append loops are kept where they read clearer
+  "N818",   # domain exceptions use glossary names (InsufficientStock), not *Error
+]
+
+[lint.per-file-ignores]
+"tests/**" = [
+  "S101",   # pytest uses assert
+  "ARG001", # fixtures requested for their side effects
+  "PLW0108",
+  "ARG002", # parametrize ids carried as unused arguments
+  "ERA001", # Arrange/Act/Assert comments look like code to eradicate
+]
+"conftest.py" = ["ARG001"]
+# Qt requires camelCase overrides (keyPressEvent, addWidget...).
+"inventory_control/ui/**" = ["N802"]
+"tests/conftest.py" = ["N802"]
+# The native smoke probes are CLI tools that report progress on stdout.
+"inventory_control/desktop_smoke*.py" = ["T201"]
+"inventory_control/desktop.py" = ["T201"]
+
+[lint.flake8-pytest-style]
+parametrize-names-type = "csv"
+
+[format]
+docstring-code-format = true

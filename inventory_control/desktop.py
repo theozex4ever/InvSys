@@ -1,20 +1,23 @@
 """Optional serverless desktop launcher; the original Qt launcher stays available."""
 
 import argparse
+import importlib.util
 import logging
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from inventory_control.backup import backup_database
 from inventory_control.bridge import InventoryBridge
 from inventory_control.config import BACKUP_DIR, DB_PATH, LOG_DIR, PROJECT_ROOT
 from inventory_control.store import InventoryStore
 
+if TYPE_CHECKING:
+    from inventory_control.desktop_smoke import DesktopSmoke
+
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="InvSys desktop (built assets, no HTTP server)"
-    )
+    parser = argparse.ArgumentParser(description="InvSys desktop (built assets, no HTTP server)")
     parser.add_argument(
         "--database",
         type=Path,
@@ -39,18 +42,14 @@ def main() -> int:
         )
     asset_root = Path(getattr(sys, "_MEIPASS", PROJECT_ROOT))
     assets = (args.assets or asset_root / "frontend" / "dist").resolve()
-    if not all(
-        (assets / name).is_file() for name in ("index.html", "app.js", "style.css")
-    ):
+    if not all((assets / name).is_file() for name in ("index.html", "app.js", "style.css")):
         parser.error(
             "Built frontend assets are missing. Run npm ci and npm run build in frontend/."
         )
-    try:
-        import webview
-    except ImportError:
-        parser.error(
-            "Install requirements-desktop.txt before launching the desktop application."
-        )
+    if importlib.util.find_spec("webview") is None:
+        parser.error("Install requirements-desktop.txt before launching the desktop application.")
+    import webview
+    import webview.http as webview_http
 
     database = args.database.resolve() if args.database else DB_PATH
     backups = database.parent / "backups" if args.database else BACKUP_DIR
@@ -59,6 +58,7 @@ def main() -> int:
     logging.basicConfig(filename=logs / "desktop.log", level=logging.INFO)
     backup_database(db_path=database, backup_dir=backups, reason="startup")
     store = InventoryStore(database, seed=False)
+    smoke: DesktopSmoke | None = None
     try:
         window = webview.create_window(
             "InvSys",
@@ -70,40 +70,38 @@ def main() -> int:
         )
         # file:// avoids pywebview's automatic server for bare filesystem paths.
         if args.smoke_check:
-            from inventory_control.desktop_smoke import DesktopSmoke
+            from inventory_control import desktop_smoke
 
-            smoke = DesktopSmoke(database.parent / "smoke-captures")
+            smoke = desktop_smoke.DesktopSmoke(database.parent / "smoke-captures")
             smoke.prepare_bom(store)
-            webview.start(smoke.run, window, gui="qt", http_server=False)
+            webview.start(smoke.run, (window,), gui="qt", http_server=False)
             if smoke.error:
-                logging.getLogger(__name__).error(
-                    "Desktop smoke failed: %s", smoke.error
-                )
+                logging.getLogger(__name__).error("Desktop smoke failed: %s", smoke.error)
                 print(f"Desktop smoke failed: {smoke.error}", file=sys.stderr)
                 return 1
-            if webview.http.global_server is not None:
-                print(
-                    "Desktop smoke failed: an HTTP server was started.", file=sys.stderr
-                )
+            # The stubs type global_server as always None; widen to check at runtime.
+            server: object = webview_http.global_server
+            if server is not None:
+                print("Desktop smoke failed: an HTTP server was started.", file=sys.stderr)
                 return 1
         else:
             webview.start(gui="qt", http_server=False)
     finally:
         store.engine.dispose()
-    if args.smoke_check:
+    if smoke is not None:
+        if smoke.bom_result is None or smoke.recovered_bom_result is None:
+            print("Desktop smoke failed: BOM results were not captured.", file=sys.stderr)
+            return 1
         reopened = InventoryStore(database, seed=False)
         try:
             bridge = InventoryBridge(reopened)
             if (
-                bridge.preferences()["data"]
-                != {"operator": "Desktop smoke", "theme": "dark"}
+                bridge.preferences()["data"] != {"operator": "Desktop smoke", "theme": "dark"}
                 or not bridge.part_detail("DESKTOP-SMOKE")["ok"]
                 or bridge.stock_context("DESKTOP-SMOKE")["data"] != smoke.stock_result
                 or bridge.shipment_detail(smoke.bom_result["shipment_number"])["data"]
                 != smoke.bom_result
-                or bridge.shipment_detail(
-                    smoke.recovered_bom_result["shipment_number"]
-                )["data"]
+                or bridge.shipment_detail(smoke.recovered_bom_result["shipment_number"])["data"]
                 != smoke.recovered_bom_result
                 or bridge.part_detail(smoke.bom_part)["data"]["quantity"] != 10
                 or bridge.part_detail(smoke.bom_sub)["data"]["quantity"] != 10

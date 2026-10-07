@@ -8,3 +8,10 @@ logs/
 build/
 dist/
 *.spec
+.coverage
+coverage.xml
+htmlcov/
+junit*.xml
+.mypy_cache/
+.ruff_cache/
+exports/

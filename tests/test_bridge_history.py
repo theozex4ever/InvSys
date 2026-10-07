@@ -38,31 +38,21 @@ def test_history_links_standard_shipment_even_with_custom_reference_after_reopen
     json.dumps(detail)
     # Mutating a response never changes the audit trail.
     detail["transaction"]["notes"] = "Changed"
-    assert (
-        bridge.history_detail(record["transaction_id"])["data"]["transaction"]["notes"]
-        == ""
-    )
+    assert bridge.history_detail(record["transaction_id"])["data"]["transaction"]["notes"] == ""
     store.engine.dispose()
     reopened = InventoryStore(path, seed=False)
     assert (
-        InventoryBridge(reopened).history_detail(record["transaction_id"])["data"][
-            "transaction"
-        ]
+        InventoryBridge(reopened).history_detail(record["transaction_id"])["data"]["transaction"]
         == record
     )
-    assert (
-        InventoryBridge(reopened).shipment_detail(number)["data"]["recipient"]
-        == "Customer"
-    )
+    assert InventoryBridge(reopened).shipment_detail(number)["data"]["recipient"] == "Customer"
     reopened.engine.dispose()
 
 
 def test_history_empty_unknown_and_invalid_reads_are_explicit(tmp_path):
     store = InventoryStore(tmp_path / "inventory.db", seed=False)
     bridge = InventoryBridge(store)
-    assert bridge.history({})["data"] == dict(
-        records=[], types=[], total=0, matching=0, page=0
-    )
+    assert bridge.history({})["data"] == dict(records=[], types=[], total=0, matching=0, page=0)
     assert bridge.history_detail(999)["error"]["code"] == "NOT_FOUND"
     assert bridge.shipment_detail("missing")["error"]["code"] == "NOT_FOUND"
     for invalid in (None, [], {"query": True}, {"tx_type": []}, {"sql": "SELECT 1"}):

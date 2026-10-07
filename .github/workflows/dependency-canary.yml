@@ -1,0 +1,101 @@
+# Early warning for upstream breakage. CI tests the hash-locked dependency
+# set; this job resolves the *newest* versions the manifest ranges allow on the
+# newest Python and runs the full Python and frontend gates against them. A red
+# canary means the next lock refresh (Dependabot or manual) needs work first;
+# it never blocks pull requests.
+name: Dependency canary
+
+on:
+  schedule:
+    - cron: "53 7 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  FORCE_COLOR: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  python-latest:
+    name: Python, newest allowed dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Install Qt runtime libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -y -qq libegl1 libopengl0 libxkbcommon0
+
+      - name: Install newest versions the ranges allow
+        run: |
+          python -m pip install --upgrade --upgrade-strategy eager -r requirements-dev.txt
+          python -m pip freeze > resolved.txt
+          {
+            echo "### Resolved (newest allowed)"
+            echo '```'
+            cat resolved.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Lint, type-check and test
+        run: |
+          ruff check .
+          mypy
+          python -m pytest
+
+  frontend-latest:
+    name: Frontend, newest allowed dependencies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install newest versions the ranges allow
+        run: |
+          rm package-lock.json
+          npm install --ignore-scripts --no-fund --no-audit
+          npm ls --depth=0
+
+      - name: Type-check, build and check assets
+        run: |
+          npm run check
+          npm run build:assets
+          npm run check:dist

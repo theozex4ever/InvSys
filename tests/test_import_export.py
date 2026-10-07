@@ -1,10 +1,11 @@
 import csv
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
-from inventory_control.backup import backup_database
 import inventory_control.backup as backup_mod
+from inventory_control.backup import backup_database
 from inventory_control.import_export import ImportExportService
 from inventory_control.store import InventoryStore
 
@@ -27,7 +28,7 @@ def write_csv(path, text):
 
 
 def read_csv(path):
-    with open(path, encoding="utf-8", newline="") as handle:
+    with Path(path).open(encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
 
 
@@ -51,7 +52,13 @@ def test_export_parts_csv_creates_expected_headers_and_rows(tmp_path):
 
     rows = read_csv(result.path)
     assert result.rows_exported == 1
-    assert list(rows[0].keys()) == ["part_number", "description", "default_location", "minimum_quantity", "active"]
+    assert list(rows[0].keys()) == [
+        "part_number",
+        "description",
+        "default_location",
+        "minimum_quantity",
+        "active",
+    ]
     assert rows[0]["part_number"] == "ABC-1"
 
 
@@ -105,7 +112,9 @@ def test_export_bom_csv_exports_direct_links(tmp_path):
 
     rows = read_csv(service.export_bom_csv().path)
 
-    assert rows == [{"parent_part_number": "KIT-001", "component_part_number": "SCREW-001", "quantity_per": "4"}]
+    assert rows == [
+        {"parent_part_number": "KIT-001", "component_part_number": "SCREW-001", "quantity_per": "4"}
+    ]
 
 
 def test_export_all_writes_five_files_with_same_timestamp(tmp_path):
@@ -113,13 +122,19 @@ def test_export_all_writes_five_files_with_same_timestamp(tmp_path):
 
     results = service.export_all()
 
-    assert {result.kind for result in results} == {"parts", "inventory", "transactions", "shipments", "bom"}
+    assert {result.kind for result in results} == {
+        "parts",
+        "inventory",
+        "transactions",
+        "shipments",
+        "bom",
+    }
     stems = [result.path.rsplit("_", 2)[-2:] for result in results]
     assert len({tuple(stem) for stem in stems}) == 1
 
 
 @pytest.mark.parametrize(
-    ("text", "field"),
+    "text, field",
     [
         ("description\nWidget", "part_number"),
         ("part_number,description\nABC-1,", "description"),
@@ -181,14 +196,14 @@ def test_parts_import_rejects_duplicate_rows_and_leaves_parts_unchanged(tmp_path
         """,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="CSV import has validation errors"):
         service.import_parts_csv(path, "alice")
 
     assert store.parts["ABC-1"].description == "Original"
 
 
 @pytest.mark.parametrize(
-    ("text", "field"),
+    "text, field",
     [
         ("part_number,location,quantity\nABC-1,Stock,5", "lot_number"),
         ("part_number,location,lot_number,quantity\nGHOST,Stock,LOT-1,5", "part_number"),
@@ -256,7 +271,7 @@ def test_inventory_failed_import_leaves_balances_and_transactions_unchanged(tmp_
         """,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="CSV import has validation errors"):
         service.import_inventory_csv(path, "alice")
 
     assert store.stock_at("ABC-1", "Stock") == 0
@@ -264,12 +279,24 @@ def test_inventory_failed_import_leaves_balances_and_transactions_unchanged(tmp_
 
 
 @pytest.mark.parametrize(
-    ("text", "field"),
+    "text, field",
     [
-        ("parent_part_number,component_part_number,quantity_per\nGHOST,COMP-1,1", "parent_part_number"),
-        ("parent_part_number,component_part_number,quantity_per\nPARENT-1,GHOST,1", "component_part_number"),
-        ("parent_part_number,component_part_number,quantity_per\nPARENT-1,PARENT-1,1", "component_part_number"),
-        ("parent_part_number,component_part_number,quantity_per\nPARENT-1,COMP-1,0", "quantity_per"),
+        (
+            "parent_part_number,component_part_number,quantity_per\nGHOST,COMP-1,1",
+            "parent_part_number",
+        ),
+        (
+            "parent_part_number,component_part_number,quantity_per\nPARENT-1,GHOST,1",
+            "component_part_number",
+        ),
+        (
+            "parent_part_number,component_part_number,quantity_per\nPARENT-1,PARENT-1,1",
+            "component_part_number",
+        ),
+        (
+            "parent_part_number,component_part_number,quantity_per\nPARENT-1,COMP-1,0",
+            "quantity_per",
+        ),
     ],
 )
 def test_bom_preview_rejects_invalid_rows(tmp_path, text, field):
@@ -292,10 +319,16 @@ def test_bom_preview_rejects_duplicates_and_cycles(tmp_path):
         tmp_path / "dup.csv",
         "parent_part_number,component_part_number,quantity_per\nA,B,1\nA,B,2",
     )
-    cycle = write_csv(tmp_path / "cycle.csv", "parent_part_number,component_part_number,quantity_per\nB,A,1")
+    cycle = write_csv(
+        tmp_path / "cycle.csv", "parent_part_number,component_part_number,quantity_per\nB,A,1"
+    )
 
-    assert any("Duplicate" in error.message for error in service.preview_bom_import_csv(duplicate).errors)
-    assert any("circular BOM" in error.message for error in service.preview_bom_import_csv(cycle).errors)
+    assert any(
+        "Duplicate" in error.message for error in service.preview_bom_import_csv(duplicate).errors
+    )
+    assert any(
+        "circular BOM" in error.message for error in service.preview_bom_import_csv(cycle).errors
+    )
 
 
 def test_bom_import_creates_and_updates_links_and_creates_backup(tmp_path):
@@ -334,7 +367,7 @@ def test_bom_failed_import_leaves_links_unchanged(tmp_path):
         """,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="CSV import has validation errors"):
         service.import_bom_csv(path, "alice")
 
     assert store.bom_components["KIT"] == {"SCREW": 1}

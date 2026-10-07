@@ -47,7 +47,9 @@ class LotRecord(Base):
 class InventoryBalanceRecord(Base):
     __tablename__ = "inventory_balances"
     __table_args__ = (
-        UniqueConstraint("part_id", "location_id", "lot_id", name="uq_inventory_balances_part_location_lot"),
+        UniqueConstraint(
+            "part_id", "location_id", "lot_id", name="uq_inventory_balances_part_location_lot"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -120,12 +122,16 @@ class ShipmentComponentRecord(Base):
 class BOMComponentRecord(Base):
     __tablename__ = "bom_components"
     __table_args__ = (
-        UniqueConstraint("parent_part_id", "component_part_id", name="uq_bom_components_parent_component"),
+        UniqueConstraint(
+            "parent_part_id", "component_part_id", name="uq_bom_components_parent_component"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     parent_part_id: Mapped[int] = mapped_column(ForeignKey("parts.id"), nullable=False, index=True)
-    component_part_id: Mapped[int] = mapped_column(ForeignKey("parts.id"), nullable=False, index=True)
+    component_part_id: Mapped[int] = mapped_column(
+        ForeignKey("parts.id"), nullable=False, index=True
+    )
     quantity_per: Mapped[int] = mapped_column(Integer, nullable=False)
 
     parent_part: Mapped[PartRecord] = relationship(foreign_keys=[parent_part_id])

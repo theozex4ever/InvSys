@@ -34,8 +34,10 @@ uncertain create preserves entries and requires closing and refreshing the
 catalog to reconcile against an authoritative part read before resubmission.
 
 Receive and Ship forms retain drafts during session navigation and refresh current
-availability on return. Receive keeps part/location/notes after success and clears
-quantity/lot/reference. Standard Ship reads a fresh selected-lot review before
+availability on return. Receive keeps part/location after confirmed success and
+clears quantity/lot/reference/notes, including operator-verified completion after
+an uncertain response. Validation failure and unresolved uncertainty preserve
+the draft notes. Standard Ship reads a fresh selected-lot review before
 confirmation, then requires Ship another after success. Existing nested BOM
 parents use Python-generated aggregated leaf requirements and lot allocations,
 including multiple lots for one material. Confirmation requires a matching
@@ -66,5 +68,15 @@ motion styles. Operator and explicit theme choice use existing Python settings.
 
 See [desktop launch and validation](../docs/frontend/desktop.md).
 See [complete prototype acceptance and remaining gaps](../docs/frontend/prototype-acceptance.md).
+See [confirmed frontend polish decisions](../docs/frontend/polish-decisions.md).
+
+Dashboard shortage arrows open Receive with the Part selected; the Low-stock
+summary and View all action open filtered Parts. Receive reviews preview stock at
+the selected Location, while standard Ship reviews highlight the selected Lot.
+These estimates use the last availability read and never replace Python
+validation or shipment confirmation. BOM reviews emphasize actual component
+requirements and Lot allocations. Low stock stays amber, including an explicit
+No stock label at zero; blocked shipment shortages and errors use red.
+
 Part details have a contextual View History action; a failed transaction or
 shipment detail read offers Retry details inside the open drawer.
