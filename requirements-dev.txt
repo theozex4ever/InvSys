@@ -1,9 +1,7 @@
 # Development, test and CI tooling. This file holds the *intent* (ranges).
-# CI installs the hash-pinned requirements.lock compiled from this file and
-# requirements-desktop.txt; regenerate it after editing either input:
-#
-#   uv pip compile requirements-dev.txt requirements-desktop.txt \
-#     --universal --python-version 3.12 --generate-hashes -o requirements.lock
+# CI installs requirements.lock.txt, compiled from this file (which includes
+# requirements-desktop.txt) with exact versions and sha256 hashes. After editing
+# either input, regenerate it with `scripts/lock.sh` (needs uv).
 #
 -r requirements-desktop.txt
 pytest>=8.0
