@@ -23,8 +23,9 @@ pull_request / push main / merge_group / weekly
 CodeQL (separate workflow) ── python, JS/TS, actions · its own required check
 ```
 
-Independent jobs run in parallel; the slowest path (frontend → desktop E2E) is
-about two minutes. A typical PR gets a full verdict in under four minutes.
+Independent jobs run in parallel. Measured on this PR: the Windows test leg is
+the slowest (about 2.5 minutes), frontend → desktop E2E takes under two, and the
+whole run reports in under three minutes.
 
 ## The gates and what each one catches
 
