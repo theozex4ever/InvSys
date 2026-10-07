@@ -35,3 +35,14 @@ def test_missing_built_assets_are_reported_before_launch(monkeypatch, capsys, tm
     assert code == 2
     assert "Built frontend assets are missing" in capsys.readouterr().err
     assert not database.exists()
+
+
+def test_missing_pywebview_is_reported_before_launch(monkeypatch, capsys, tmp_path):
+    for name in ("index.html", "app.js", "style.css"):
+        (tmp_path / name).write_text("x", encoding="utf-8")
+    monkeypatch.setattr(desktop.importlib.util, "find_spec", lambda _name: None)
+    database = tmp_path / "inventory.db"
+    code = run_launcher(monkeypatch, "--database", str(database), "--assets", str(tmp_path))
+    assert code == 2
+    assert "Install requirements-desktop.txt" in capsys.readouterr().err
+    assert not database.exists()

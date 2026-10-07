@@ -4,7 +4,7 @@
 // must be self-contained: the three expected files, wired together by relative
 // paths, with no network references, inside a size budget. Exits non-zero with
 // every violation listed, and appends a table to the GitHub job summary.
-import { appendFileSync, readFileSync, statSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 
 const DIST = new URL('../dist/', import.meta.url);
@@ -23,12 +23,12 @@ for (const [name, budget] of Object.entries(BUDGETS)) {
   const url = new URL(name, DIST);
   let raw;
   try {
-    if (statSync(url).size === 0) failures.push(`${name} is empty`);
     raw = readFileSync(url);
   } catch {
     failures.push(`${name} is missing`);
     continue;
   }
+  if (raw.length === 0) failures.push(`${name} is empty`);
   const gz = gzipSync(raw, { level: 9 }).length;
   if (gz > budget) failures.push(`${name} is ${gz} B gzipped; budget is ${budget} B`);
   rows.push(`| \`${name}\` | ${raw.length} | ${gz} | ${budget} | ${gz <= budget ? 'pass' : '**over**'} |`);

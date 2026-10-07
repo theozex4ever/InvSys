@@ -1,6 +1,7 @@
 """Optional serverless desktop launcher; the original Qt launcher stays available."""
 
 import argparse
+import importlib.util
 import logging
 import sys
 from pathlib import Path
@@ -45,11 +46,10 @@ def main() -> int:
         parser.error(
             "Built frontend assets are missing. Run npm ci and npm run build in frontend/."
         )
-    try:
-        import webview
-        import webview.http as webview_http
-    except ImportError:
+    if importlib.util.find_spec("webview") is None:
         parser.error("Install requirements-desktop.txt before launching the desktop application.")
+    import webview
+    import webview.http as webview_http
 
     database = args.database.resolve() if args.database else DB_PATH
     backups = database.parent / "backups" if args.database else BACKUP_DIR
