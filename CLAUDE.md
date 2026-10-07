@@ -26,15 +26,28 @@ See `docs/frontend/desktop.md` for smoke commands, platform requirements,
 packaging limits, and executed validation. See `frontend/README.md` for the live
 frontend contract and `README.md` for project context.
 
-Install test tools with `pip install -r requirements-dev.txt`. Run the automated
-gate from the repository root:
+Install the locked toolchain with
+`pip install --require-hashes -r requirements.lock.txt`. Run the automated gate
+from the repository root; CI enforces the same checks (see `docs/ci.md`):
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 QT_QPA_PLATFORM=offscreen python -m pytest
-python -m ruff check .
+ruff check . && ruff format --check . && mypy
+python -m pytest --cov
 npm run check --prefix frontend
-npm run build --prefix frontend
+npm run build:assets --prefix frontend && npm run check:dist --prefix frontend
 ```
+
+Gate rules to keep green:
+
+- pytest config lives in `pyproject.toml`: random order, warnings are errors,
+  85 % branch-coverage floor. Fix leaks and warnings; never filter them away or
+  lower the floor.
+- Tests must not write into the checkout. The root `conftest.py` points
+  `INVSYS_HOME` at a temp dir; use `tmp_path` for any database you create.
+- After editing `requirements-*.txt`, run `scripts/lock.sh` (needs uv) and
+  commit both lock files.
+- Every ruff/mypy suppression needs a reason in the comment or config.
+- Pin new GitHub Actions to a full commit SHA with the version in a comment.
 
 ## Current Architecture
 

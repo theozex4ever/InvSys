@@ -15,7 +15,7 @@ From the repository root, use a virtual environment and the locked frontend:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-dev.txt -r requirements-desktop.txt
+python -m pip install --require-hashes -r requirements.lock.txt
 npm ci --prefix frontend
 npm run build --prefix frontend
 python inventory_desktop.py --database /tmp/invsys-review/inventory.db

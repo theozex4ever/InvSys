@@ -1,6 +1,8 @@
 # Inventory Control
 
 [![CI](https://github.com/theozex4ever/InvSys/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/theozex4ever/InvSys/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/theozex4ever/InvSys/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/theozex4ever/InvSys/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/theozex4ever/InvSys/badge)](https://scorecard.dev/viewer/?uri=github.com/theozex4ever/InvSys)
 
 A local-first desktop inventory management application built with Python and PySide6. Designed to replace scattered Excel sheets for small operations — parts tracking, stock movement, and shipping records in a single, auditable application.
 
@@ -145,59 +147,41 @@ shipment types, keyboard/layout checks, and restart persistence.
 
 ## Continuous integration
 
-[CI](.github/workflows/ci.yml) runs on every pull request and push to `main`.
-It can also be started manually from GitHub's **Actions → CI → Run workflow**
-once the workflow exists on the default branch.
+Every pull request must pass one required check, **CI gate**, which succeeds
+only when all of these do:
 
-The initial gate runs two independent jobs on Ubuntu 24.04: **Python CI** with
-Python 3.12 and **Frontend CI** with Node.js 22. Both jobs run on every trigger
-and can execute in parallel, so a failure in one does not prevent the other
-from reporting its result.
+| Job | What it enforces |
+| --- | --- |
+| Workflow lint | actionlint + shellcheck and zizmor (pedantic) on the workflows themselves |
+| Python static analysis | ruff lint and format, `mypy --strict` on the domain core, lock files in sync |
+| Tests | Ubuntu (Python 3.12, 3.13, 3.14), Windows and macOS; random order, warnings as errors, 85 % branch-coverage floor, no writes into the checkout |
+| Frontend build | install without scripts, registry signatures, strict `tsc`, self-contained assets within size budgets, reproducible build |
+| Desktop E2E | the native `--smoke-check` (pywebview + Qt WebEngine under Xvfb) against the exact assets built above, twice, with screenshots |
+| Dependency audit / review | pip-audit and npm audit over the locked trees; PRs may not add vulnerable dependencies |
 
-- Ruff checks Python syntax and likely runtime errors. The small rule set in
-  `ruff.toml` deliberately leaves broader style cleanup for later.
-- pytest runs the existing service, SQLite, bridge, and Qt UI tests. Qt uses
-  the offscreen platform so these tests do not need a desktop display.
-- `npm ci` installs the locked frontend dependencies. Separate steps run strict
-  TypeScript checking (`npm run check`) and build the local HTML, JavaScript,
-  and CSS (`npm run build:assets`). Local `npm run build` runs both commands.
-- A smoke check confirms all three built asset files are present and nonempty.
+CodeQL (Python, TypeScript and the workflows), OpenSSF Scorecard and a weekly
+newest-dependency canary run alongside. Actions are pinned to commit SHAs, jobs
+get least-privilege tokens, and Python dependencies install from hash-pinned
+universal lock files.
 
-Run the same checks locally from the repository root, using a virtual environment:
+**[docs/ci.md](docs/ci.md)** explains each gate, the supply-chain hardening,
+the branch ruleset, the trade-offs, and how to run every gate locally.
+
+Quick local check from the repository root:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-python -m ruff check .
-QT_QPA_PLATFORM=offscreen PYTHONDONTWRITEBYTECODE=1 python -m pytest
-npm ci --prefix frontend
-npm run build --prefix frontend
-test -s frontend/dist/index.html
-test -s frontend/dist/app.js
-test -s frontend/dist/style.css
+python -m venv .venv && source .venv/bin/activate
+python -m pip install --require-hashes -r requirements.lock.txt
+ruff check . && ruff format --check . && mypy
+python -m pytest --cov
+npm ci --ignore-scripts --prefix frontend
+npm run build --prefix frontend && npm run check:dist --prefix frontend
 ```
 
-These commands use a Bash-compatible shell. On Ubuntu, if Qt reports missing
-shared libraries, install `libegl1`, `libopengl0`, and `libxkbcommon0`, as CI does.
-The optional pywebview GUI launch and installer packaging remain manual checks;
-see [desktop validation](docs/frontend/desktop.md).
-
-To verify the workflow itself before expanding it:
-
-1. Push this branch and open a pull request against `main`. Check that **Python
-   CI** and **Frontend CI** appear and all steps pass; open any step to read its log.
-2. On a disposable test branch with a pull request, add `tests/test_ci_probe.py`
-   containing `def test_ci_probe(): assert False`, then commit and push. Confirm
-   **Run Python and Qt tests** fails and **Python CI** turns red, while
-   **Frontend CI** still runs independently.
-3. Remove the probe, commit, and push again. Confirm the check returns to green.
-   Keep the deliberately failing probe out of `main`.
-
-The badge above shows the latest `main` result and links to the run history for
-portfolio viewers. CI reports failures; enforcing a passing check before merging
-requires a separate GitHub branch rule that requires both jobs to pass. This
-workflow requires no project secrets and does not deploy or publish the app.
+On Ubuntu, Qt needs a few shared libraries; the list is `QT_APT_PACKAGES` in
+[`ci.yml`](.github/workflows/ci.yml). Set `INVSYS_HOME` to keep the operational
+database, backups, exports and logs outside the checkout (the test suite always
+uses a throwaway one).
 
 ---
 
