@@ -1,7 +1,8 @@
-from datetime import datetime
-from pathlib import Path
 import shutil
 import sqlite3
+from contextlib import closing
+from datetime import datetime
+from pathlib import Path
 
 from inventory_control.config import BACKUP_DIR, DB_PATH
 
@@ -17,7 +18,12 @@ def backup_database(
     backup_dir.mkdir(parents=True, exist_ok=True)
     target = _backup_target(backup_dir, reason)
     try:
-        with sqlite3.connect(db_path) as source, sqlite3.connect(target) as destination:
+        # sqlite3's own context manager only commits; closing() releases the file
+        # handles so retention can delete old backups (Windows locks open files).
+        with (
+            closing(sqlite3.connect(db_path)) as source,
+            closing(sqlite3.connect(target)) as destination,
+        ):
             source.backup(destination)
     except sqlite3.Error:
         shutil.copy2(db_path, target)

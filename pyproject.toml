@@ -1,0 +1,27 @@
+# Tool configuration only: InvSys is an application, not a distributable package.
+# Every gate CI enforces is configured here so local runs and CI cannot drift.
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# -ra: summarize every non-pass at the end. Strict flags turn typos in markers or
+# config into errors instead of silently ignored settings.
+addopts = ["-ra", "--tb=short", "--strict-markers", "--strict-config"]
+xfail_strict = true
+# Warnings are bugs: an unclosed SQLite handle surfaces as ResourceWarning.
+filterwarnings = ["error"]
+# A hung Qt event loop fails one test quickly instead of burning the job timeout.
+timeout = 60
+
+[tool.coverage.run]
+branch = true
+source = ["inventory_control"]
+# The native smoke probes are test code driven by the desktop E2E job.
+omit = ["inventory_control/desktop_smoke.py", "inventory_control/desktop_smoke_ui.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+# Ratchet: raise this when coverage rises; never lower it to make a PR pass.
+fail_under = 85
+exclude_also = ["if __name__ == .__main__.:", "if TYPE_CHECKING:", "raise NotImplementedError"]
