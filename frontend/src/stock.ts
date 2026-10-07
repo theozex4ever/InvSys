@@ -145,7 +145,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     return mode === 'receive' ? { ...common, notes: value(mode, 'notes') } : { ...common, recipient: value(mode, 'recipient'), carrier: value(mode, 'carrier'), tracking: value(mode, 'tracking') };
   }
   function clearEntry(mode: Mode) {
-    for (const name of mode === 'receive' ? ['quantity', 'lot_number', 'reference'] : ['quantity', 'lot_number', 'reference', 'recipient', 'carrier', 'tracking']) control<HTMLInputElement | HTMLSelectElement>(mode, name).value = '';
+    for (const name of mode === 'receive' ? ['quantity', 'lot_number', 'reference', 'notes'] : ['quantity', 'lot_number', 'reference', 'recipient', 'carrier', 'tracking']) control<HTMLInputElement | HTMLSelectElement>(mode, name).value = '';
     if (mode === 'ship') { preview = null; bomReview = null; } renderReview(mode);
   }
   function ambiguous(mode: Mode, error: unknown) {

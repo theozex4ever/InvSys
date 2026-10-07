@@ -64,6 +64,11 @@ inventory_control/
 
 **Service boundary:** `InventoryStore` is now a SQLite-backed facade. The UI still calls store methods and never writes database rows directly.
 
+Store notifications refresh subscribed views after mutations commit. A failed
+observer is logged without rejecting the committed operation or stopping other
+observers. Shipment drafts with ineligible BOM components display a blocked
+preview until the eligibility issue is resolved.
+
 ---
 
 ## Key Design Decisions
@@ -207,6 +212,8 @@ SQLite is opened with foreign keys, WAL mode, and a busy timeout enabled.
 Lot numbers are required when receiving stock. Opening inventory should be entered through **Receive Stock** with a real lot number and a reference such as `OPENING`.
 
 Shipping a single part, moving, and adjusting stock operate against a selected lot. For BOM shipments, the app automatically allocates each required leaf material from positive-stock lots in lot-number order. The operator reviews those allocations before shipping; if they change before submission, the shipment is blocked until the updated allocation is reviewed.
+
+Adjust Count includes existing zero-stock lots at the selected location, so found stock can be recorded as a count correction. Move Stock offers only lots with positive stock at the source.
 
 ## Database Schema
 

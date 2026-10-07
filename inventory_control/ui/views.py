@@ -784,8 +784,12 @@ class ShipView(BaseView):
             return
         self.preview.show()
         if pn in STORE.parts and qty > 0 and STORE.has_bom(pn):
+            try:
+                plan = STORE.prepare_bom_shipment(pn, qty, loc)
+            except ValueError as e:
+                self.preview.setText(f"Blocked: {e}")
+                return
             self.component_lot_table.setVisible(True)
-            plan = STORE.prepare_bom_shipment(pn, qty, loc)
             self._bom_plan = plan
             self._show_component_lots(plan)
             shortages = [req for req in plan.requirements if req.shortage > 0]
@@ -983,8 +987,12 @@ class MoveAdjustView(BaseView):
         self.refresh_lots()
 
     def refresh_lots(self) -> None:
-        self._fill_lots(self.move_lot, self.move_part.part_number(), self.move_from.currentText())
-        self._fill_lots(self.adjust_lot, self.adjust_part.part_number(), self.adjust_location.currentText())
+        self._fill_lots(
+            self.move_lot, self.move_part.part_number(), self.move_from.currentText(), positive_only=True
+        )
+        self._fill_lots(
+            self.adjust_lot, self.adjust_part.part_number(), self.adjust_location.currentText(), positive_only=False
+        )
         self.update_previews()
 
     def update_previews(self) -> None:
@@ -1026,12 +1034,12 @@ class MoveAdjustView(BaseView):
         else:
             set_feedback(self.adjust_preview, "")
 
-    def _fill_lots(self, combo: QComboBox, part_number: str, location: str) -> None:
+    def _fill_lots(self, combo: QComboBox, part_number: str, location: str, *, positive_only: bool) -> None:
         current = combo.currentText()
         combo.blockSignals(True)
         combo.clear()
         if part_number in STORE.parts:
-            for lot in STORE.lots_for_part(part_number, location, positive_only=True):
+            for lot in STORE.lots_for_part(part_number, location, positive_only=positive_only):
                 combo.addItem(lot.lot_number)
         combo.setCurrentText(current)
         combo.blockSignals(False)

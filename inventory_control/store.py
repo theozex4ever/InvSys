@@ -2,6 +2,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime
+import logging
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
@@ -17,12 +18,14 @@ from inventory_control.models import (
     BOMLotPlanLine,
     BOMRequirement,
     BOMShipmentPlan,
+    BOMShipmentReview,
     BOMTreeNode,
     ComponentConsumption,
     Lot,
     LotBalance,
     Part,
     Shipment,
+    StandardShipmentReview,
     Transaction,
 )
 from inventory_control.orm import (
@@ -36,6 +39,12 @@ from inventory_control.orm import (
     ShipmentRecord,
     SettingRecord,
 )
+
+logger = logging.getLogger(__name__)
+
+
+class ShipmentReviewNotFound(ValueError):
+    """A requested Part or Lot is absent from the shipment review snapshot."""
 
 
 class InventoryStore:
@@ -275,42 +284,111 @@ class InventoryStore:
         """One Part's stock and complete audit history from the same snapshot."""
         number = self._normalize_part_number(part_number)
         with self._read_snapshot() as session:
-            locations = self._active_locations(session)
-            part = self._read_part_detail(session, number, locations)
-            if part is None:
-                return None
-            transactions = session.scalars(
-                self._transaction_statement()
-                .join(InventoryTransactionRecord.part)
-                .where(PartRecord.part_number == number)
+            return self._read_stock_context(session, number)
+
+    def _read_stock_context(
+        self, session: Session, part_number: str
+    ) -> dict[str, Any] | None:
+        locations = self._active_locations(session)
+        part = self._read_part_detail(session, part_number, locations)
+        if part is None:
+            return None
+        transactions = session.scalars(
+            self._transaction_statement()
+            .join(InventoryTransactionRecord.part)
+            .where(PartRecord.part_number == part_number)
+        )
+        shipments = session.scalars(
+            select(ShipmentRecord)
+            .join(ShipmentRecord.part)
+            .where(PartRecord.part_number == part_number)
+            .options(
+                joinedload(ShipmentRecord.part),
+                joinedload(ShipmentRecord.components).joinedload(
+                    ShipmentComponentRecord.part
+                ),
+                joinedload(ShipmentRecord.components).joinedload(
+                    ShipmentComponentRecord.lot
+                ),
+                joinedload(ShipmentRecord.components).joinedload(
+                    ShipmentComponentRecord.location
+                ),
             )
-            shipments = session.scalars(
-                select(ShipmentRecord)
-                .join(ShipmentRecord.part)
-                .where(PartRecord.part_number == number)
-                .options(
-                    joinedload(ShipmentRecord.part),
-                    joinedload(ShipmentRecord.components).joinedload(
-                        ShipmentComponentRecord.part
-                    ),
-                    joinedload(ShipmentRecord.components).joinedload(
-                        ShipmentComponentRecord.lot
-                    ),
-                    joinedload(ShipmentRecord.components).joinedload(
-                        ShipmentComponentRecord.location
-                    ),
+            .order_by(desc(ShipmentRecord.id))
+        ).unique()
+        return {
+            "part": part,
+            "locations": locations,
+            "has_bom": self._has_bom(session, part_number),
+            "transactions": [
+                asdict(self._transaction_dto(row)) for row in transactions
+            ],
+            "shipments": [asdict(self._shipment_dto(row)) for row in shipments],
+        }
+
+    def review_standard_shipment(
+        self, part_number: str, qty: int, location: str, lot_number: str
+    ) -> StandardShipmentReview:
+        """Stock impact and eligibility from one committed shipment review state."""
+        number = self._normalize_part_number(part_number)
+        lot_number = self._normalize_lot_number(lot_number)
+        with self._read_snapshot() as session:
+            context = self._read_stock_context(session, number)
+            if context is None:
+                raise ShipmentReviewNotFound("Part not found.")
+            if context["has_bom"]:
+                raise ValueError(
+                    "BOM shipping is unavailable here. Use the original application to review allocations."
                 )
-                .order_by(desc(ShipmentRecord.id))
-            ).unique()
-            return {
-                "part": part,
-                "locations": locations,
-                "has_bom": self._has_bom(session, number),
-                "transactions": [
-                    asdict(self._transaction_dto(row)) for row in transactions
-                ],
-                "shipments": [asdict(self._shipment_dto(row)) for row in shipments],
-            }
+            if not context["part"]["active"]:
+                raise ValueError("Part is inactive. Reactivate it before shipping.")
+            if location not in context["locations"]:
+                raise ValueError("Invalid location.")
+            if qty <= 0:
+                raise ValueError("Quantity must be greater than zero.")
+            part = self._part(session, number)
+            if self._lot(session, part.id, lot_number) is None:
+                raise ShipmentReviewNotFound("Lot not found.")
+            stock = next(
+                (
+                    balance["quantity"]
+                    for balance in context["part"]["balances"]
+                    if balance["location"] == location
+                    and balance["lot_number"] == lot_number
+                ),
+                0,
+            )
+            if qty > stock:
+                raise ValueError(
+                    f"Not enough stock in selected lot. Available: {stock}, requested: {qty}."
+                )
+            return StandardShipmentReview(
+                stock,
+                context["part"]["location_balances"].get(location, 0),
+                stock - qty,
+                context,
+            )
+
+    def review_bom_shipment(
+        self, part_number: str, qty: int, location: str
+    ) -> BOMShipmentReview:
+        """Leaf allocation, capacity, and context from the same review snapshot."""
+        number = self._normalize_part_number(part_number)
+        with self._read_snapshot() as session:
+            part = self._part(session, number)
+            if part is None:
+                raise ShipmentReviewNotFound("Part not found.")
+            if not self._has_bom(session, number):
+                raise ValueError(
+                    "This part has no BOM. Review a standard shipment instead."
+                )
+            part, loc = self._require_part_location_qty(session, number, location, qty)
+            availability = self._bom_availability_in_session(session, part, qty, loc)
+            plan = self._prepare_bom_shipment(
+                session, part, qty, loc, availability=availability
+            )
+            context = self._read_stock_context(session, number)
+            return BOMShipmentReview(plan, availability.buildable, context)
 
     def _history_record(
         self, row: InventoryTransactionRecord, shipment_number: str | None
@@ -423,7 +501,11 @@ class InventoryStore:
 
     def notify(self) -> None:
         for callback in self._subscribers:
-            callback()
+            try:
+                callback()
+            except Exception:
+                # Refresh failures must not make committed mutations look rejected.
+                logger.exception("Inventory observer refresh failed: %r", callback)
 
     def get_setting(self, key: str, default: str = "") -> str:
         with self.session_factory() as session:
@@ -1276,9 +1358,16 @@ class InventoryStore:
         return BOMAvailability(tree, requirements, min(capacities.values()), capacities)
 
     def _prepare_bom_shipment(
-        self, session: Session, part: PartRecord, qty: int, location: LocationRecord
+        self,
+        session: Session,
+        part: PartRecord,
+        qty: int,
+        location: LocationRecord,
+        *,
+        availability: BOMAvailability | None = None,
     ) -> BOMShipmentPlan:
-        availability = self._bom_availability_in_session(session, part, qty, location)
+        if availability is None:
+            availability = self._bom_availability_in_session(session, part, qty, location)
         requirements = availability.requirements
         rows = session.execute(
             select(PartRecord.part_number, LotRecord.lot_number, InventoryBalanceRecord.quantity)

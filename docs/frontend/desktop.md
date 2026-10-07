@@ -96,8 +96,10 @@ read-only drawer with fields and lot/location balances. Low-stock entries open
 live parts; the attention panel shows five entries and links to all low-stock
 parts. Active and low-stock indicators are separate. Receive and standard Ship
 open from navigation, dashboard actions, and part details, adopting the selected
-part's default location. Receipt success retains part/location/notes and clears
-quantity/lot/reference. Shipment confirmation shows selected-lot stock separately
+part's default location. Confirmed receipt success retains part/location and clears
+quantity/lot/reference/notes, including operator-verified completion after an
+uncertain response. Validation failure, unresolved uncertainty, and navigation
+preserve draft Notes. Shipment confirmation shows selected-lot stock separately
 from location stock, quantity, recipient, operator, optional details, and the
 actual lot remaining. Success shows the generated shipment number and requires
 Ship another. Both use persistent results and a temporary toast. The frontend never computes
@@ -120,12 +122,21 @@ are logged and return a safe message. Private helpers, store/session access,
 SQL, arbitrary settings, and generic balance writes are not exposed. Requests from this
 window are serialized.
 
-InventoryStore owns the catalog, dashboard, Part detail, and stock-context read
-modules. Each of these reads uses an explicit SQLite read transaction so its
-quantities, status, and included audit records describe one committed database
-state, even when another application writes during the read. The next request
+InventoryStore owns the catalog, dashboard, Part detail, stock-context, and
+shipment-review read modules. Each read uses an explicit SQLite read transaction
+so its quantities, status, and included audit records describe one committed
+database state, even when another application writes during the read. The next request
 sees subsequent commits. The bridge validates requests and translates errors;
 it does not assemble these results from separate store reads.
+
+Desktop standard and BOM reviews use `review_standard_shipment` and
+`review_bom_shipment`. Each returns eligibility, quantities, and complete stock
+context from one snapshot. BOM allocation and build capacity share the same
+availability calculation. The bridge parses request fields, translates errors,
+and retains the session-local reviewed plan; it performs no separate inventory
+checks before the review. Existing eligibility remains: standard review requires
+an active Location, while BOM review accepts any existing Location. An existing
+Lot with no balance at the selected Location is a shortage, not a missing Lot.
 
 Catalog quantities are aggregated together. Part detail and stock context query
 the selected Part's balances and audit records directly. Stock context retains

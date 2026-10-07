@@ -279,9 +279,21 @@ class DesktopSmoke:
         """)
         wait("!document.querySelector('#receive-submit').disabled")
         require(
-            "document.querySelector('#receive-quantity').value === '8' && document.querySelector('#receive-lot_number').value === 'SMOKE-A'",
+            "document.querySelector('#receive-quantity').value === '8' && document.querySelector('#receive-lot_number').value === 'SMOKE-A' && document.querySelector('#receive-reference').value === 'SMOKE-RECEIVE' && document.querySelector('#receive-notes').value === 'Inspected'",
             "receipt draft retention",
         )
+        # Whitespace passes HTML required validation but is rejected by Python.
+        run(
+            "document.querySelector('#receive-lot_number').value='   '; document.querySelector('#receive-form').requestSubmit()"
+        )
+        wait(
+            "document.querySelector('#receive-error').textContent.includes('Lot required.') && !document.querySelector('#receive-submit').disabled"
+        )
+        require(
+            "document.querySelector('#receive-quantity').value === '8' && document.querySelector('#receive-lot_number').value === '   ' && document.querySelector('#receive-reference').value === 'SMOKE-RECEIVE' && document.querySelector('#receive-notes').value === 'Inspected' && document.querySelector('#receive-recovery').hidden",
+            "receipt validation failure preserves draft",
+        )
+        run("document.querySelector('#receive-lot_number').value='SMOKE-A'")
         run(
             "document.querySelector('#receive-form').requestSubmit(); document.querySelector('#receive-form').requestSubmit()"
         )
@@ -289,7 +301,7 @@ class DesktopSmoke:
             "document.querySelector('#receive-result').textContent.includes('Received 8') && !document.querySelector('#receive-submit').disabled"
         )
         require(
-            "document.querySelector('#receive-quantity').value === '' && document.querySelector('#receive-lot_number').value === '' && document.querySelector('#receive-reference').value === '' && document.querySelector('#receive-notes').value === 'Inspected'",
+            "document.querySelector('#receive-part_number').value === 'DESKTOP-SMOKE' && document.querySelector('#receive-location').value === 'Stock' && document.querySelector('#receive-quantity').value === '' && document.querySelector('#receive-lot_number').value === '' && document.querySelector('#receive-reference').value === '' && document.querySelector('#receive-notes').value === ''",
             "receipt repeat-entry reset",
         )
         run("""
@@ -406,6 +418,10 @@ class DesktopSmoke:
         """)
         wait("window.smokeAfter")
         require(
+            "(() => { const receipts = window.smokeAfter.transactions.slice(0, window.smokeAfter.transactions.length - window.smokeBefore.transactions.length).filter(tx => tx.tx_type === 'RECEIVE'); return receipts.length === 2 && receipts.find(tx => tx.lot_number === 'SMOKE-A')?.notes === 'Inspected' && receipts.find(tx => tx.lot_number === 'SMOKE-B')?.notes === ''; })()",
+            "receipt notes belong only to their own persisted audit record",
+        )
+        require(
             "window.smokeAfter.part.quantity === window.smokeBefore.part.quantity + 17 && window.smokeAfter.transactions.length === window.smokeBefore.transactions.length + 3 && window.smokeAfter.shipments.length === window.smokeBefore.shipments.length + 1",
             "one receipt/shipment per double click",
         )
@@ -421,13 +437,15 @@ class DesktopSmoke:
         run("""
             document.querySelector('#receive-quantity').value='2';
             document.querySelector('#receive-lot_number').value='SMOKE-LOST';
+            document.querySelector('#receive-reference').value='LOST-RECEIVE';
+            document.querySelector('#receive-notes').value='Inspected after transport loss';
             document.querySelector('#receive-form').requestSubmit(); document.querySelector('#receive-form').requestSubmit();
         """)
         wait(
             "document.querySelector('#receive-error').textContent.includes('Completion is uncertain')"
         )
         require(
-            "window.smokeCalls === 1 && document.querySelector('#receive-quantity').value === '2' && document.querySelector('#receive-submit').disabled",
+            "window.smokeCalls === 1 && document.querySelector('#receive-quantity').value === '2' && document.querySelector('#receive-notes').value === 'Inspected after transport loss' && document.querySelector('#receive-submit').disabled",
             "lost receipt response preserves and blocks draft",
         )
         run("""
@@ -437,14 +455,14 @@ class DesktopSmoke:
         """)
         wait("document.querySelector('#receive-recovery [data-recovery=completed]')")
         require(
-            "document.querySelector('#receive-recovery').textContent.includes('SMOKE-LOST')",
+            "document.querySelector('#receive-recovery').textContent.includes('SMOKE-LOST') && document.querySelector('#receive-recovery .recovery-records').textContent.includes('Inspected after transport loss') && document.querySelector('#receive-notes').value === 'Inspected after transport loss' && document.querySelector('#receive-submit').disabled",
             "authoritative receipt reconciliation",
         )
         run(
             "document.querySelector('#receive-recovery [data-recovery=completed]').click()"
         )
         require(
-            "!document.querySelector('#receive-submit').disabled && document.querySelector('#receive-quantity').value === ''",
+            "!document.querySelector('#receive-submit').disabled && document.querySelector('#receive-part_number').value === 'DESKTOP-SMOKE' && document.querySelector('#receive-location').value === 'Stock' && document.querySelector('#receive-quantity').value === '' && document.querySelector('#receive-lot_number').value === '' && document.querySelector('#receive-reference').value === '' && document.querySelector('#receive-notes').value === ''",
             "verified receipt completion",
         )
 
@@ -506,7 +524,7 @@ class DesktopSmoke:
         """)
         wait("!document.querySelector('#receive-submit').disabled")
         run(
-            "document.querySelector('#receive-quantity').value='4'; document.querySelector('#receive-lot_number').value='SMOKE-NOT-SENT'; document.querySelector('#receive-form').requestSubmit()"
+            "document.querySelector('#receive-quantity').value='4'; document.querySelector('#receive-lot_number').value='SMOKE-NOT-SENT'; document.querySelector('#receive-notes').value='Preserve unsent receipt notes'; document.querySelector('#receive-form').requestSubmit()"
         )
         wait(
             "document.querySelector('#receive-error').textContent.includes('Completion is uncertain')"
@@ -519,11 +537,15 @@ class DesktopSmoke:
             "document.querySelector('#receive-recovery .recovery-records').textContent.includes('No new audit records')",
             "absent mutation reconciliation",
         )
+        require(
+            "document.querySelector('#receive-notes').value === 'Preserve unsent receipt notes' && document.querySelector('#receive-submit').disabled",
+            "reconciliation without a decision preserves and locks notes",
+        )
         run(
             "document.querySelector('#receive-recovery [data-recovery=absent]').click()"
         )
         require(
-            "!document.querySelector('#receive-submit').disabled && document.querySelector('#receive-quantity').value === '4'",
+            "!document.querySelector('#receive-submit').disabled && document.querySelector('#receive-quantity').value === '4' && document.querySelector('#receive-notes').value === 'Preserve unsent receipt notes'",
             "explicit recovery preserves unsent draft",
         )
         run(

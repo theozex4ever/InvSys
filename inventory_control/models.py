@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -57,6 +58,21 @@ class BOMShipmentPlan:
     requirements: tuple["BOMRequirement", ...]
     lines: tuple[BOMLotPlanLine, ...]
     ready: bool
+
+
+@dataclass(frozen=True)
+class StandardShipmentReview:
+    lot_stock: int
+    location_stock: int
+    remaining: int
+    context: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class BOMShipmentReview:
+    plan: BOMShipmentPlan
+    buildable: int
+    context: dict[str, Any]
 
 
 @dataclass
