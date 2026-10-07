@@ -12,9 +12,9 @@ npm run build
 ```
 
 `npm run build` checks types and then builds the assets. CI runs `npm run check`
-and `npm run build:assets` as separate steps. Node must satisfy the locked Vite
-release's engine requirement (Node 22.12+ or 24+). No frontend test runner is
-installed.
+and `npm run build:assets` as separate steps. The project requires Node 22+;
+use Node 22.12+ on the 22.x line to satisfy the locked Vite release. CI uses
+Node 22. No frontend test runner is installed.
 
 `npm run dev` serves the UI, but a normal browser has no Python bridge, so it
 deliberately shows an unavailable-connection state. Use the desktop launcher from

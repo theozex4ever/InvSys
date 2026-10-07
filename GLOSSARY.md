@@ -23,16 +23,16 @@ The transaction log together with the Stock balances it accounts for. Every bala
 An active Part whose total stock is at or below its positive minimum quantity. A Part with a minimum quantity of zero is not classified as low stock.
 
 **BOM (bill of materials)**:
-Parent-to-component links that specify the quantity of each component needed for one parent. BOMs can be nested.
+Parent-to-component links that specify the quantity of each component Part needed for one parent Part. BOMs can be nested.
 
 **Phantom assembly**:
-A BOM parent recorded on a shipment without deducting stock for the parent or intermediate assemblies. Shipping consumes the required leaf materials instead.
+A BOM parent Part recorded on a shipment without deducting stock for the parent or intermediate assemblies. Shipping consumes the required leaf materials instead.
 
 **Leaf material**:
 A Part with no child BOM in the selected BOM traversal. Its required quantity includes every path through the nested BOM.
 
 **BOM availability**:
-The leaf requirements and stock at a selected Location for a requested quantity, plus the shortages and build capacity derived from those same requirements.
+The leaf requirements and stock at a selected Location for a requested quantity, plus the shortages and final-product Build capacity derived from those same requirements.
 
 **Build capacity**:
 The number of final products that current leaf stock at a selected Location can fulfill. A material shared by multiple BOM branches counts toward one aggregated requirement per final product.
