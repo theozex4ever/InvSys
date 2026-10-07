@@ -52,10 +52,10 @@ class InventoryBridge:
     def _text(self, value: Any, label: str, required: bool = True) -> str:
         if not isinstance(value, str):
             raise BridgeError("VALIDATION", f"{label} must be text.")
-        value = value.strip()
-        if required and not value:
+        text = value.strip()
+        if required and not text:
             raise ValueError(f"{label} required.")
-        return value
+        return text
 
     def _preferences(self) -> dict[str, str]:
         return {
@@ -216,7 +216,7 @@ class InventoryBridge:
             }
             | optional,
         )
-        values = {
+        values: dict[str, Any] = {
             key: self._text(fields.get(key), label)
             for key, label in (
                 ("part_number", "Part number"),

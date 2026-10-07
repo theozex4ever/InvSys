@@ -73,6 +73,8 @@ def post(
         session.add(balance)
     balance.quantity = available + delta
     balance.updated_at = timestamp
+    location_from: LocationRecord | None
+    location_to: LocationRecord | None
     if delta < 0:
         location_from, location_to = location, counterpart
     else:

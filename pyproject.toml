@@ -25,3 +25,23 @@ skip_covered = true
 # Ratchet: raise this when coverage rises; never lower it to make a PR pass.
 fail_under = 85
 exclude_also = ["if __name__ == .__main__.:", "if TYPE_CHECKING:", "raise NotImplementedError"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["inventory_control", "inventory_desktop.py", "inventory_visualizer.py"]
+strict = true
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool", "possibly-undefined"]
+plugins = []
+
+# The domain core (store, ledger, bridge, ORM, import/export, backup) is held to
+# --strict: it owns every inventory invariant. The Qt widget layer and the native
+# smoke probes are excluded until PySide6's enum stubs stop producing false
+# positives; shrink this list, never grow it.
+[[tool.mypy.overrides]]
+module = ["inventory_control.ui.*", "inventory_control.desktop_smoke", "inventory_control.desktop_smoke_ui", "inventory_control.app"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["webview", "webview.*"]
+ignore_missing_imports = true

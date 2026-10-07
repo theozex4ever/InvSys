@@ -4,11 +4,15 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from inventory_control.backup import backup_database
 from inventory_control.bridge import InventoryBridge
 from inventory_control.config import BACKUP_DIR, DB_PATH, LOG_DIR, PROJECT_ROOT
 from inventory_control.store import InventoryStore
+
+if TYPE_CHECKING:
+    from inventory_control.desktop_smoke import DesktopSmoke
 
 
 def main() -> int:
@@ -43,6 +47,7 @@ def main() -> int:
         )
     try:
         import webview
+        import webview.http as webview_http
     except ImportError:
         parser.error("Install requirements-desktop.txt before launching the desktop application.")
 
@@ -53,6 +58,7 @@ def main() -> int:
     logging.basicConfig(filename=logs / "desktop.log", level=logging.INFO)
     backup_database(db_path=database, backup_dir=backups, reason="startup")
     store = InventoryStore(database, seed=False)
+    smoke: DesktopSmoke | None = None
     try:
         window = webview.create_window(
             "InvSys",
@@ -64,23 +70,28 @@ def main() -> int:
         )
         # file:// avoids pywebview's automatic server for bare filesystem paths.
         if args.smoke_check:
-            from inventory_control.desktop_smoke import DesktopSmoke
+            from inventory_control import desktop_smoke
 
-            smoke = DesktopSmoke(database.parent / "smoke-captures")
+            smoke = desktop_smoke.DesktopSmoke(database.parent / "smoke-captures")
             smoke.prepare_bom(store)
-            webview.start(smoke.run, window, gui="qt", http_server=False)
+            webview.start(smoke.run, (window,), gui="qt", http_server=False)
             if smoke.error:
                 logging.getLogger(__name__).error("Desktop smoke failed: %s", smoke.error)
                 print(f"Desktop smoke failed: {smoke.error}", file=sys.stderr)
                 return 1
-            if webview.http.global_server is not None:
+            # The stubs type global_server as always None; widen to check at runtime.
+            server: object = webview_http.global_server
+            if server is not None:
                 print("Desktop smoke failed: an HTTP server was started.", file=sys.stderr)
                 return 1
         else:
             webview.start(gui="qt", http_server=False)
     finally:
         store.engine.dispose()
-    if args.smoke_check:
+    if smoke is not None:
+        if smoke.bom_result is None or smoke.recovered_bom_result is None:
+            print("Desktop smoke failed: BOM results were not captured.", file=sys.stderr)
+            return 1
         reopened = InventoryStore(database, seed=False)
         try:
             bridge = InventoryBridge(reopened)

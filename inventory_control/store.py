@@ -188,7 +188,7 @@ class InventoryStore:
             reverse=descending,
         )
 
-    def _transaction_statement(self) -> Select[tuple[InventoryTransactionRecord]]:
+    def _transaction_statement(self) -> Select[InventoryTransactionRecord]:
         return (
             select(InventoryTransactionRecord)
             .options(
@@ -235,7 +235,7 @@ class InventoryStore:
         parts = self._part_summaries(session, part_number)
         if not parts:
             return None
-        balances = [
+        balances: list[dict[str, Any]] = [
             dict(
                 part_number=part_number,
                 location=location,
@@ -329,6 +329,8 @@ class InventoryStore:
             if qty <= 0:
                 raise ValueError("Quantity must be greater than zero.")
             part = self._part(session, number)
+            if part is None:
+                raise ShipmentReviewNotFound("Part not found.")
             if self._lot(session, part.id, lot_number) is None:
                 raise ShipmentReviewNotFound("Lot not found.")
             stock = next(
@@ -363,6 +365,8 @@ class InventoryStore:
             availability = self._bom_availability_in_session(session, part, qty, loc)
             plan = self._prepare_bom_shipment(session, part, qty, loc, availability=availability)
             context = self._read_stock_context(session, number)
+            if context is None:
+                raise ShipmentReviewNotFound("Part not found.")
             return BOMShipmentReview(plan, availability.buildable, context)
 
     def _history_record(
