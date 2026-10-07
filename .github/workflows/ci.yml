@@ -165,25 +165,31 @@ jobs:
       # errors, 60 s per-test timeout and the coverage floor all come from
       # pyproject.toml, so a local `python -m pytest --cov` enforces the same.
       - name: Run tests
+        env:
+          # Reports go to the runner's temp dir so the checkout must stay clean.
+          COVERAGE_FILE: ${{ runner.temp }}/.coverage
         run: >-
           python -m pytest
-          --cov --cov-report=term --cov-report=xml
-          --junitxml=junit.xml
+          --cov --cov-report=term
+          --cov-report=xml:"$RUNNER_TEMP/coverage.xml"
+          --junitxml="$RUNNER_TEMP/junit.xml"
 
       - name: Tests left the checkout untouched
         run: |
           # Tests must not write into the repository: no operational database,
-          # backups, exports or logs, tracked or ignored.
+          # backups, exports or logs, tracked, untracked or ignored. Only
+          # interpreter and tool caches are expected.
           leaked="$(git status --porcelain --ignored --untracked-files=all \
-            | grep -vE '(__pycache__/|\.pyc$|^!! \.(pytest|mypy|ruff)_cache/|^\?\? (\.coverage|coverage\.xml|junit\.xml)$)' || true)"
+            | grep -vE '(__pycache__/|\.pyc$|^!! \.(pytest|mypy|ruff)_cache/)' || true)"
           if [ -n "$leaked" ]; then
-            echo "::error::The test run created or modified files in the checkout:"
-            echo "$leaked"
+            echo "::error::The test run wrote into the checkout: $(echo "$leaked" | tr '\n' ' ')"
             exit 1
           fi
 
       - name: Coverage summary
         if: ${{ !cancelled() && matrix.os == 'ubuntu-24.04' && matrix.python == '3.12' }}
+        env:
+          COVERAGE_FILE: ${{ runner.temp }}/.coverage
         run: |
           {
             echo "### Coverage (branch, domain + UI)"
@@ -196,8 +202,8 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}-py${{ matrix.python }}
           path: |
-            junit.xml
-            coverage.xml
+            ${{ runner.temp }}/junit.xml
+            ${{ runner.temp }}/coverage.xml
           retention-days: 14
           if-no-files-found: ignore
 
