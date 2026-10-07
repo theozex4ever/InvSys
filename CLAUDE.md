@@ -65,7 +65,7 @@ History. Its deferred workflows and migration status are documented in
 
 ## Key Design Rules
 
-- **Transaction-first inventory**: every balance change must produce a transaction record. The balance table is for fast lookup; the transaction log is the source of truth. Never subtract from a balance without a transaction row.
+- **Transaction-first inventory**: every balance change must produce a transaction record. The balance table is for fast lookup; the transaction log is the source of truth. Never subtract from a balance without a transaction row. Store mutations post stock changes through `inventory_control/ledger.py`, the only writer of balance quantities and transaction rows; nothing outside `InventoryStore` imports it.
 - **No negative stock**: block shipping/moving/scrapping beyond available quantity; raise `ValueError` with a human-readable message.
 - **No hard deletes**: use `active = False` on parts and locations. Never delete transaction or shipment records; instead create reversing transactions.
 - **Business logic in the store/services**: views and the frontend collect input and display results. They call service methods rather than writing database rows or calculating inventory rules. Expected validation failures use human-readable `ValueError` messages. The desktop bridge validates request types and returns discriminated success/error responses; unexpected exceptions are logged and return safe messages.

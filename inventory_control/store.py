@@ -10,6 +10,7 @@ from sqlalchemy import Select, desc, func, or_, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, joinedload, sessionmaker
 
+from inventory_control import ledger
 from inventory_control.db import create_inventory_engine, create_session_factory
 from inventory_control.migrations import bootstrap_database
 from inventory_control.models import (
@@ -499,6 +500,14 @@ class InventoryStore:
                 "transactions": self.history_records(shipment_number=shipment_number),
             }
 
+    @contextmanager
+    def _mutation(self, notify: bool = True) -> Iterator[tuple[Session, str]]:
+        """Run one write transaction with a shared timestamp; notify only after commit."""
+        with self.session_factory.begin() as session:
+            yield session, self.now()
+        if notify:
+            self.notify()
+
     def notify(self) -> None:
         for callback in self._subscribers:
             try:
@@ -546,11 +555,10 @@ class InventoryStore:
             raise ValueError("Description required.")
         if minimum_quantity < 0:
             raise ValueError("Minimum quantity cannot be negative.")
-        with self.session_factory.begin() as session:
+        with self._mutation(notify) as (session, now):
             if self._part(session, part_number) is not None:
                 raise ValueError("Part already exists.")
             location_row = self._require_location(session, location)
-            now = self.now()
             session.add(
                 PartRecord(
                     part_number=part_number,
@@ -562,8 +570,6 @@ class InventoryStore:
                     updated_at=now,
                 )
             )
-        if notify:
-            self.notify()
 
     def upsert_part(
         self,
@@ -581,9 +587,8 @@ class InventoryStore:
             raise ValueError("Description required.")
         if minimum_quantity < 0:
             raise ValueError("Minimum quantity cannot be negative.")
-        with self.session_factory.begin() as session:
+        with self._mutation(notify) as (session, now):
             location_row = self._require_location(session, location)
-            now = self.now()
             part = self._part(session, part_number)
             if part is None:
                 session.add(
@@ -603,49 +608,34 @@ class InventoryStore:
                 part.default_location_id = location_row.id
                 part.active = active
                 part.updated_at = now
-        if notify:
-            self.notify()
 
     def set_part_active(self, part_number: str, active: bool, notify: bool = True) -> None:
         part_number = self._normalize_part_number(part_number)
-        with self.session_factory.begin() as session:
+        with self._mutation(notify) as (session, now):
             part = self._part(session, part_number)
             if part is None:
                 raise ValueError("Part not found.")
             part.active = active
-            part.updated_at = self.now()
-        if notify:
-            self.notify()
+            part.updated_at = now
 
     def import_inventory_receipts(self, rows: List[dict[str, Any]], operator: str, notify: bool = True) -> int:
-        with self.session_factory.begin() as session:
+        with self._mutation(notify) as (session, timestamp):
             for row in rows:
-                part_number = self._normalize_part_number(str(row["part_number"]))
-                lot_number = self._normalize_lot_number(str(row["lot_number"]))
-                quantity = int(row["quantity"])
-                part, loc = self._require_part_location_qty(session, part_number, str(row["location"]), quantity)
-                lot = self._get_or_create_lot(session, part, lot_number)
-                balance = self._get_or_create_balance(session, part, loc, lot)
-                balance.quantity += quantity
-                balance.updated_at = self.now()
-                self._add_transaction(
+                self._receive_in(
                     session,
-                    "RECEIVE",
-                    part,
-                    quantity,
-                    None,
-                    loc,
+                    timestamp,
+                    str(row["part_number"]),
+                    int(row["quantity"]),
+                    str(row["location"]),
+                    str(row["lot_number"]),
                     operator,
-                    str(row.get("reference", "")).strip(),
-                    str(row.get("notes", "")).strip(),
-                    lot,
+                    str(row.get("reference", "")),
+                    str(row.get("notes", "")),
                 )
-        if notify:
-            self.notify()
         return len(rows)
 
     def import_parts(self, rows: List[dict[str, Any]], notify: bool = True) -> int:
-        with self.session_factory.begin() as session:
+        with self._mutation(notify) as (session, now):
             for row in rows:
                 part_number = self._normalize_part_number(str(row["part_number"]))
                 description = str(row["description"]).strip()
@@ -659,7 +649,6 @@ class InventoryStore:
                 if minimum_quantity < 0:
                     raise ValueError("Minimum quantity cannot be negative.")
                 location_row = self._require_location(session, location)
-                now = self.now()
                 part = self._part(session, part_number)
                 if part is None:
                     session.add(
@@ -679,12 +668,10 @@ class InventoryStore:
                     part.default_location_id = location_row.id
                     part.active = active
                     part.updated_at = now
-        if notify:
-            self.notify()
         return len(rows)
 
     def import_bom_components(self, rows: List[dict[str, Any]], notify: bool = True) -> int:
-        with self.session_factory.begin() as session:
+        with self._mutation(notify) as (session, _):
             for row in rows:
                 parent = self._normalize_part_number(str(row["parent_part_number"]))
                 component = self._normalize_part_number(str(row["component_part_number"]))
@@ -714,8 +701,6 @@ class InventoryStore:
                     session.flush()
                 else:
                     existing.quantity_per = quantity_per
-        if notify:
-            self.notify()
         return len(rows)
 
     def add_bom_component(
@@ -731,7 +716,7 @@ class InventoryStore:
             raise ValueError("A part cannot contain itself.")
         if quantity_per <= 0:
             raise ValueError("Component quantity must be greater than zero.")
-        with self.session_factory.begin() as session:
+        with self._mutation(notify) as (session, _):
             parent_part = self._require_part(session, parent)
             component_part = self._require_part(session, component)
             if self._bom_contains(session, component, parent):
@@ -752,13 +737,11 @@ class InventoryStore:
                 )
             else:
                 row.quantity_per = quantity_per
-        if notify:
-            self.notify()
 
     def remove_bom_component(self, parent_part_number: str, component_part_number: str, notify: bool = True) -> None:
         parent = self._normalize_part_number(parent_part_number)
         component = self._normalize_part_number(component_part_number)
-        with self.session_factory.begin() as session:
+        with self._mutation(notify) as (session, _):
             parent_part = self._require_part(session, parent)
             component_part = self._require_part(session, component)
             row = session.scalar(
@@ -770,8 +753,6 @@ class InventoryStore:
             if row is None:
                 raise ValueError("Component is not on this BOM.")
             session.delete(row)
-        if notify:
-            self.notify()
 
     def has_bom(self, part_number: str) -> bool:
         parent = self._normalize_part_number(part_number)
@@ -900,17 +881,8 @@ class InventoryStore:
         notes: str = "",
         notify: bool = True,
     ) -> None:
-        part_number = self._normalize_part_number(part_number)
-        lot_number = self._normalize_lot_number(lot_number)
-        with self.session_factory.begin() as session:
-            part, loc = self._require_part_location_qty(session, part_number, location, qty)
-            lot = self._get_or_create_lot(session, part, lot_number)
-            balance = self._get_or_create_balance(session, part, loc, lot)
-            balance.quantity += qty
-            balance.updated_at = self.now()
-            self._add_transaction(session, "RECEIVE", part, qty, None, loc, operator, reference, notes, lot)
-        if notify:
-            self.notify()
+        with self._mutation(notify) as (session, timestamp):
+            self._receive_in(session, timestamp, part_number, qty, location, lot_number, operator, reference, notes)
 
     def ship(
         self,
@@ -926,13 +898,14 @@ class InventoryStore:
         expected_bom_plan: BOMShipmentPlan | None = None,
     ) -> str:
         part_number = self._normalize_part_number(part_number)
-        with self.session_factory.begin() as session:
+        with self._mutation() as (session, timestamp):
             part, loc = self._require_part_location_qty(session, part_number, location, qty)
             if not recipient.strip():
                 raise ValueError("Recipient required.")
             if self._has_bom(session, part_number):
                 shipment_number = self._ship_bom_part(
                     session,
+                    timestamp,
                     part,
                     qty,
                     loc,
@@ -947,13 +920,10 @@ class InventoryStore:
                 if lot_number is None:
                     raise ValueError("Lot required.")
                 lot = self._require_lot(session, part.id, lot_number)
-                available = self._stock_at(session, part.id, loc.id, lot.id)
-                if qty > available:
-                    raise ValueError(f"Not enough stock. Available: {available}, requested: {qty}.")
                 shipment_number = self._next_shipment_number(session)
                 shipment = ShipmentRecord(
                     shipment_number=shipment_number,
-                    timestamp=self.now(),
+                    timestamp=timestamp,
                     part_id=part.id,
                     quantity=qty,
                     recipient=recipient.strip(),
@@ -963,23 +933,18 @@ class InventoryStore:
                 )
                 session.add(shipment)
                 session.flush()
-                balance = self._require_balance(session, part, loc, lot)
-                balance.quantity -= qty
-                balance.updated_at = self.now()
-                self._add_transaction(
+                ledger.post(
                     session,
+                    timestamp,
                     "SHIP",
                     part,
-                    -qty,
-                    loc,
-                    None,
-                    operator,
-                    reference or shipment_number,
-                    "",
                     lot,
-                    shipment.id,
+                    loc,
+                    -qty,
+                    operator=operator,
+                    reference=reference or shipment_number,
+                    shipment_id=shipment.id,
                 )
-        self.notify()
         return shipment_number
 
     def move(
@@ -993,25 +958,20 @@ class InventoryStore:
         reference: str = "",
     ) -> None:
         part_number = self._normalize_part_number(part_number)
-        with self.session_factory.begin() as session:
+        with self._mutation() as (session, timestamp):
             part, source_loc = self._require_part_location_qty(session, part_number, source, qty)
             target_loc = self._require_location(session, target, destination=True)
             if source == target:
                 raise ValueError("Source and destination cannot match.")
             lot = self._require_lot(session, part.id, lot_number)
-            available = self._stock_at(session, part.id, source_loc.id, lot.id)
-            if qty > available:
-                raise ValueError(f"Not enough stock. Available: {available}, requested: {qty}.")
-            source_balance = self._require_balance(session, part, source_loc, lot)
-            target_balance = self._get_or_create_balance(session, part, target_loc, lot)
-            source_balance.quantity -= qty
-            target_balance.quantity += qty
-            now = self.now()
-            source_balance.updated_at = now
-            target_balance.updated_at = now
-            self._add_transaction(session, "MOVE_OUT", part, -qty, source_loc, target_loc, operator, reference, "", lot)
-            self._add_transaction(session, "MOVE_IN", part, qty, source_loc, target_loc, operator, reference, "", lot)
-        self.notify()
+            ledger.post(
+                session, timestamp, "MOVE_OUT", part, lot, source_loc, -qty,
+                counterpart=target_loc, operator=operator, reference=reference,
+            )
+            ledger.post(
+                session, timestamp, "MOVE_IN", part, lot, target_loc, qty,
+                counterpart=source_loc, operator=operator, reference=reference,
+            )
 
     def adjust(self, part_number: str, location: str, lot_number: str, new_count: int, operator: str, reason: str) -> int:
         part_number = self._normalize_part_number(part_number)
@@ -1019,17 +979,15 @@ class InventoryStore:
             raise ValueError("New count cannot be negative.")
         if not reason.strip():
             raise ValueError("Reason required.")
-        with self.session_factory.begin() as session:
+        with self._mutation() as (session, timestamp):
             part = self._require_part(session, part_number)
             loc = self._require_location(session, location)
             lot = self._require_lot(session, part.id, lot_number)
-            balance = self._get_or_create_balance(session, part, loc, lot)
-            old = balance.quantity
-            diff = new_count - old
-            balance.quantity = new_count
-            balance.updated_at = self.now()
-            self._add_transaction(session, "COUNT_CORRECTION", part, diff, loc, loc, operator, reason.strip(), "", lot)
-        self.notify()
+            diff = new_count - self._stock_at(session, part.id, loc.id, lot.id)
+            ledger.post(
+                session, timestamp, "COUNT_CORRECTION", part, lot, loc, diff,
+                counterpart=loc, operator=operator, reference=reason,
+            )
         return diff
 
     def low_stock(self) -> List[Part]:
@@ -1039,9 +997,28 @@ class InventoryStore:
             if p.active and p.minimum_quantity > 0 and self.total_stock(p.part_number) <= p.minimum_quantity
         ]
 
+    def _receive_in(
+        self,
+        session: Session,
+        timestamp: str,
+        part_number: str,
+        qty: int,
+        location: str,
+        lot_number: str,
+        operator: str,
+        reference: str = "",
+        notes: str = "",
+    ) -> None:
+        part_number = self._normalize_part_number(part_number)
+        lot_number = self._normalize_lot_number(lot_number)
+        part, loc = self._require_part_location_qty(session, part_number, location, qty)
+        lot = self._get_or_create_lot(session, part, lot_number)
+        ledger.post(session, timestamp, "RECEIVE", part, lot, loc, qty, operator=operator, reference=reference, notes=notes)
+
     def _ship_bom_part(
         self,
         session: Session,
+        timestamp: str,
         part: PartRecord,
         qty: int,
         location: LocationRecord,
@@ -1073,7 +1050,6 @@ class InventoryStore:
             raise ValueError(f"Not enough BOM component stock for {part.part_number}.")
 
         shipment_number = self._next_shipment_number(session)
-        timestamp = self.now()
         shipment = ShipmentRecord(
             shipment_number=shipment_number,
             timestamp=timestamp,
@@ -1091,11 +1067,6 @@ class InventoryStore:
             component_part = self._require_part(session, line.part_number)
             component_location = self._require_location(session, line.location)
             lot = self._require_lot(session, component_part.id, line.lot_number)
-            balance = self._require_balance(session, component_part, component_location, lot)
-            if line.quantity_allocated > balance.quantity:
-                raise ValueError(f"Not enough BOM component stock for {part.part_number}.")
-            balance.quantity -= line.quantity_allocated
-            balance.updated_at = timestamp
             session.add(
                 ShipmentComponentRecord(
                     shipment_id=shipment.id,
@@ -1105,37 +1076,37 @@ class InventoryStore:
                     quantity=line.quantity_allocated,
                 )
             )
-            self._add_transaction(
-                session,
-                "BOM_CONSUME",
-                component_part,
-                -line.quantity_allocated,
-                component_location,
-                None,
-                operator,
-                shipment_number,
-                f"Used by {part.part_number} x{qty}",
-                lot,
-                shipment.id,
-                timestamp,
-            )
+            try:
+                ledger.post(
+                    session,
+                    timestamp,
+                    "BOM_CONSUME",
+                    component_part,
+                    lot,
+                    component_location,
+                    -line.quantity_allocated,
+                    operator=operator,
+                    reference=shipment_number,
+                    notes=f"Used by {part.part_number} x{qty}",
+                    shipment_id=shipment.id,
+                )
+            except ledger.InsufficientStock as exc:
+                raise ValueError(f"Not enough BOM component stock for {part.part_number}.") from exc
 
         notes = "Shipment fulfilled by BOM component consumption."
         if reference.strip():
             notes = f"{notes} Reference: {reference.strip()}"
-        self._add_transaction(
+        ledger.record_phantom(
             session,
+            timestamp,
             "SHIP_BOM",
             part,
             -qty,
             location,
-            None,
-            operator,
-            shipment_number,
-            notes,
-            None,
-            shipment.id,
-            timestamp,
+            operator=operator,
+            reference=shipment_number,
+            notes=notes,
+            shipment_id=shipment.id,
         )
         return shipment_number
 
@@ -1203,47 +1174,6 @@ class InventoryStore:
             session.flush()
         return lot
 
-    def _require_balance(
-        self,
-        session: Session,
-        part: PartRecord,
-        location: LocationRecord,
-        lot: LotRecord,
-    ) -> InventoryBalanceRecord:
-        balance = self._balance(session, part.id, location.id, lot.id)
-        if balance is None:
-            raise ValueError("Not enough stock. Available: 0, requested: 1.")
-        return balance
-
-    def _get_or_create_balance(
-        self,
-        session: Session,
-        part: PartRecord,
-        location: LocationRecord,
-        lot: LotRecord,
-    ) -> InventoryBalanceRecord:
-        balance = self._balance(session, part.id, location.id, lot.id)
-        if balance is None:
-            balance = InventoryBalanceRecord(
-                part_id=part.id,
-                location_id=location.id,
-                lot_id=lot.id,
-                quantity=0,
-                updated_at=self.now(),
-            )
-            session.add(balance)
-            session.flush()
-        return balance
-
-    def _balance(self, session: Session, part_id: int, location_id: int, lot_id: int) -> InventoryBalanceRecord | None:
-        return session.scalar(
-            select(InventoryBalanceRecord).where(
-                InventoryBalanceRecord.part_id == part_id,
-                InventoryBalanceRecord.location_id == location_id,
-                InventoryBalanceRecord.lot_id == lot_id,
-            )
-        )
-
     def _stock_at(self, session: Session, part_id: int, location_id: int, lot_id: int) -> int:
         return int(
             session.scalar(
@@ -1254,37 +1184,6 @@ class InventoryStore:
                 )
             )
             or 0
-        )
-
-    def _add_transaction(
-        self,
-        session: Session,
-        tx_type: str,
-        part: PartRecord,
-        quantity_change: int,
-        location_from: LocationRecord | None,
-        location_to: LocationRecord | None,
-        operator: str,
-        reference: str = "",
-        notes: str = "",
-        lot: LotRecord | None = None,
-        shipment_id: int | None = None,
-        timestamp: str | None = None,
-    ) -> None:
-        session.add(
-            InventoryTransactionRecord(
-                timestamp=timestamp or self.now(),
-                tx_type=tx_type,
-                part_id=part.id,
-                lot_id=lot.id if lot else None,
-                quantity_change=quantity_change,
-                location_from_id=location_from.id if location_from else None,
-                location_to_id=location_to.id if location_to else None,
-                operator=operator,
-                reference=reference.strip(),
-                notes=notes.strip(),
-                shipment_id=shipment_id,
-            )
         )
 
     def _has_bom(self, session: Session, part_number: str) -> bool:
