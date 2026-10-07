@@ -1,0 +1,40 @@
+# Automated dependency update PRs. Every Dependabot PR runs the full CI gate,
+# so an update only merges if lint, types, tests, the native E2E smoke and the
+# dependency audit all pass with it.
+#
+# Python is deliberately absent: requirements.lock.txt is a *universal*
+# (Linux/Windows/macOS) hash-pinned lock compiled by uv, which Dependabot's pip
+# updater cannot regenerate faithfully. The weekly "Dependency canary"
+# workflow tests the newest allowed versions instead, and `scripts/lock.sh
+# --upgrade` applies them. Vulnerability alerts still cover the lock file.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Let new releases age a week before adopting them; a compromised release
+    # is usually caught and yanked within days.
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    groups:
+      frontend-minor-and-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: build
+      include: scope

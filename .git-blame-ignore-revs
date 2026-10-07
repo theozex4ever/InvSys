@@ -1,0 +1,7 @@
+# Mechanical reformatting commits, skipped by `git blame` (GitHub honours this
+# file automatically; locally run:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs).
+# Keep these commits by merging PRs with a merge commit, not squash/rebase.
+
+# style: adopt ruff format (mechanical, no behavior change)
+12622d19cc5fe9230cd3c5e8b4977b98842bf368

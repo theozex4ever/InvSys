@@ -1,7 +1,13 @@
-# Development and testing dependencies.
-# Install with:  pip install -r requirements-dev.txt
+# Development, test and CI tooling. This file holds the *intent* (ranges).
+# CI installs requirements.lock.txt, compiled from this file (which includes
+# requirements-desktop.txt) with exact versions and sha256 hashes. After editing
+# either input, regenerate it with `scripts/lock.sh` (needs uv).
+#
+-r requirements-desktop.txt
 pytest>=8.0
 pytest-qt>=4.4
-SQLAlchemy>=2.0
-PySide6>=6.6,<7
+pytest-cov>=6.0
+pytest-randomly>=3.15
+pytest-timeout>=2.3
+mypy>=1.15
 ruff==0.16.9

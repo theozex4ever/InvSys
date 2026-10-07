@@ -24,9 +24,7 @@ class DesktopSmoke:
         try:
             if not window.events.loaded.wait(20):
                 raise RuntimeError("Desktop assets failed to load.")
-            wait(
-                "document.querySelector('#dashboard-data').textContent.includes('Active parts')"
-            )
+            wait("document.querySelector('#dashboard-data').textContent.includes('Active parts')")
             if window.evaluate_js("location.protocol") != "file:":
                 raise RuntimeError("Assets did not load from file://.")
             if not window.evaluate_js("document.styleSheets.length > 0"):
@@ -38,12 +36,8 @@ class DesktopSmoke:
             window.evaluate_js(
                 "document.querySelector('#global-search').click(); document.querySelector('#query').value='DESKTOP-SMOKE'; document.querySelector('#query').dispatchEvent(new Event('input'))"
             )
-            wait(
-                "!document.querySelector('#parts-data').textContent.includes('Loading')"
-            )
-            exists = window.evaluate_js(
-                "!!document.querySelector('[data-part=\"DESKTOP-SMOKE\"]')"
-            )
+            wait("!document.querySelector('#parts-data').textContent.includes('Loading')")
+            exists = window.evaluate_js("!!document.querySelector('[data-part=\"DESKTOP-SMOKE\"]')")
             if not exists:
                 window.evaluate_js(
                     "document.querySelector('#add-part').click(); document.querySelector('#number').value='DESKTOP-SMOKE'; document.querySelector('#description').value='Disposable desktop smoke part'; document.querySelector('#minimum').value='5'; document.querySelector('#new-part').requestSubmit()"
@@ -52,14 +46,13 @@ class DesktopSmoke:
                 window.evaluate_js(
                     "document.querySelector('[data-part=\"DESKTOP-SMOKE\"]').click()"
                 )
-            wait(
-                "document.querySelector('#drawer-data').textContent.includes('DESKTOP-SMOKE')"
-            )
+            wait("document.querySelector('#drawer-data').textContent.includes('DESKTOP-SMOKE')")
             window.evaluate_js("document.querySelector('#close-drawer').click()")
-            if not window.evaluate_js(
-                "document.documentElement.scrollWidth <= innerWidth"
-            ):
+            if not window.evaluate_js("document.documentElement.scrollWidth <= innerWidth"):
                 raise RuntimeError("Desktop page overflows horizontally.")
+            from inventory_control.desktop_smoke_ui import check_stock_presentation
+
+            check_stock_presentation(window, wait)
             self._stock_workflows(window, wait)
             self._bom_history_workflows(window, wait)
             self._history_read_recovery(window, wait)
@@ -87,9 +80,7 @@ class DesktopSmoke:
             window.smokeAPI.history_detail = async () => ({ok:false, error:{code:'INTERNAL', message:'Read unavailable'}});
             document.querySelector('#dashboard-data [data-history-id]').click();
         """)
-        wait(
-            "document.querySelector('#history-detail').textContent.includes('Read unavailable')"
-        )
+        wait("document.querySelector('#history-detail').textContent.includes('Read unavailable')")
         if not run("!!document.querySelector('#history-detail [data-retry-detail]')"):
             raise RuntimeError("Failed History detail has no explicit retry action.")
         run("""
@@ -114,9 +105,7 @@ class DesktopSmoke:
         """)
         wait("!!document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]')")
         run("document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]').click()")
-        wait(
-            "document.querySelector('#drawer-data').textContent.includes('Lot balances')"
-        )
+        wait("document.querySelector('#drawer-data').textContent.includes('Lot balances')")
         if not run("!!document.querySelector('#drawer-data [data-part-history]')"):
             raise RuntimeError("Part details have no contextual History action.")
         run("document.querySelector('#drawer-data [data-part-history]').click()")
@@ -152,9 +141,7 @@ class DesktopSmoke:
         if not run(
             "Number(document.querySelector('#parts-data tbody tr td.num').textContent)===window.smokeRefreshResult.part.quantity && document.querySelector('#query').value==='DESKTOP-SMOKE'"
         ):
-            raise RuntimeError(
-                "Catalog refresh did not show current stock and retain search."
-            )
+            raise RuntimeError("Catalog refresh did not show current stock and retain search.")
         run(
             "document.querySelector('[data-page=dashboard]').click(); document.querySelector('#dashboard .refresh').click()"
         )
@@ -173,9 +160,7 @@ class DesktopSmoke:
             window.smokeAPI.receive({part_number:window.smokeBOMLeaf, quantity:7, location:'Stock', lot_number:'RECOVERY', operator:'Desktop smoke', reference:'RECOVERY', notes:''}).then(r => { window.smokeRecoveryMaterial=r.ok; });
             document.querySelector('[data-page=ship]').click(); document.querySelector('#ship-result [data-another]').click();
         """)
-        wait(
-            "window.smokeRecoveryMaterial && !document.querySelector('#ship-submit').disabled"
-        )
+        wait("window.smokeRecoveryMaterial && !document.querySelector('#ship-submit').disabled")
         run(
             "document.querySelector('#ship-quantity').value='1'; document.querySelector('#ship-recipient').value='Uncertain BOM customer'; document.querySelector('#ship-form').requestSubmit()"
         )
@@ -206,9 +191,7 @@ class DesktopSmoke:
         if not run(
             "document.querySelector('#ship-submit').disabled && !document.querySelector('#ship-recovery [data-recovery=completed]')"
         ):
-            raise RuntimeError(
-                "Failed reconciliation unlocked uncertain BOM submission."
-            )
+            raise RuntimeError("Failed reconciliation unlocked uncertain BOM submission.")
         run("""
             window.smokeAPI.stock_context=window.smokeRecoveryContext;
             document.querySelector('[data-page=parts]').click(); document.querySelector('[data-page=ship]').click();
@@ -221,9 +204,7 @@ class DesktopSmoke:
             raise RuntimeError(
                 "BOM reconciliation did not expose persisted consumption without retrying."
             )
-        run(
-            "document.querySelector('#ship-recovery [data-recovery=completed]').click()"
-        )
+        run("document.querySelector('#ship-recovery [data-recovery=completed]').click()")
         wait(
             "document.querySelector('#ship-result').textContent.includes('Verified shipment of 1')"
         )
@@ -276,9 +257,21 @@ class DesktopSmoke:
         """)
         wait("!document.querySelector('#receive-submit').disabled")
         require(
-            "document.querySelector('#receive-quantity').value === '8' && document.querySelector('#receive-lot_number').value === 'SMOKE-A'",
+            "document.querySelector('#receive-quantity').value === '8' && document.querySelector('#receive-lot_number').value === 'SMOKE-A' && document.querySelector('#receive-reference').value === 'SMOKE-RECEIVE' && document.querySelector('#receive-notes').value === 'Inspected'",
             "receipt draft retention",
         )
+        # Whitespace passes HTML required validation but is rejected by Python.
+        run(
+            "document.querySelector('#receive-lot_number').value='   '; document.querySelector('#receive-form').requestSubmit()"
+        )
+        wait(
+            "document.querySelector('#receive-error').textContent.includes('Lot required.') && !document.querySelector('#receive-submit').disabled"
+        )
+        require(
+            "document.querySelector('#receive-quantity').value === '8' && document.querySelector('#receive-lot_number').value === '   ' && document.querySelector('#receive-reference').value === 'SMOKE-RECEIVE' && document.querySelector('#receive-notes').value === 'Inspected' && document.querySelector('#receive-recovery').hidden",
+            "receipt validation failure preserves draft",
+        )
+        run("document.querySelector('#receive-lot_number').value='SMOKE-A'")
         run(
             "document.querySelector('#receive-form').requestSubmit(); document.querySelector('#receive-form').requestSubmit()"
         )
@@ -286,7 +279,7 @@ class DesktopSmoke:
             "document.querySelector('#receive-result').textContent.includes('Received 8') && !document.querySelector('#receive-submit').disabled"
         )
         require(
-            "document.querySelector('#receive-quantity').value === '' && document.querySelector('#receive-lot_number').value === '' && document.querySelector('#receive-reference').value === '' && document.querySelector('#receive-notes').value === 'Inspected'",
+            "document.querySelector('#receive-part_number').value === 'DESKTOP-SMOKE' && document.querySelector('#receive-location').value === 'Stock' && document.querySelector('#receive-quantity').value === '' && document.querySelector('#receive-lot_number').value === '' && document.querySelector('#receive-reference').value === '' && document.querySelector('#receive-notes').value === ''",
             "receipt repeat-entry reset",
         )
         run("""
@@ -331,9 +324,7 @@ class DesktopSmoke:
             document.querySelector('#ship-recipient').value='Smoke customer';
             document.querySelector('#ship-form').requestSubmit();
         """)
-        wait(
-            "document.querySelector('#ship-error').textContent.includes('Not enough stock')"
-        )
+        wait("document.querySelector('#ship-error').textContent.includes('Not enough stock')")
         require(
             "document.querySelector('#ship-recipient').value === 'Smoke customer' && !document.querySelector('#ship-confirmation').open",
             "shortage preserves draft",
@@ -391,9 +382,7 @@ class DesktopSmoke:
         run(
             "document.querySelector('#ship-confirm-submit').click(); document.querySelector('#ship-confirm-submit').click()"
         )
-        wait(
-            "document.querySelector('#ship-result').textContent.includes('Shipment SHP-')"
-        )
+        wait("document.querySelector('#ship-result').textContent.includes('Shipment SHP-')")
         require(
             "document.querySelector('#ship-submit').disabled && !!document.querySelector('#ship-result [data-another]')",
             "explicit ship another",
@@ -402,6 +391,10 @@ class DesktopSmoke:
             window.smokeAPI.stock_context('DESKTOP-SMOKE').then(r => { window.smokeAfter = r.data; });
         """)
         wait("window.smokeAfter")
+        require(
+            "(() => { const receipts = window.smokeAfter.transactions.slice(0, window.smokeAfter.transactions.length - window.smokeBefore.transactions.length).filter(tx => tx.tx_type === 'RECEIVE'); return receipts.length === 2 && receipts.find(tx => tx.lot_number === 'SMOKE-A')?.notes === 'Inspected' && receipts.find(tx => tx.lot_number === 'SMOKE-B')?.notes === ''; })()",
+            "receipt notes belong only to their own persisted audit record",
+        )
         require(
             "window.smokeAfter.part.quantity === window.smokeBefore.part.quantity + 17 && window.smokeAfter.transactions.length === window.smokeBefore.transactions.length + 3 && window.smokeAfter.shipments.length === window.smokeBefore.shipments.length + 1",
             "one receipt/shipment per double click",
@@ -418,13 +411,15 @@ class DesktopSmoke:
         run("""
             document.querySelector('#receive-quantity').value='2';
             document.querySelector('#receive-lot_number').value='SMOKE-LOST';
+            document.querySelector('#receive-reference').value='LOST-RECEIVE';
+            document.querySelector('#receive-notes').value='Inspected after transport loss';
             document.querySelector('#receive-form').requestSubmit(); document.querySelector('#receive-form').requestSubmit();
         """)
         wait(
             "document.querySelector('#receive-error').textContent.includes('Completion is uncertain')"
         )
         require(
-            "window.smokeCalls === 1 && document.querySelector('#receive-quantity').value === '2' && document.querySelector('#receive-submit').disabled",
+            "window.smokeCalls === 1 && document.querySelector('#receive-quantity').value === '2' && document.querySelector('#receive-notes').value === 'Inspected after transport loss' && document.querySelector('#receive-submit').disabled",
             "lost receipt response preserves and blocks draft",
         )
         run("""
@@ -434,14 +429,12 @@ class DesktopSmoke:
         """)
         wait("document.querySelector('#receive-recovery [data-recovery=completed]')")
         require(
-            "document.querySelector('#receive-recovery').textContent.includes('SMOKE-LOST')",
+            "document.querySelector('#receive-recovery').textContent.includes('SMOKE-LOST') && document.querySelector('#receive-recovery .recovery-records').textContent.includes('Inspected after transport loss') && document.querySelector('#receive-notes').value === 'Inspected after transport loss' && document.querySelector('#receive-submit').disabled",
             "authoritative receipt reconciliation",
         )
-        run(
-            "document.querySelector('#receive-recovery [data-recovery=completed]').click()"
-        )
+        run("document.querySelector('#receive-recovery [data-recovery=completed]').click()")
         require(
-            "!document.querySelector('#receive-submit').disabled && document.querySelector('#receive-quantity').value === ''",
+            "!document.querySelector('#receive-submit').disabled && document.querySelector('#receive-part_number').value === 'DESKTOP-SMOKE' && document.querySelector('#receive-location').value === 'Stock' && document.querySelector('#receive-quantity').value === '' && document.querySelector('#receive-lot_number').value === '' && document.querySelector('#receive-reference').value === '' && document.querySelector('#receive-notes').value === ''",
             "verified receipt completion",
         )
 
@@ -483,9 +476,7 @@ class DesktopSmoke:
             "document.querySelector('#ship-recovery').textContent.includes('Lost response customer')",
             "shipment reconciliation exposes number and recipient",
         )
-        run(
-            "document.querySelector('#ship-recovery [data-recovery=completed]').click()"
-        )
+        run("document.querySelector('#ship-recovery [data-recovery=completed]').click()")
         require(
             "document.querySelector('#ship-submit').disabled && !!document.querySelector('#ship-result [data-another]')",
             "verified shipment requires ship another",
@@ -503,7 +494,7 @@ class DesktopSmoke:
         """)
         wait("!document.querySelector('#receive-submit').disabled")
         run(
-            "document.querySelector('#receive-quantity').value='4'; document.querySelector('#receive-lot_number').value='SMOKE-NOT-SENT'; document.querySelector('#receive-form').requestSubmit()"
+            "document.querySelector('#receive-quantity').value='4'; document.querySelector('#receive-lot_number').value='SMOKE-NOT-SENT'; document.querySelector('#receive-notes').value='Preserve unsent receipt notes'; document.querySelector('#receive-form').requestSubmit()"
         )
         wait(
             "document.querySelector('#receive-error').textContent.includes('Completion is uncertain')"
@@ -516,11 +507,13 @@ class DesktopSmoke:
             "document.querySelector('#receive-recovery .recovery-records').textContent.includes('No new audit records')",
             "absent mutation reconciliation",
         )
-        run(
-            "document.querySelector('#receive-recovery [data-recovery=absent]').click()"
-        )
         require(
-            "!document.querySelector('#receive-submit').disabled && document.querySelector('#receive-quantity').value === '4'",
+            "document.querySelector('#receive-notes').value === 'Preserve unsent receipt notes' && document.querySelector('#receive-submit').disabled",
+            "reconciliation without a decision preserves and locks notes",
+        )
+        run("document.querySelector('#receive-recovery [data-recovery=absent]').click()")
+        require(
+            "!document.querySelector('#receive-submit').disabled && document.querySelector('#receive-quantity').value === '4' && document.querySelector('#receive-notes').value === 'Preserve unsent receipt notes'",
             "explicit recovery preserves unsent draft",
         )
         run(
@@ -575,9 +568,7 @@ class DesktopSmoke:
         run(
             "document.querySelector('#ship-quantity').value='3'; document.querySelector('#ship-recipient').value='BOM customer'; document.querySelector('#ship-form').requestSubmit()"
         )
-        wait(
-            "document.querySelector('#ship-error').textContent.includes('Component shortage')"
-        )
+        wait("document.querySelector('#ship-error').textContent.includes('Component shortage')")
         require(
             "!document.querySelector('#ship-confirmation').open && document.querySelector('#ship-review').textContent.includes('Blocked')",
             "shortage does not submit",
@@ -637,9 +628,7 @@ class DesktopSmoke:
         run(
             "window.smokeHistoryButton=document.querySelector('#history-data [data-history-id]'); window.smokeHistoryButton.focus(); window.smokeHistoryY=scrollY; window.smokeHistoryButton.click()"
         )
-        wait(
-            "document.querySelector('#history-detail').textContent.includes('BOM_CONSUME')"
-        )
+        wait("document.querySelector('#history-detail').textContent.includes('BOM_CONSUME')")
         require(
             "document.querySelector('#history-detail').textContent.includes('Desktop smoke') && document.querySelector('#history-detail').textContent.includes('Used by')",
             "read-only record contains operator and notes",
@@ -663,9 +652,7 @@ class DesktopSmoke:
         run(
             "window.smokeDashboardID=document.querySelector('#dashboard-data [data-history-id]').dataset.historyId; document.querySelector('#dashboard-data [data-history-id]').click()"
         )
-        wait(
-            "document.querySelector('#history-detail').textContent.includes('SHIP_BOM')"
-        )
+        wait("document.querySelector('#history-detail').textContent.includes('SHIP_BOM')")
         require(
             "document.querySelector('#history-detail').textContent.includes(window.smokeBOMNumber)",
             "dashboard opens matching history record",

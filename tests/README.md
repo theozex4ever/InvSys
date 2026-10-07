@@ -1,10 +1,10 @@
 # Inventory Control Quality Gate
 
-Run the Python and Qt test suite before opening a pull request. The full gate,
-including lint and the frontend checks, is listed in `CLAUDE.md`.
+Run the automated suite from the repository root (configuration is in
+`pyproject.toml`; the full CI gate is described in `docs/ci.md`):
 
 ```bash
-QT_QPA_PLATFORM=offscreen pytest
+python -m pytest --cov
 ```
 
 Manual usability smoke checks:

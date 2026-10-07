@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from inventory_control.orm import Base, LocationRecord, SettingRecord
 
-
 DEFAULT_LOCATIONS = ["Receiving", "Stock", "Shipping Bench", "Scrap"]
 SCHEMA_VERSION = "1"
 

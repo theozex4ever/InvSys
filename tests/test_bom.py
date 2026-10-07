@@ -108,7 +108,9 @@ class TestBOMBuildCapacity:
 
         availability = blank_store.bom_availability("KIT", 1, "Stock")
         assert (availability.buildable, availability.capacities) == (100, {"SCREW": 100})
-        assert [(req.part_number, req.quantity_required) for req in availability.requirements] == [("SCREW", 5)]
+        assert [(req.part_number, req.quantity_required) for req in availability.requirements] == [
+            ("SCREW", 5)
+        ]
 
     def test_part_without_bom_uses_its_own_stock(self, blank_store):
         blank_store.add_part("SINGLE", "Standalone")
@@ -165,7 +167,8 @@ class TestBOMShip:
 
         assert blank_store.transactions[0].tx_type == "SHIP_BOM"
         consume_transactions = [
-            tx for tx in blank_store.transactions
+            tx
+            for tx in blank_store.transactions
             if tx.tx_type == "BOM_CONSUME" and tx.reference == shipment_number
         ]
         assert {tx.part_number for tx in consume_transactions} == {"NUT-001", "SCREW-001"}
@@ -200,7 +203,10 @@ class TestBOMShip:
             ("LOT-B", 3),
         ]
         blank_store.ship("KIT", 1, "Stock", "Acme", "alice", expected_bom_plan=plan)
-        assert {(item.lot_number, item.quantity) for item in blank_store.shipments[0].consumed_components} == {
+        assert {
+            (item.lot_number, item.quantity)
+            for item in blank_store.shipments[0].consumed_components
+        } == {
             ("LOT-A", 2),
             ("LOT-B", 3),
         }

@@ -24,13 +24,12 @@ ever changes the insertion order, these tests will fail and catch the change.
 
 import pytest
 
-
 # ===========================================================================
 # move — happy path
 # ===========================================================================
 
-class TestMoveHappyPath:
 
+class TestMoveHappyPath:
     def test_source_balance_decreases(self, part_in_store):
         # Arrange: TEST-001 has 10 in Stock
         # Act: move 4 from Stock → Shipping Bench
@@ -99,8 +98,9 @@ class TestMoveHappyPath:
         assert part_in_store.transactions[1].operator == "carol"
 
     def test_transactions_record_reference(self, part_in_store):
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol",
-                           reference="WO-007")
+        part_in_store.move(
+            "TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol", reference="WO-007"
+        )
 
         assert part_in_store.transactions[0].reference == "WO-007"
         assert part_in_store.transactions[1].reference == "WO-007"
@@ -117,8 +117,8 @@ class TestMoveHappyPath:
 # move — validation / guards
 # ===========================================================================
 
-class TestMoveValidation:
 
+class TestMoveValidation:
     def test_same_source_and_destination_raises(self, part_in_store):
         with pytest.raises(ValueError, match="Source and destination cannot match"):
             part_in_store.move("TEST-001", 1, "Stock", "Stock", "LOT-1", "carol")
@@ -129,10 +129,8 @@ class TestMoveValidation:
             part_in_store.move("TEST-001", 11, "Stock", "Shipping Bench", "LOT-1", "carol")
 
     def test_insufficient_stock_does_not_change_either_balance(self, part_in_store):
-        try:
+        with pytest.raises(ValueError, match="Not enough stock"):
             part_in_store.move("TEST-001", 99, "Stock", "Shipping Bench", "LOT-1", "carol")
-        except ValueError:
-            pass
 
         assert part_in_store.stock_at("TEST-001", "Stock") == 10
         assert part_in_store.stock_at("TEST-001", "Shipping Bench") == 0
@@ -140,10 +138,8 @@ class TestMoveValidation:
     def test_insufficient_stock_does_not_create_transactions(self, part_in_store):
         tx_count_before = len(part_in_store.transactions)
 
-        try:
+        with pytest.raises(ValueError, match="Not enough stock"):
             part_in_store.move("TEST-001", 99, "Stock", "Shipping Bench", "LOT-1", "carol")
-        except ValueError:
-            pass
 
         assert len(part_in_store.transactions) == tx_count_before
 

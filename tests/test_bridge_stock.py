@@ -171,10 +171,7 @@ def test_shipment_revalidates_after_review_and_blocks_bom_and_inactive_parts(tmp
     before = bridge.stock_context("A")
     request.update(part_number="A", lot_number="L1")
     assert bridge.ship(request)["ok"] is False
-    assert (
-        bridge.receive({k: v for k, v in request.items() if k != "recipient"})["ok"]
-        is False
-    )
+    assert bridge.receive({k: v for k, v in request.items() if k != "recipient"})["ok"] is False
     assert bridge.stock_context("A") == before
     store.engine.dispose()
 

@@ -6,7 +6,7 @@ const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ 
 const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete the request.';
 const pair = (label: string, value: unknown) => `<div class="detail-pair"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
 
-export function stockWorkflows(getAPI: () => API, operator: () => string, changed: () => Promise<void>, toast: (text: string) => void) {
+export function stockWorkflows(getAPI: () => API, operator: () => string, changed: () => Promise<void>, toast: (text: string, summary?: string) => void) {
   const states = {
     receive: { pending: false, uncertain: false, completed: false, version: 0, context: null as StockContext | null, submitted: null as Receipt | ShipmentRequest | null, before: 0, beforeShipments: 0, recoveredNumbers: [] as string[], reconciled: false },
     ship: { pending: false, uncertain: false, completed: false, version: 0, context: null as StockContext | null, submitted: null as Receipt | ShipmentRequest | null, before: 0, beforeShipments: 0, recoveredNumbers: [] as string[], reconciled: false },
@@ -48,7 +48,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
           const text = `Verified ${mode === 'receive' ? 'receipt' : 'shipment'} of ${submitted.quantity} × ${submitted.part_number}, ${submitted.lot_number ? `lot ${submitted.lot_number}` : 'automatic component lots'}, at ${submitted.location}. Current location stock: ${context.part.location_balances[submitted.location] ?? 0}; total stock: ${context.part.quantity}.${mode === 'ship' ? ` Shipment numbers reviewed: ${states[mode].recoveredNumbers.join(', ') || 'No new shipment records; investigate in History.'}` : ''}`;
           control<HTMLElement>(mode, 'result').innerHTML = `<div class="status success">${esc(text)}${mode === 'ship' ? ' <button class="btn" data-another>Ship another</button>' : ''}</div>`;
           if (mode === 'receive') clearEntry(mode); else states[mode].completed = true;
-          toast(text);
+          toast(text, `${mode === 'receive' ? 'Receipt' : 'Shipment'} completion verified for ${submitted.part_number}.`);
         }
         lock(mode); void changed();
       }
@@ -85,13 +85,29 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     select.value = saved;
   }
   function allocations(review: BOMPreview) {
-    return pair('BOM build capacity at this location', review.buildable) + pair('Requested shipment readiness', review.plan.ready ? 'Ready' : 'Blocked — component shortage') + `<h3>Aggregated leaf requirements</h3><div class="table-wrap"><table><thead><tr><th>Material</th><th class="num">Required</th><th class="num">Available</th><th class="num">Shortage</th></tr></thead><tbody>${review.plan.requirements.map(r => `<tr><td>${esc(r.part_number)}<br>${esc(r.description)}</td><td class="num">${r.quantity_required}</td><td class="num">${r.stock_available}</td><td class="num">${r.shortage}</td></tr>`).join('')}</tbody></table></div><h3>Leaf lot allocations</h3><div class="table-wrap"><table><thead><tr><th>Material</th><th>Lot / Location</th><th class="num">Consume</th><th class="num">Lot stock</th></tr></thead><tbody>${review.plan.lines.map(line => `<tr><td>${esc(line.part_number)}</td><td>${esc(line.lot_number)}<br>${esc(line.location)}</td><td class="num">${line.quantity_allocated}</td><td class="num">${line.lot_stock}</td></tr>`).join('')}</tbody></table></div><p class="help">Parent and intermediate assembly stock stays unchanged. Only these leaf lots are consumed.</p>`;
+    return `<div class="readiness"><span class="badge ${review.plan.ready ? 'good' : 'bad'}">${review.plan.ready ? 'Ready to ship' : 'Blocked — component shortage'}</span></div>` + pair('BOM build capacity at this location', review.buildable) + `<h3>Aggregated leaf requirements</h3><div class="table-wrap"><table><thead><tr><th>Material</th><th class="num">Required</th><th class="num">Available</th><th class="num">Shortage</th></tr></thead><tbody>${review.plan.requirements.map(r => `<tr><td>${esc(r.part_number)}<br>${esc(r.description)}</td><td class="num">${r.quantity_required}</td><td class="num">${r.stock_available}</td><td class="num">${r.shortage > 0 ? `<span class="badge bad">${r.shortage} short</span>` : '0'}</td></tr>`).join('')}</tbody></table></div><h3>Leaf lot allocations</h3><div class="table-wrap"><table><thead><tr><th>Material</th><th>Lot / Location</th><th class="num">Consume</th><th class="num">Lot stock</th></tr></thead><tbody>${review.plan.lines.map(line => `<tr><td>${esc(line.part_number)}</td><td>${esc(line.lot_number)}<br>${esc(line.location)}</td><td class="num">${line.quantity_allocated}</td><td class="num">${line.lot_stock}</td></tr>`).join('')}</tbody></table></div><p class="help">Parent and intermediate assembly stock stays unchanged. Only these leaf lots are consumed.</p>`;
+  }
+  function impact(title: string, before: number, quantity: number | null, after: number | null, receiving = false) {
+    const blocked = after !== null && after < 0;
+    return `<div class="stock-impact ${blocked ? 'blocked' : ''}"><div class="review-title">${esc(title)}</div><div class="review-row"><span>Before</span><strong>${before}</strong></div><div class="review-row"><span>${receiving ? 'Adding' : 'Shipping'}</span><strong>${quantity ?? 'Enter a valid quantity'}</strong></div><div class="review-row total"><span>${receiving ? 'Expected after' : 'Lot remaining after shipment'}</span><strong>${blocked ? `${-after} short` : after ?? '—'}</strong></div>${blocked ? '<span class="badge bad">Blocked — selected-lot shortage</span>' : ''}</div>`;
   }
   function renderReview(mode: Mode) {
     const context = states[mode].context;
     const location = value(mode, 'location'), lot = value(mode, 'lot_number');
     const lotStock = context?.part.balances.find(b => b.location === location && b.lot_number === lot)?.quantity ?? 0;
-    control<HTMLElement>(mode, 'review').innerHTML = context ? `${pair('Part', context.part.part_number)}<p class="description">${esc(context.part.description)}</p>${pair('Location', location)}${pair('Total location stock', context.part.location_balances[location] ?? 0)}${mode === 'ship' && !context.has_bom ? pair('Selected lot', lot || 'Select a lot') + pair('Selected-lot availability', lotStock) : ''}${pair('Quantity requested', value(mode, 'quantity') || 'Enter quantity')}${pair('Operator', operator() || 'Name required in header')}<p class="help">${mode === 'ship' ? 'Review shipment reads current stock and shows the exact stock impact before confirmation.' : 'Stock is revalidated by Python when receiving.'}</p>${!context.part.active ? '<div class="status error">This part is inactive. Use the original application to reactivate it.</div>' : ''}${pair('Part stock status', context.part.low_stock ? 'Low stock' : 'Above minimum')}${mode === 'ship' && context.has_bom ? states.ship.completed ? '<p class="help">Shipment complete. Inspect shipment for consumed leaf lots, or use Ship another.</p>' : bomReview ? allocations(bomReview) : '<p class="help">BOM parent selected. Review shipment to read current leaf requirements, build capacity, and lot allocations.</p>' : ''}` : 'Select a part to read current inventory.';
+    const quantityInput = control<HTMLInputElement>(mode, 'quantity');
+    const entered = quantityInput.valueAsNumber;
+    const quantity = quantityInput.validity.valid && Number.isSafeInteger(entered) && entered > 0 ? entered : null;
+    const locationStock = context?.part.location_balances[location] ?? 0;
+    const state = states[mode];
+    let stockImpact = '';
+    if (context && !state.completed && !state.uncertain && (mode === 'receive' || !context.has_bom)) {
+      stockImpact = mode === 'receive' ? impact('Location stock preview', locationStock, quantity, quantity === null ? null : locationStock + quantity, true)
+        : lot ? impact('Selected-lot stock preview', lotStock, quantity, quantity === null ? null : lotStock - quantity) : '<p class="help">Select a lot to preview its stock impact.</p>';
+      stockImpact += '<p class="help">Preview based on the last availability read. Python validates current stock at submission.</p>';
+    }
+    const health = context?.part.low_stock ? `<span class="badge warn">${context.part.quantity === 0 ? 'Low stock · No stock' : 'Low stock'}</span>` : `<span class="badge ${context?.part.active ? 'good' : 'neutral'}">${context?.part.active ? 'Above minimum' : 'Inactive'}</span>`;
+    control<HTMLElement>(mode, 'review').innerHTML = context ? `<div class="review-part">${esc(context.part.part_number)}</div><p class="description help">${esc(context.part.description)}</p><div class="readiness">${health}</div>${pair('Location', location)}${stockImpact}${pair('Total location stock', locationStock)}${mode === 'ship' && !context.has_bom ? pair('Selected lot', lot || 'Select a lot') + pair('Selected-lot availability', lotStock) : ''}${pair('Quantity requested', value(mode, 'quantity') || 'Enter quantity')}${pair('Operator', operator() || 'Name required in header')}<p class="help">${mode === 'ship' ? 'Review shipment reads current stock and shows the exact stock impact before confirmation.' : 'Enter a lot number to keep this receipt traceable.'}</p>${!context.part.active ? '<div class="status error">This part is inactive. Use the original application to reactivate it.</div>' : ''}${mode === 'ship' && context.has_bom ? states.ship.completed ? '<p class="help">Shipment complete. Inspect shipment for consumed leaf lots, or use Ship another.</p>' : bomReview ? allocations(bomReview) : '<p class="help">BOM parent selected. Review shipment to read current leaf requirements, build capacity, and lot allocations.</p>' : ''}` : 'Select a part to read current inventory.';
   }
   async function refresh(mode: Mode, adoptLocation = false) {
     const state = states[mode];
@@ -129,7 +145,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     return mode === 'receive' ? { ...common, notes: value(mode, 'notes') } : { ...common, recipient: value(mode, 'recipient'), carrier: value(mode, 'carrier'), tracking: value(mode, 'tracking') };
   }
   function clearEntry(mode: Mode) {
-    for (const name of mode === 'receive' ? ['quantity', 'lot_number', 'reference'] : ['quantity', 'lot_number', 'reference', 'recipient', 'carrier', 'tracking']) control<HTMLInputElement | HTMLSelectElement>(mode, name).value = '';
+    for (const name of mode === 'receive' ? ['quantity', 'lot_number', 'reference', 'notes'] : ['quantity', 'lot_number', 'reference', 'recipient', 'carrier', 'tracking']) control<HTMLInputElement | HTMLSelectElement>(mode, name).value = '';
     if (mode === 'ship') { preview = null; bomReview = null; } renderReview(mode);
   }
   function ambiguous(mode: Mode, error: unknown) {
@@ -160,7 +176,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
           if (!result.plan.ready) { preview = null; feedback(mode, 'Component shortage. No shipment was sent. Replenish stock and review again.', true); return; }
         }
         const r = result.request;
-        document.querySelector('#ship-confirm-data')!.innerHTML = pair('Part', r.part_number) + pair('Location / lot', `${r.location} / ${'lot_number' in r ? r.lot_number : 'Automatic component lots'}`) + pair('Quantity', r.quantity) + pair('Recipient', r.recipient) + pair('Operator', r.operator) + pair('Carrier', r.carrier || '—') + pair('Tracking', r.tracking || '—') + pair('Reference', r.reference || '—') + ('plan' in result ? allocations(result) : pair('Selected-lot stock', result.lot_stock) + pair('Total location stock', result.location_stock) + pair('Lot remaining after shipment', result.remaining)) + '<p class="help">Confirmation creates a real shipment. Python rechecks available stock at submission.</p>';
+        document.querySelector('#ship-confirm-data')!.innerHTML = pair('Part', r.part_number) + pair('Location / lot', `${r.location} / ${'lot_number' in r ? r.lot_number : 'Automatic component lots'}`) + ('plan' in result ? allocations(result) : impact('Reviewed lot impact', result.lot_stock, r.quantity, result.remaining) + pair('Total location stock', result.location_stock)) + pair('Quantity', r.quantity) + pair('Recipient', r.recipient) + pair('Operator', r.operator) + pair('Carrier', r.carrier || '—') + pair('Tracking', r.tracking || '—') + pair('Reference', r.reference || '—') + '<p class="help">Confirmation creates a real shipment. Python rechecks available stock at submission.</p>';
         feedback(mode, 'Current shipment review is ready. Confirm or cancel.'); dialog().showModal();
       } else {
         const before = await read(getAPI().stock_context(fields.part_number));
@@ -170,7 +186,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
         const locationStock = context.part.location_balances[fields.location] ?? 0;
         const text = `Received ${fields.quantity} × ${context.part.part_number} into ${fields.location}, lot ${fields.lot_number.trim().toUpperCase()}. Updated location stock: ${locationStock}; total stock: ${context.part.quantity}.`;
         control<HTMLElement>(mode, 'result').innerHTML = `<div class="status success">${esc(text)}</div>`;
-        clearEntry(mode); feedback(mode, 'Ready for the next receipt.'); toast(text); void changed();
+        clearEntry(mode); feedback(mode, 'Ready for the next receipt.'); toast(text, `Received ${fields.quantity} × ${context.part.part_number}. Ready for the next lot.`); void changed();
       }
     } catch (error) {
       if (mode === 'ship' && (version !== state.version || reviewVersion !== previewVersion)) return;
@@ -200,7 +216,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
       const text = `Shipped ${fields.quantity} × ${fields.part_number} to ${fields.recipient}. Shipment ${result.shipment_number}. ${'plan' in reviewed ? 'Parent stock unchanged; leaf consumption recorded in History.' : `Updated total stock: ${result.context.part.quantity}.`}`;
       bomReview = null;
       control<HTMLElement>('ship', 'result').innerHTML = `<div class="status success">${esc(text)} <button class="btn" data-another>Ship another</button> <button class="btn" data-shipment="${esc(result.shipment_number)}">Inspect shipment</button></div>`;
-      feedback('ship', 'Shipment complete. Use Ship another to begin the next entry.'); toast(text); void changed();
+      feedback('ship', 'Shipment complete. Use Ship another to begin the next entry.'); toast(text, `Shipment ${result.shipment_number} recorded.`); void changed();
     } catch (error) {
       ambiguous('ship', error);
       if (error instanceof RequestError && error.code === 'PLAN_CHANGED') {
