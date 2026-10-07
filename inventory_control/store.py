@@ -965,12 +965,28 @@ class InventoryStore:
                 raise ValueError("Source and destination cannot match.")
             lot = self._require_lot(session, part.id, lot_number)
             ledger.post(
-                session, timestamp, "MOVE_OUT", part, lot, source_loc, -qty,
-                counterpart=target_loc, operator=operator, reference=reference,
+                session,
+                timestamp,
+                "MOVE_OUT",
+                part,
+                lot,
+                source_loc,
+                -qty,
+                counterpart=target_loc,
+                operator=operator,
+                reference=reference,
             )
             ledger.post(
-                session, timestamp, "MOVE_IN", part, lot, target_loc, qty,
-                counterpart=source_loc, operator=operator, reference=reference,
+                session,
+                timestamp,
+                "MOVE_IN",
+                part,
+                lot,
+                target_loc,
+                qty,
+                counterpart=source_loc,
+                operator=operator,
+                reference=reference,
             )
 
     def adjust(self, part_number: str, location: str, lot_number: str, new_count: int, operator: str, reason: str) -> int:
@@ -985,8 +1001,16 @@ class InventoryStore:
             lot = self._require_lot(session, part.id, lot_number)
             diff = new_count - self._stock_at(session, part.id, loc.id, lot.id)
             ledger.post(
-                session, timestamp, "COUNT_CORRECTION", part, lot, loc, diff,
-                counterpart=loc, operator=operator, reference=reason,
+                session,
+                timestamp,
+                "COUNT_CORRECTION",
+                part,
+                lot,
+                loc,
+                diff,
+                counterpart=loc,
+                operator=operator,
+                reference=reason,
             )
         return diff
 
@@ -1013,7 +1037,18 @@ class InventoryStore:
         lot_number = self._normalize_lot_number(lot_number)
         part, loc = self._require_part_location_qty(session, part_number, location, qty)
         lot = self._get_or_create_lot(session, part, lot_number)
-        ledger.post(session, timestamp, "RECEIVE", part, lot, loc, qty, operator=operator, reference=reference, notes=notes)
+        ledger.post(
+            session,
+            timestamp,
+            "RECEIVE",
+            part,
+            lot,
+            loc,
+            qty,
+            operator=operator,
+            reference=reference,
+            notes=notes,
+        )
 
     def _ship_bom_part(
         self,

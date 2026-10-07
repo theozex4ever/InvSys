@@ -20,8 +20,17 @@ from inventory_control.orm import (
 class InsufficientStock(ValueError):
     """A posting would make a Stock balance negative."""
 
-    def __init__(self, part_number: str, lot_number: str, location: str, available: int, requested: int) -> None:
-        super().__init__(f"Not enough stock. Available: {available}, requested: {requested}.")
+    def __init__(
+        self,
+        part_number: str,
+        lot_number: str,
+        location: str,
+        available: int,
+        requested: int,
+    ) -> None:
+        super().__init__(
+            f"Not enough stock. Available: {available}, requested: {requested}."
+        )
         self.part_number = part_number
         self.lot_number = lot_number
         self.location = location
@@ -54,7 +63,9 @@ def post(
     )
     available = balance.quantity if balance is not None else 0
     if available + delta < 0:
-        raise InsufficientStock(part.part_number, lot.lot_number, location.name, available, -delta)
+        raise InsufficientStock(
+            part.part_number, lot.lot_number, location.name, available, -delta
+        )
     if balance is None:
         balance = InventoryBalanceRecord(
             part_id=part.id,
@@ -71,8 +82,18 @@ def post(
     else:
         location_from, location_to = counterpart, location
     _add_row(
-        session, timestamp, tx_type, part, lot, delta, location_from, location_to,
-        operator, reference, notes, shipment_id,
+        session,
+        timestamp,
+        tx_type,
+        part,
+        lot,
+        delta,
+        location_from,
+        location_to,
+        operator,
+        reference,
+        notes,
+        shipment_id,
     )
     session.flush()
     return balance.quantity
@@ -93,8 +114,18 @@ def record_phantom(
 ) -> None:
     """Record a phantom BOM row that changes no Stock balance."""
     _add_row(
-        session, timestamp, tx_type, part, None, quantity_change, location_from, None,
-        operator, reference, notes, shipment_id,
+        session,
+        timestamp,
+        tx_type,
+        part,
+        None,
+        quantity_change,
+        location_from,
+        None,
+        operator,
+        reference,
+        notes,
+        shipment_id,
     )
 
 
