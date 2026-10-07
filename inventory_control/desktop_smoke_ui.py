@@ -22,7 +22,7 @@ class _GuiActions(QObject):
     def perform(self) -> None:
         try:
             self.action()
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - reported to the probe's caller
             self.error = error
         finally:
             self.finished.set()
@@ -61,9 +61,7 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             raise RuntimeError(f"Desktop UI smoke failed: {label}")
 
     def key(code: Any, modifiers: Any = Qt.KeyboardModifier.NoModifier) -> None:
-        actions.run(
-            lambda: QTest.keyClick(window.native.webview.focusProxy(), code, modifiers)
-        )
+        actions.run(lambda: QTest.keyClick(window.native.webview.focusProxy(), code, modifiers))
 
     def capture(target: Path) -> None:
         # Geometry updates precede Chromium painting; capture the completed frame.
@@ -274,13 +272,9 @@ def check_stock_presentation(window: Any, wait: Any) -> None:
     if not run(
         "document.querySelector('#receive-review').textContent.includes('Enter a valid quantity') && !document.querySelector('#receive-review').textContent.includes('18.5')"
     ):
-        raise RuntimeError(
-            "An invalid fractional quantity must not show a receipt estimate."
-        )
+        raise RuntimeError("An invalid fractional quantity must not show a receipt estimate.")
     run("document.querySelector('[data-page=ship]').click()")
-    wait(
-        "!document.querySelector('#ship-review').textContent.includes('Reading current stock')"
-    )
+    wait("!document.querySelector('#ship-review').textContent.includes('Reading current stock')")
     run(
         "document.querySelector('#ship-part_number').value=polishPart; document.querySelector('#ship-part_number').dispatchEvent(new Event('change'))"
     )
@@ -300,9 +294,7 @@ def check_stock_presentation(window: Any, wait: Any) -> None:
     if not run(
         "document.querySelector('#ship-review').textContent.includes('1 short') && document.querySelector('#ship-review').textContent.includes('Blocked — selected-lot shortage') && document.querySelector('#ship-review').textContent.includes('Low stock')"
     ):
-        raise RuntimeError(
-            "Shipment shortage must remain distinct from part Low stock."
-        )
+        raise RuntimeError("Shipment shortage must remain distinct from part Low stock.")
     run(
         "window.polishRead=null; window.pywebview.api.stock_context(polishPart).then(r => { window.polishRead=r; })"
     )
@@ -310,9 +302,7 @@ def check_stock_presentation(window: Any, wait: Any) -> None:
     if not run(
         "window.polishRead.ok && window.polishRead.data.part.quantity === 17 && window.polishRead.data.transactions.length === 1 && window.polishRead.data.shipments.length === 0"
     ):
-        raise RuntimeError(
-            "Presentation previews must not change stock or create records."
-        )
+        raise RuntimeError("Presentation previews must not change stock or create records.")
     for mode in ("receive", "ship"):
         run(
             f"document.querySelector('#{mode}-part_number').value=''; document.querySelector('#{mode}-quantity').value=''; document.querySelector('#{mode}-part_number').dispatchEvent(new Event('change'))"

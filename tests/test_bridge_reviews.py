@@ -45,9 +45,7 @@ def review_data(response):
 
 @pytest.mark.parametrize("operation", ["preview_ship", "preview_bom_ship"])
 @pytest.mark.parametrize("write_at", ["first", "middle", "last"])
-def test_review_holds_one_snapshot_across_validation_and_stock_reads(
-    reviews, operation, write_at
-):
+def test_review_holds_one_snapshot_across_validation_and_stock_reads(reviews, operation, write_at):
     store, bridge = reviews
     request = draft(operation)
     preview = getattr(bridge, operation)
@@ -114,9 +112,7 @@ def test_review_part_eligibility_uses_the_same_snapshot(reviews, operation):
     writer = InventoryStore(store.db_path, seed=False)
     wrote = False
 
-    def deactivate_during_read(
-        connection, cursor, statement, parameters, context, many
-    ):
+    def deactivate_during_read(connection, cursor, statement, parameters, context, many):
         nonlocal wrote
         if not wrote and statement.lstrip().upper().startswith("SELECT"):
             writer.set_part_active(request["part_number"], False)
@@ -135,9 +131,7 @@ def test_review_part_eligibility_uses_the_same_snapshot(reviews, operation):
 def test_review_preserves_distinct_inactive_location_rules(reviews):
     store, bridge = reviews
     with store.session_factory.begin() as session:
-        session.scalar(
-            select(LocationRecord).where(LocationRecord.name == "Stock")
-        ).active = False
+        session.scalar(select(LocationRecord).where(LocationRecord.name == "Stock")).active = False
     standard = bridge.preview_ship(draft("preview_ship"))
     assert standard["error"] == {"code": "VALIDATION", "message": "Invalid location."}
     bom = bridge.preview_bom_ship(draft("preview_bom_ship"))
@@ -157,16 +151,12 @@ def test_standard_review_distinguishes_missing_lots_from_zero_local_stock(review
         "message": "Not enough stock in selected lot. Available: 0, requested: 3.",
     }
     with store.session_factory.begin() as session:
-        session.scalar(
-            select(LotRecord).where(LotRecord.lot_number == "L1")
-        ).active = False
+        session.scalar(select(LotRecord).where(LotRecord.lot_number == "L1")).active = False
     assert bridge.preview_ship(request)["ok"]
 
 
 @pytest.mark.parametrize("operation", ["preview_ship", "preview_bom_ship"])
 def test_missing_review_part_keeps_not_found_response(reviews, operation):
     _, bridge = reviews
-    response = getattr(bridge, operation)(
-        {**draft(operation), "part_number": "MISSING"}
-    )
+    response = getattr(bridge, operation)({**draft(operation), "part_number": "MISSING"})
     assert response["error"] == {"code": "NOT_FOUND", "message": "Part not found."}

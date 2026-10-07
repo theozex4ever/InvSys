@@ -1,9 +1,10 @@
 # Inventory Control Quality Gate
 
-Run the automated gate before starting the database migration:
+Run the automated suite from the repository root (configuration is in
+`pyproject.toml`; the full CI gate is described in `docs/ci.md`):
 
 ```bash
-QT_QPA_PLATFORM=offscreen pytest
+python -m pytest --cov
 ```
 
 Manual usability smoke checks:

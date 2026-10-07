@@ -52,10 +52,10 @@ class InventoryBridge:
     def _text(self, value: Any, label: str, required: bool = True) -> str:
         if not isinstance(value, str):
             raise BridgeError("VALIDATION", f"{label} must be text.")
-        value = value.strip()
-        if required and not value:
+        text = value.strip()
+        if required and not text:
             raise ValueError(f"{label} required.")
-        return value
+        return text
 
     def _preferences(self) -> dict[str, str]:
         return {
@@ -91,20 +91,15 @@ class InventoryBridge:
 
     def search_parts(self, request: Any) -> dict[str, Any]:
         def search() -> list[dict[str, Any]]:
-            fields = self._request(
-                request, {"query", "status", "low_stock", "sort", "descending"}
-            )
-            query = self._text(
-                fields.get("query", ""), "Search", required=False
-            ).casefold()
+            fields = self._request(request, {"query", "status", "low_stock", "sort", "descending"})
+            query = self._text(fields.get("query", ""), "Search", required=False).casefold()
             status = fields.get("status", "all")
             sort = fields.get("sort", "part_number")
             low = fields.get("low_stock", False)
             descending = fields.get("descending", False)
             if (
                 status not in ("all", "active", "inactive")
-                or sort
-                not in ("part_number", "description", "quantity", "minimum_quantity")
+                or sort not in ("part_number", "description", "quantity", "minimum_quantity")
                 or type(low) is not bool
                 or type(descending) is not bool
             ):
@@ -132,9 +127,7 @@ class InventoryBridge:
         def read() -> dict[str, Any]:
             fields = self._request(request, {"query", "tx_type", "page"})
             query = self._text(fields.get("query", ""), "Search", required=False)
-            tx_type = self._text(
-                fields.get("tx_type", ""), "Transaction type", required=False
-            )
+            tx_type = self._text(fields.get("tx_type", ""), "Transaction type", required=False)
             page = fields.get("page", 0)
             if type(page) is not int or not 0 <= page <= 2**31 - 1:
                 raise ValueError("History page must be a nonnegative whole number.")
@@ -223,7 +216,7 @@ class InventoryBridge:
             }
             | optional,
         )
-        values = {
+        values: dict[str, Any] = {
             key: self._text(fields.get(key), label)
             for key, label in (
                 ("part_number", "Part number"),
@@ -234,9 +227,7 @@ class InventoryBridge:
         }
         quantity = fields.get("quantity")
         if type(quantity) is not int or not 0 < quantity <= 2**31 - 1:
-            raise ValueError(
-                "Quantity must be a whole number between 1 and 2147483647."
-            )
+            raise ValueError("Quantity must be a whole number between 1 and 2147483647.")
         values["quantity"] = quantity
         values["part_number"] = values["part_number"].upper()
         if require_lot:
@@ -244,9 +235,7 @@ class InventoryBridge:
         if check_inventory:
             self._detail(values["part_number"])
         for key in optional:
-            values[key] = self._text(
-                fields.get(key, ""), key.capitalize(), required=False
-            )
+            values[key] = self._text(fields.get(key, ""), key.capitalize(), required=False)
         return values
 
     def receive(self, request: Any) -> dict[str, Any]:
@@ -265,9 +254,7 @@ class InventoryBridge:
 
         return self._respond(receive)
 
-    def _ship_request(
-        self, request: Any, *, check_inventory: bool = True
-    ) -> dict[str, Any]:
+    def _ship_request(self, request: Any, *, check_inventory: bool = True) -> dict[str, Any]:
         fields = self._stock_request(
             request,
             {"recipient", "carrier", "tracking", "reference"},
@@ -315,9 +302,7 @@ class InventoryBridge:
 
         return self._respond(ship)
 
-    def _bom_request(
-        self, request: Any, *, check_inventory: bool = True
-    ) -> dict[str, Any]:
+    def _bom_request(self, request: Any, *, check_inventory: bool = True) -> dict[str, Any]:
         fields = self._request(
             request,
             {
@@ -341,9 +326,7 @@ class InventoryBridge:
         if not values["recipient"]:
             raise ValueError("Recipient required.")
         if check_inventory and not self._store.bom_children(values["part_number"]):
-            raise ValueError(
-                "This part has no BOM. Review a standard shipment instead."
-            )
+            raise ValueError("This part has no BOM. Review a standard shipment instead.")
         return values
 
     def preview_bom_ship(self, request: Any) -> dict[str, Any]:
@@ -376,7 +359,8 @@ class InventoryBridge:
     def ship_bom(self, request: Any) -> dict[str, Any]:
         def ship() -> dict[str, Any]:
             if not isinstance(request, dict):
-                raise ValueError("Invalid request fields.")
+                # ValueError maps to the bridge's VALIDATION response code.
+                raise ValueError("Invalid request fields.")  # noqa: TRY004
             fields = self._bom_request(
                 {key: value for key, value in request.items() if key != "review_id"}
             )

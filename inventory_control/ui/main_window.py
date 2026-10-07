@@ -1,5 +1,3 @@
-from typing import Dict
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -55,9 +53,9 @@ class MainWindow(QMainWindow):
         side.addSpacing(16)
 
         self.stack = QStackedWidget()
-        self.nav_buttons: Dict[str, QPushButton] = {}
-        self.group_bars: Dict[str, QTabBar] = {}
-        self.group_stacks: Dict[str, QStackedWidget] = {}
+        self.nav_buttons: dict[str, QPushButton] = {}
+        self.group_bars: dict[str, QTabBar] = {}
+        self.group_stacks: dict[str, QStackedWidget] = {}
         self.views = {
             "dashboard": DashboardView(self.navigate, self.open_part, self.open_history),
             "parts": PartsView(self.toast),
@@ -69,7 +67,9 @@ class MainWindow(QMainWindow):
             "settings": SettingsView(self.toast, self.operator_name),
         }
         catalog = self._make_group("catalog", [("parts", "Parts"), ("bom", "BOM")])
-        self.group_bars["catalog"].setTabToolTip(1, "Bill of materials: parts needed to build an assembly or kit.")
+        self.group_bars["catalog"].setTabToolTip(
+            1, "Bill of materials: parts needed to build an assembly or kit."
+        )
         stock = self._make_group(
             "stock",
             [("receive", "Receive"), ("ship", "Ship"), ("move", "Move"), ("adjust", "Adjust")],
@@ -172,7 +172,9 @@ class MainWindow(QMainWindow):
             view = self.views["move" if key == "adjust" else key]
             if pages.indexOf(view) == -1:
                 pages.addWidget(view)
-        bar.currentChanged.connect(lambda index, keys=[key for key, _ in tabs]: self.navigate(keys[index]))
+        bar.currentChanged.connect(
+            lambda index, keys=[key for key, _ in tabs]: self.navigate(keys[index])
+        )
         tabs_row = QHBoxLayout()
         tabs_row.setContentsMargins(24, 16, 24, 0)
         tabs_row.addWidget(tab_strip)
@@ -205,7 +207,17 @@ class MainWindow(QMainWindow):
         search_shortcut.activated.connect(self._focus_global_search)
         self.shortcuts.append(search_shortcut)
         for index, key in enumerate(
-            ("dashboard", "parts", "bom", "receive", "ship", "move", "history", "settings", "adjust"),
+            (
+                "dashboard",
+                "parts",
+                "bom",
+                "receive",
+                "ship",
+                "move",
+                "history",
+                "settings",
+                "adjust",
+            ),
             start=1,
         ):
             shortcut = QShortcut(QKeySequence(f"Ctrl+{index}"), self)
@@ -233,7 +245,9 @@ class MainWindow(QMainWindow):
         section = self.section_for_page.get(key, key)
         self.stack.setCurrentWidget(self.sections[section])
         if section in self.group_bars:
-            tabs = ["parts", "bom"] if section == "catalog" else ["receive", "ship", "move", "adjust"]
+            tabs = (
+                ["parts", "bom"] if section == "catalog" else ["receive", "ship", "move", "adjust"]
+            )
             if key == section:
                 key = tabs[self.group_bars[section].currentIndex()]
             if key in tabs:
