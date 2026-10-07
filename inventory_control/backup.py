@@ -28,7 +28,9 @@ def backup_database(
     except sqlite3.Error:
         shutil.copy2(db_path, target)
 
-    backups = sorted(backup_dir.glob("inventory-*.db"), key=lambda path: path.stat().st_mtime, reverse=True)
+    backups = sorted(
+        backup_dir.glob("inventory-*.db"), key=lambda path: path.stat().st_mtime, reverse=True
+    )
     for old in backups[keep:]:
         old.unlink(missing_ok=True)
     return target

@@ -51,7 +51,13 @@ def test_export_parts_csv_creates_expected_headers_and_rows(tmp_path):
 
     rows = read_csv(result.path)
     assert result.rows_exported == 1
-    assert list(rows[0].keys()) == ["part_number", "description", "default_location", "minimum_quantity", "active"]
+    assert list(rows[0].keys()) == [
+        "part_number",
+        "description",
+        "default_location",
+        "minimum_quantity",
+        "active",
+    ]
     assert rows[0]["part_number"] == "ABC-1"
 
 
@@ -105,7 +111,9 @@ def test_export_bom_csv_exports_direct_links(tmp_path):
 
     rows = read_csv(service.export_bom_csv().path)
 
-    assert rows == [{"parent_part_number": "KIT-001", "component_part_number": "SCREW-001", "quantity_per": "4"}]
+    assert rows == [
+        {"parent_part_number": "KIT-001", "component_part_number": "SCREW-001", "quantity_per": "4"}
+    ]
 
 
 def test_export_all_writes_five_files_with_same_timestamp(tmp_path):
@@ -113,7 +121,13 @@ def test_export_all_writes_five_files_with_same_timestamp(tmp_path):
 
     results = service.export_all()
 
-    assert {result.kind for result in results} == {"parts", "inventory", "transactions", "shipments", "bom"}
+    assert {result.kind for result in results} == {
+        "parts",
+        "inventory",
+        "transactions",
+        "shipments",
+        "bom",
+    }
     stems = [result.path.rsplit("_", 2)[-2:] for result in results]
     assert len({tuple(stem) for stem in stems}) == 1
 
@@ -266,10 +280,22 @@ def test_inventory_failed_import_leaves_balances_and_transactions_unchanged(tmp_
 @pytest.mark.parametrize(
     ("text", "field"),
     [
-        ("parent_part_number,component_part_number,quantity_per\nGHOST,COMP-1,1", "parent_part_number"),
-        ("parent_part_number,component_part_number,quantity_per\nPARENT-1,GHOST,1", "component_part_number"),
-        ("parent_part_number,component_part_number,quantity_per\nPARENT-1,PARENT-1,1", "component_part_number"),
-        ("parent_part_number,component_part_number,quantity_per\nPARENT-1,COMP-1,0", "quantity_per"),
+        (
+            "parent_part_number,component_part_number,quantity_per\nGHOST,COMP-1,1",
+            "parent_part_number",
+        ),
+        (
+            "parent_part_number,component_part_number,quantity_per\nPARENT-1,GHOST,1",
+            "component_part_number",
+        ),
+        (
+            "parent_part_number,component_part_number,quantity_per\nPARENT-1,PARENT-1,1",
+            "component_part_number",
+        ),
+        (
+            "parent_part_number,component_part_number,quantity_per\nPARENT-1,COMP-1,0",
+            "quantity_per",
+        ),
     ],
 )
 def test_bom_preview_rejects_invalid_rows(tmp_path, text, field):
@@ -292,10 +318,16 @@ def test_bom_preview_rejects_duplicates_and_cycles(tmp_path):
         tmp_path / "dup.csv",
         "parent_part_number,component_part_number,quantity_per\nA,B,1\nA,B,2",
     )
-    cycle = write_csv(tmp_path / "cycle.csv", "parent_part_number,component_part_number,quantity_per\nB,A,1")
+    cycle = write_csv(
+        tmp_path / "cycle.csv", "parent_part_number,component_part_number,quantity_per\nB,A,1"
+    )
 
-    assert any("Duplicate" in error.message for error in service.preview_bom_import_csv(duplicate).errors)
-    assert any("circular BOM" in error.message for error in service.preview_bom_import_csv(cycle).errors)
+    assert any(
+        "Duplicate" in error.message for error in service.preview_bom_import_csv(duplicate).errors
+    )
+    assert any(
+        "circular BOM" in error.message for error in service.preview_bom_import_csv(cycle).errors
+    )
 
 
 def test_bom_import_creates_and_updates_links_and_creates_backup(tmp_path):

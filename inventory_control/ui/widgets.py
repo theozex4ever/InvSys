@@ -53,7 +53,14 @@ class Toast(QFrame):
     dismiss_requested = Signal()
     COLORS = {"success": "#178553", "error": "#d14343", "warning": "#f6c343", "info": "#2f6fed"}
 
-    def __init__(self, parent: QWidget, message: str, level: str = "info", fade_in_ms: int = 220, fade_out_ms: int = 260) -> None:
+    def __init__(
+        self,
+        parent: QWidget,
+        message: str,
+        level: str = "info",
+        fade_in_ms: int = 220,
+        fade_out_ms: int = 260,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("Toast")
         self.setAttribute(Qt.WA_StyledBackground, True)
@@ -165,7 +172,7 @@ class ToastManager:
             y = self.parent.height() - margin
         except RuntimeError:
             return
-        for toast in reversed(self.toasts[-self.max_visible:]):
+        for toast in reversed(self.toasts[-self.max_visible :]):
             try:
                 toast.adjustSize()
                 y -= toast.height()

@@ -69,7 +69,13 @@ class InventoryStore:
     @property
     def locations(self) -> List[str]:
         with self.session_factory() as session:
-            return list(session.scalars(select(LocationRecord.name).where(LocationRecord.active.is_(True)).order_by(LocationRecord.id)))
+            return list(
+                session.scalars(
+                    select(LocationRecord.name)
+                    .where(LocationRecord.active.is_(True))
+                    .order_by(LocationRecord.id)
+                )
+            )
 
     @property
     def balances(self) -> Dict[str, Dict[str, int]]:
@@ -98,7 +104,9 @@ class InventoryStore:
             rows = session.scalars(select(BOMComponentRecord)).all()
             result: Dict[str, Dict[str, int]] = {}
             for row in rows:
-                result.setdefault(row.parent_part.part_number, {})[row.component_part.part_number] = row.quantity_per
+                result.setdefault(row.parent_part.part_number, {})[
+                    row.component_part.part_number
+                ] = row.quantity_per
             return result
 
     @property
@@ -130,12 +138,8 @@ class InventoryStore:
         self, session: Session, part_number: str | None = None
     ) -> list[dict[str, Any]]:
         statement = (
-            select(
-                PartRecord, func.coalesce(func.sum(InventoryBalanceRecord.quantity), 0)
-            )
-            .outerjoin(
-                InventoryBalanceRecord, InventoryBalanceRecord.part_id == PartRecord.id
-            )
+            select(PartRecord, func.coalesce(func.sum(InventoryBalanceRecord.quantity), 0))
+            .outerjoin(InventoryBalanceRecord, InventoryBalanceRecord.part_id == PartRecord.id)
             .options(joinedload(PartRecord.default_location))
             .group_by(PartRecord.id)
             .order_by(PartRecord.part_number)
@@ -147,9 +151,7 @@ class InventoryStore:
                 **asdict(self._part_dto(part)),
                 "quantity": int(quantity),
                 "low_stock": bool(
-                    part.active
-                    and part.minimum_quantity > 0
-                    and quantity <= part.minimum_quantity
+                    part.active and part.minimum_quantity > 0 and quantity <= part.minimum_quantity
                 ),
             }
             for part, quantity in session.execute(statement)
@@ -173,10 +175,7 @@ class InventoryStore:
         parts = [
             part
             for part in parts
-            if (
-                query in part["part_number"].casefold()
-                or query in part["description"].casefold()
-            )
+            if (query in part["part_number"].casefold() or query in part["description"].casefold())
             and (status == "all" or part["active"] == (status == "active"))
             and (not low_stock or part["low_stock"])
         ]
@@ -217,12 +216,8 @@ class InventoryStore:
             return {
                 "active_parts": sum(part["active"] for part in parts),
                 "low_stock": [part for part in parts if part["low_stock"]],
-                "shipment_count": session.scalar(
-                    select(func.count()).select_from(ShipmentRecord)
-                ),
-                "activity": [
-                    self._history_record(row, number) for row, number in activity
-                ],
+                "shipment_count": session.scalar(select(func.count()).select_from(ShipmentRecord)),
+                "activity": [self._history_record(row, number) for row, number in activity],
             }
 
     def _active_locations(self, session: Session) -> list[str]:
@@ -264,9 +259,7 @@ class InventoryStore:
         location_balances = dict.fromkeys(locations, 0)
         for balance in balances:
             location = balance["location"]
-            location_balances[location] = (
-                location_balances.get(location, 0) + balance["quantity"]
-            )
+            location_balances[location] = location_balances.get(location, 0) + balance["quantity"]
         return {
             **parts[0],
             "balances": balances,
@@ -277,9 +270,7 @@ class InventoryStore:
         """Detached Part stock, including zero lots and stock at inactive locations."""
         number = self._normalize_part_number(part_number)
         with self._read_snapshot() as session:
-            return self._read_part_detail(
-                session, number, self._active_locations(session)
-            )
+            return self._read_part_detail(session, number, self._active_locations(session))
 
     def stock_context(self, part_number: str) -> dict[str, Any] | None:
         """One Part's stock and complete audit history from the same snapshot."""
@@ -287,9 +278,7 @@ class InventoryStore:
         with self._read_snapshot() as session:
             return self._read_stock_context(session, number)
 
-    def _read_stock_context(
-        self, session: Session, part_number: str
-    ) -> dict[str, Any] | None:
+    def _read_stock_context(self, session: Session, part_number: str) -> dict[str, Any] | None:
         locations = self._active_locations(session)
         part = self._read_part_detail(session, part_number, locations)
         if part is None:
@@ -305,15 +294,9 @@ class InventoryStore:
             .where(PartRecord.part_number == part_number)
             .options(
                 joinedload(ShipmentRecord.part),
-                joinedload(ShipmentRecord.components).joinedload(
-                    ShipmentComponentRecord.part
-                ),
-                joinedload(ShipmentRecord.components).joinedload(
-                    ShipmentComponentRecord.lot
-                ),
-                joinedload(ShipmentRecord.components).joinedload(
-                    ShipmentComponentRecord.location
-                ),
+                joinedload(ShipmentRecord.components).joinedload(ShipmentComponentRecord.part),
+                joinedload(ShipmentRecord.components).joinedload(ShipmentComponentRecord.lot),
+                joinedload(ShipmentRecord.components).joinedload(ShipmentComponentRecord.location),
             )
             .order_by(desc(ShipmentRecord.id))
         ).unique()
@@ -321,9 +304,7 @@ class InventoryStore:
             "part": part,
             "locations": locations,
             "has_bom": self._has_bom(session, part_number),
-            "transactions": [
-                asdict(self._transaction_dto(row)) for row in transactions
-            ],
+            "transactions": [asdict(self._transaction_dto(row)) for row in transactions],
             "shipments": [asdict(self._shipment_dto(row)) for row in shipments],
         }
 
@@ -354,8 +335,7 @@ class InventoryStore:
                 (
                     balance["quantity"]
                     for balance in context["part"]["balances"]
-                    if balance["location"] == location
-                    and balance["lot_number"] == lot_number
+                    if balance["location"] == location and balance["lot_number"] == lot_number
                 ),
                 0,
             )
@@ -370,9 +350,7 @@ class InventoryStore:
                 context,
             )
 
-    def review_bom_shipment(
-        self, part_number: str, qty: int, location: str
-    ) -> BOMShipmentReview:
+    def review_bom_shipment(self, part_number: str, qty: int, location: str) -> BOMShipmentReview:
         """Leaf allocation, capacity, and context from the same review snapshot."""
         number = self._normalize_part_number(part_number)
         with self._read_snapshot() as session:
@@ -380,14 +358,10 @@ class InventoryStore:
             if part is None:
                 raise ShipmentReviewNotFound("Part not found.")
             if not self._has_bom(session, number):
-                raise ValueError(
-                    "This part has no BOM. Review a standard shipment instead."
-                )
+                raise ValueError("This part has no BOM. Review a standard shipment instead.")
             part, loc = self._require_part_location_qty(session, number, location, qty)
             availability = self._bom_availability_in_session(session, part, qty, loc)
-            plan = self._prepare_bom_shipment(
-                session, part, qty, loc, availability=availability
-            )
+            plan = self._prepare_bom_shipment(session, part, qty, loc, availability=availability)
             context = self._read_stock_context(session, number)
             return BOMShipmentReview(plan, availability.buildable, context)
 
@@ -422,10 +396,7 @@ class InventoryStore:
                 query = query.where(ShipmentRecord.shipment_number == shipment_number)
             if limit is not None:
                 query = query.limit(limit)
-            return [
-                self._history_record(row, number)
-                for row, number in session.execute(query)
-            ]
+            return [self._history_record(row, number) for row, number in session.execute(query)]
 
     def search_history(self, query: str, tx_type: str, page: int) -> dict[str, Any]:
         """Filter before paging so older matches stay accessible without unbounded DTOs."""
@@ -456,21 +427,13 @@ class InventoryStore:
                     )
                 )
             if tx_type:
-                statement = statement.where(
-                    InventoryTransactionRecord.tx_type == tx_type
-                )
-            matching = session.scalar(
-                select(func.count()).select_from(statement.subquery())
-            )
+                statement = statement.where(InventoryTransactionRecord.tx_type == tx_type)
+            matching = session.scalar(select(func.count()).select_from(statement.subquery()))
             records = session.execute(
-                statement.order_by(desc(InventoryTransactionRecord.id))
-                .offset(page * 50)
-                .limit(50)
+                statement.order_by(desc(InventoryTransactionRecord.id)).offset(page * 50).limit(50)
             )
             return {
-                "records": [
-                    self._history_record(row, number) for row, number in records
-                ],
+                "records": [self._history_record(row, number) for row, number in records],
                 "types": list(
                     session.scalars(
                         select(InventoryTransactionRecord.tx_type)
@@ -488,9 +451,7 @@ class InventoryStore:
     def shipment_detail(self, shipment_number: str) -> dict[str, Any] | None:
         with self.session_factory() as session:
             row = session.scalar(
-                select(ShipmentRecord).where(
-                    ShipmentRecord.shipment_number == shipment_number
-                )
+                select(ShipmentRecord).where(ShipmentRecord.shipment_number == shipment_number)
             )
             if row is None:
                 return None
@@ -618,7 +579,9 @@ class InventoryStore:
             part.active = active
             part.updated_at = now
 
-    def import_inventory_receipts(self, rows: List[dict[str, Any]], operator: str, notify: bool = True) -> int:
+    def import_inventory_receipts(
+        self, rows: List[dict[str, Any]], operator: str, notify: bool = True
+    ) -> int:
         with self._mutation(notify) as (session, timestamp):
             for row in rows:
                 self._receive_in(
@@ -738,7 +701,9 @@ class InventoryStore:
             else:
                 row.quantity_per = quantity_per
 
-    def remove_bom_component(self, parent_part_number: str, component_part_number: str, notify: bool = True) -> None:
+    def remove_bom_component(
+        self, parent_part_number: str, component_part_number: str, notify: bool = True
+    ) -> None:
         parent = self._normalize_part_number(parent_part_number)
         component = self._normalize_part_number(component_part_number)
         with self._mutation(notify) as (session, _):
@@ -760,9 +725,14 @@ class InventoryStore:
             part = self._part(session, parent)
             if part is None:
                 return False
-            return session.scalar(
-                select(BOMComponentRecord.id).where(BOMComponentRecord.parent_part_id == part.id).limit(1)
-            ) is not None
+            return (
+                session.scalar(
+                    select(BOMComponentRecord.id)
+                    .where(BOMComponentRecord.parent_part_id == part.id)
+                    .limit(1)
+                )
+                is not None
+            )
 
     def bom_children(self, part_number: str) -> List[BOMComponent]:
         parent = self._normalize_part_number(part_number)
@@ -796,7 +766,10 @@ class InventoryStore:
             return self._prepare_bom_shipment(session, part, qty, loc)
 
     def bom_can_ship(self, part_number: str, qty: int, location: str) -> bool:
-        return all(req.shortage == 0 for req in self.bom_availability(part_number, qty, location).requirements)
+        return all(
+            req.shortage == 0
+            for req in self.bom_availability(part_number, qty, location).requirements
+        )
 
     def total_stock(self, part_number: str) -> int:
         part_number = self._normalize_part_number(part_number)
@@ -805,7 +778,9 @@ class InventoryStore:
             if part is None:
                 return 0
             total = session.scalar(
-                select(func.sum(InventoryBalanceRecord.quantity)).where(InventoryBalanceRecord.part_id == part.id)
+                select(func.sum(InventoryBalanceRecord.quantity)).where(
+                    InventoryBalanceRecord.part_id == part.id
+                )
             )
             return int(total or 0)
 
@@ -827,15 +802,21 @@ class InventoryStore:
                 stmt = stmt.where(InventoryBalanceRecord.lot_id == lot.id)
             return int(session.scalar(stmt) or 0)
 
-    def lots_for_part(self, part_number: str, location: str | None = None, positive_only: bool = False) -> List[Lot]:
+    def lots_for_part(
+        self, part_number: str, location: str | None = None, positive_only: bool = False
+    ) -> List[Lot]:
         part_number = self._normalize_part_number(part_number)
         with self.session_factory() as session:
             part = self._part(session, part_number)
             if part is None:
                 return []
-            stmt = select(LotRecord).where(LotRecord.part_id == part.id).order_by(LotRecord.lot_number)
+            stmt = (
+                select(LotRecord).where(LotRecord.part_id == part.id).order_by(LotRecord.lot_number)
+            )
             if location is not None or positive_only:
-                stmt = stmt.join(InventoryBalanceRecord, InventoryBalanceRecord.lot_id == LotRecord.id)
+                stmt = stmt.join(
+                    InventoryBalanceRecord, InventoryBalanceRecord.lot_id == LotRecord.id
+                )
                 if location is not None:
                     loc = self._location(session, location)
                     if loc is None:
@@ -882,7 +863,17 @@ class InventoryStore:
         notify: bool = True,
     ) -> None:
         with self._mutation(notify) as (session, timestamp):
-            self._receive_in(session, timestamp, part_number, qty, location, lot_number, operator, reference, notes)
+            self._receive_in(
+                session,
+                timestamp,
+                part_number,
+                qty,
+                location,
+                lot_number,
+                operator,
+                reference,
+                notes,
+            )
 
     def ship(
         self,
@@ -989,7 +980,15 @@ class InventoryStore:
                 reference=reference,
             )
 
-    def adjust(self, part_number: str, location: str, lot_number: str, new_count: int, operator: str, reason: str) -> int:
+    def adjust(
+        self,
+        part_number: str,
+        location: str,
+        lot_number: str,
+        new_count: int,
+        operator: str,
+        reason: str,
+    ) -> int:
         part_number = self._normalize_part_number(part_number)
         if new_count < 0:
             raise ValueError("New count cannot be negative.")
@@ -1018,7 +1017,9 @@ class InventoryStore:
         return [
             p
             for p in self.parts.values()
-            if p.active and p.minimum_quantity > 0 and self.total_stock(p.part_number) <= p.minimum_quantity
+            if p.active
+            and p.minimum_quantity > 0
+            and self.total_stock(p.part_number) <= p.minimum_quantity
         ]
 
     def _receive_in(
@@ -1075,11 +1076,11 @@ class InventoryStore:
             (line.part_number, line.lot_number, line.location, line.quantity_allocated)
             for line in plan.lines
         )
-        if (
-            (expected_plan.part_number, expected_plan.quantity, expected_plan.location)
-            != (part.part_number, qty, location.name)
-            or expected_lots != current_lots
-        ):
+        if (expected_plan.part_number, expected_plan.quantity, expected_plan.location) != (
+            part.part_number,
+            qty,
+            location.name,
+        ) or expected_lots != current_lots:
             raise ValueError("BOM lot allocation changed. Review the updated lots before shipping.")
         if not plan.ready:
             raise ValueError(f"Not enough BOM component stock for {part.part_number}.")
@@ -1170,21 +1171,33 @@ class InventoryStore:
             raise ValueError("Quantity must be greater than zero.")
         return part, loc
 
-    def _require_part(self, session: Session, part_number: str, allow_inactive: bool = False) -> PartRecord:
+    def _require_part(
+        self, session: Session, part_number: str, allow_inactive: bool = False
+    ) -> PartRecord:
         part = self._part(session, part_number)
         if part is None:
             raise ValueError("Part not found.")
         if not allow_inactive and not part.active:
-            raise ValueError(f"Part {part.part_number} is inactive. Reactivate it before recording inventory activity.")
+            raise ValueError(
+                f"Part {part.part_number} is inactive. Reactivate it before recording inventory activity."
+            )
         return part
 
     def _part(self, session: Session, part_number: str) -> PartRecord | None:
-        return session.scalar(select(PartRecord).where(PartRecord.part_number == self._normalize_part_number(part_number)))
+        return session.scalar(
+            select(PartRecord).where(
+                PartRecord.part_number == self._normalize_part_number(part_number)
+            )
+        )
 
-    def _require_location(self, session: Session, location: str, destination: bool = False) -> LocationRecord:
+    def _require_location(
+        self, session: Session, location: str, destination: bool = False
+    ) -> LocationRecord:
         loc = self._location(session, location)
         if loc is None:
-            raise ValueError("Invalid destination location." if destination else "Invalid location.")
+            raise ValueError(
+                "Invalid destination location." if destination else "Invalid location."
+            )
         return loc
 
     def _location(self, session: Session, location: str) -> LocationRecord | None:
@@ -1199,12 +1212,21 @@ class InventoryStore:
 
     def _lot(self, session: Session, part_id: int, lot_number: str) -> LotRecord | None:
         lot_number = self._normalize_lot_number(lot_number)
-        return session.scalar(select(LotRecord).where(LotRecord.part_id == part_id, LotRecord.lot_number == lot_number))
+        return session.scalar(
+            select(LotRecord).where(
+                LotRecord.part_id == part_id, LotRecord.lot_number == lot_number
+            )
+        )
 
     def _get_or_create_lot(self, session: Session, part: PartRecord, lot_number: str) -> LotRecord:
         lot = self._lot(session, part.id, lot_number)
         if lot is None:
-            lot = LotRecord(part_id=part.id, lot_number=self._normalize_lot_number(lot_number), active=True, created_at=self.now())
+            lot = LotRecord(
+                part_id=part.id,
+                lot_number=self._normalize_lot_number(lot_number),
+                active=True,
+                created_at=self.now(),
+            )
             session.add(lot)
             session.flush()
         return lot
@@ -1225,11 +1247,22 @@ class InventoryStore:
         part = self._part(session, part_number)
         if part is None:
             return False
-        return session.scalar(
-            select(BOMComponentRecord.id).where(BOMComponentRecord.parent_part_id == part.id).limit(1)
-        ) is not None
+        return (
+            session.scalar(
+                select(BOMComponentRecord.id)
+                .where(BOMComponentRecord.parent_part_id == part.id)
+                .limit(1)
+            )
+            is not None
+        )
 
-    def _bom_contains(self, session: Session, start_part_number: str, target_part_number: str, seen: set[str] | None = None) -> bool:
+    def _bom_contains(
+        self,
+        session: Session,
+        start_part_number: str,
+        target_part_number: str,
+        seen: set[str] | None = None,
+    ) -> bool:
         seen = seen or set()
         if start_part_number in seen:
             return False
@@ -1242,7 +1275,9 @@ class InventoryStore:
         ).all()
         for child in children:
             child_number = child.component_part.part_number
-            if child_number == target_part_number or self._bom_contains(session, child_number, target_part_number, seen):
+            if child_number == target_part_number or self._bom_contains(
+                session, child_number, target_part_number, seen
+            ):
                 return True
         return False
 
@@ -1284,8 +1319,7 @@ class InventoryStore:
                 )
             # Required totals include the requested quantity; capacity counts single final products.
             capacities = {
-                number: stock[number] // (amount // qty)
-                for number, amount in required.items()
+                number: stock[number] // (amount // qty) for number, amount in required.items()
             }
         else:
             capacities = {part.part_number: stock[part.part_number]}
@@ -1328,8 +1362,12 @@ class InventoryStore:
                 if allocated > 0:
                     lines.append(
                         BOMLotPlanLine(
-                            req.part_number, lot_number, location.name,
-                            req.quantity_required, allocated, lot_stock,
+                            req.part_number,
+                            lot_number,
+                            location.name,
+                            req.quantity_required,
+                            allocated,
+                            lot_stock,
                         )
                     )
                     remaining -= allocated
@@ -1337,7 +1375,9 @@ class InventoryStore:
                     break
             if remaining > 0 or req.shortage > 0:
                 ready = False
-        return BOMShipmentPlan(part.part_number, qty, location.name, tuple(requirements), tuple(lines), ready)
+        return BOMShipmentPlan(
+            part.part_number, qty, location.name, tuple(requirements), tuple(lines), ready
+        )
 
     def _bom_structure(
         self,
@@ -1411,7 +1451,12 @@ class InventoryStore:
 
     def _shipment_dto(self, row: ShipmentRecord) -> Shipment:
         consumed = [
-            ComponentConsumption(component.part.part_number, component.quantity, component.location.name, component.lot.lot_number)
+            ComponentConsumption(
+                component.part.part_number,
+                component.quantity,
+                component.location.name,
+                component.lot.lot_number,
+            )
             for component in sorted(row.components, key=lambda component: component.id)
         ]
         return Shipment(

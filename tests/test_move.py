@@ -29,8 +29,8 @@ import pytest
 # move — happy path
 # ===========================================================================
 
-class TestMoveHappyPath:
 
+class TestMoveHappyPath:
     def test_source_balance_decreases(self, part_in_store):
         # Arrange: TEST-001 has 10 in Stock
         # Act: move 4 from Stock → Shipping Bench
@@ -99,8 +99,9 @@ class TestMoveHappyPath:
         assert part_in_store.transactions[1].operator == "carol"
 
     def test_transactions_record_reference(self, part_in_store):
-        part_in_store.move("TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol",
-                           reference="WO-007")
+        part_in_store.move(
+            "TEST-001", 4, "Stock", "Shipping Bench", "LOT-1", "carol", reference="WO-007"
+        )
 
         assert part_in_store.transactions[0].reference == "WO-007"
         assert part_in_store.transactions[1].reference == "WO-007"
@@ -117,8 +118,8 @@ class TestMoveHappyPath:
 # move — validation / guards
 # ===========================================================================
 
-class TestMoveValidation:
 
+class TestMoveValidation:
     def test_same_source_and_destination_raises(self, part_in_store):
         with pytest.raises(ValueError, match="Source and destination cannot match"):
             part_in_store.move("TEST-001", 1, "Stock", "Stock", "LOT-1", "carol")

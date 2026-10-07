@@ -51,8 +51,7 @@ def test_reviewed_nested_shared_leaf_consumes_multiple_lots_and_persists_trace(b
         )
     ]
     assert [
-        (line["lot_number"], line["quantity_allocated"])
-        for line in review["plan"]["lines"]
+        (line["lot_number"], line["quantity_allocated"]) for line in review["plan"]["lines"]
     ] == [("A", 5), ("B", 9)]
     json.dumps(review)
     result = bridge.ship_bom({**draft, "review_id": review["review_id"]})
@@ -73,9 +72,7 @@ def test_reviewed_nested_shared_leaf_consumes_multiple_lots_and_persists_trace(b
         "BOM_CONSUME",
     ]
     assert (
-        bridge.history_detail(detail["transactions"][1]["transaction_id"])["data"][
-            "shipment"
-        ]
+        bridge.history_detail(detail["transactions"][1]["transaction_id"])["data"]["shipment"]
         == detail
     )
     assert bridge.ship_bom({**draft, "review_id": review["review_id"]})["ok"] is False
@@ -98,8 +95,7 @@ def test_changed_allocation_rejects_without_effects_and_requires_fresh_review(bo
     assert bridge.ship_bom({**draft, "review_id": review["review_id"]})["ok"] is False
     updated = bridge.preview_bom_ship(draft)["data"]
     assert [
-        (line["lot_number"], line["quantity_allocated"])
-        for line in updated["plan"]["lines"]
+        (line["lot_number"], line["quantity_allocated"]) for line in updated["plan"]["lines"]
     ] == [("0", 2), ("A", 5), ("B", 7)]
     assert bridge.ship_bom({**draft, "review_id": updated["review_id"]})["ok"]
 
@@ -149,9 +145,7 @@ def test_review_is_bound_to_exact_draft(bom, change):
     review = bridge.preview_bom_ship(request())["data"]
     before = bridge.stock_context("LEAF")
     assert (
-        bridge.ship_bom({**request(), **change, "review_id": review["review_id"]})[
-            "error"
-        ]["code"]
+        bridge.ship_bom({**request(), **change, "review_id": review["review_id"]})["error"]["code"]
         == "VALIDATION"
     )
     assert bridge.stock_context("LEAF") == before
@@ -192,10 +186,7 @@ def test_review_does_not_trust_mutated_response_and_does_not_survive_bridge_rest
     review = bridge.preview_bom_ship(request())["data"]
     review["plan"]["lines"][0]["quantity_allocated"] = 999
     restarted = InventoryBridge(store)
-    assert (
-        restarted.ship_bom({**request(), "review_id": review["review_id"]})["ok"]
-        is False
-    )
+    assert restarted.ship_bom({**request(), "review_id": review["review_id"]})["ok"] is False
     assert bridge.ship_bom({**request(), "review_id": review["review_id"]})["ok"]
     assert bridge.part_detail("LEAF")["data"]["quantity"] == 6
 
@@ -205,9 +196,7 @@ def test_component_shortage_after_ready_review_rolls_back_all_trace(bom):
     review = bridge.preview_bom_ship(request())["data"]
     store.ship("LEAF", 10, "Stock", "Other", "Other", lot_number="B")
     before = {p: bridge.stock_context(p) for p in ("KIT", "SUB", "LEAF")}
-    assert (
-        bridge.ship_bom({**request(), "review_id": review["review_id"]})["ok"] is False
-    )
+    assert bridge.ship_bom({**request(), "review_id": review["review_id"]})["ok"] is False
     assert {p: bridge.stock_context(p) for p in before} == before
     assert bridge.history({"tx_type": "SHIP_BOM"})["data"]["records"] == []
     assert bridge.history({"tx_type": "BOM_CONSUME"})["data"]["records"] == []
@@ -224,9 +213,9 @@ def test_snapshot_reads_survive_later_bom_definition_changes(bom):
     store.remove_bom_component("KIT", "LEAF")
     assert bridge.shipment_detail(number) == before
     assert (
-        bridge.history_detail(before["data"]["transactions"][0]["transaction_id"])[
-            "data"
-        ]["shipment"]
+        bridge.history_detail(before["data"]["transactions"][0]["transaction_id"])["data"][
+            "shipment"
+        ]
         == before["data"]
     )
 

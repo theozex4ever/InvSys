@@ -10,7 +10,14 @@ from inventory_control.store import InventoryStore
 
 
 PARTS_HEADERS = ["part_number", "description", "default_location", "minimum_quantity", "active"]
-INVENTORY_HEADERS = ["part_number", "description", "location", "lot_number", "quantity", "minimum_quantity"]
+INVENTORY_HEADERS = [
+    "part_number",
+    "description",
+    "location",
+    "lot_number",
+    "quantity",
+    "minimum_quantity",
+]
 TRANSACTION_HEADERS = [
     "timestamp",
     "tx_type",
@@ -142,13 +149,20 @@ class ImportExportService:
         ]
 
     def preview_parts_import_csv(self, path: Path) -> CSVPreview:
-        rows, header_errors, warnings = self._read_csv(path, "parts", {"part_number", "description"})
-        return self._preview_rows("parts", path, rows, header_errors, warnings, self._validate_part_row)
+        rows, header_errors, warnings = self._read_csv(
+            path, "parts", {"part_number", "description"}
+        )
+        return self._preview_rows(
+            "parts", path, rows, header_errors, warnings, self._validate_part_row
+        )
 
     def import_parts_csv(self, path: Path, operator: str) -> ImportResult:
         preview = self.preview_parts_import_csv(path)
         self._require_importable(preview)
-        rows = [self._part_import_row(row) for _, row in self._read_csv(path, "parts", {"part_number", "description"})[0]]
+        rows = [
+            self._part_import_row(row)
+            for _, row in self._read_csv(path, "parts", {"part_number", "description"})[0]
+        ]
         backup = self._pre_import_backup()
         self.store.import_parts(rows, notify=True)
         return ImportResult("parts", len(rows), str(backup or ""))
@@ -156,14 +170,18 @@ class ImportExportService:
     def preview_inventory_import_csv(self, path: Path) -> CSVPreview:
         required = {"part_number", "location", "lot_number", "quantity"}
         rows, header_errors, warnings = self._read_csv(path, "inventory", required)
-        return self._preview_rows("inventory", path, rows, header_errors, warnings, self._validate_inventory_row)
+        return self._preview_rows(
+            "inventory", path, rows, header_errors, warnings, self._validate_inventory_row
+        )
 
     def import_inventory_csv(self, path: Path, operator: str) -> ImportResult:
         preview = self.preview_inventory_import_csv(path)
         self._require_importable(preview)
         rows = [
             self._inventory_import_row(row)
-            for _, row in self._read_csv(path, "inventory", {"part_number", "location", "lot_number", "quantity"})[0]
+            for _, row in self._read_csv(
+                path, "inventory", {"part_number", "location", "lot_number", "quantity"}
+            )[0]
         ]
         backup = self._pre_import_backup()
         self.store.import_inventory_receipts(rows, operator, notify=True)
@@ -171,18 +189,24 @@ class ImportExportService:
 
     def preview_bom_import_csv(self, path: Path) -> CSVPreview:
         rows, header_errors, warnings = self._read_csv(path, "bom", set(BOM_HEADERS))
-        preview = self._preview_rows("bom", path, rows, header_errors, warnings, self._validate_bom_row)
+        preview = self._preview_rows(
+            "bom", path, rows, header_errors, warnings, self._validate_bom_row
+        )
         if not preview.errors:
             cycle_errors = self._validate_bom_cycles(rows)
             preview.errors.extend(cycle_errors)
             bad_rows = {error.row_number for error in preview.errors if error.row_number > 1}
-            preview.valid_count = max(preview.row_count - len(bad_rows), 0) if not cycle_errors else 0
+            preview.valid_count = (
+                max(preview.row_count - len(bad_rows), 0) if not cycle_errors else 0
+            )
         return preview
 
     def import_bom_csv(self, path: Path, operator: str) -> ImportResult:
         preview = self.preview_bom_import_csv(path)
         self._require_importable(preview)
-        rows = [self._bom_import_row(row) for _, row in self._read_csv(path, "bom", set(BOM_HEADERS))[0]]
+        rows = [
+            self._bom_import_row(row) for _, row in self._read_csv(path, "bom", set(BOM_HEADERS))[0]
+        ]
         backup = self._pre_import_backup()
         self.store.import_bom_components(rows, notify=True)
         return ImportResult("bom", len(rows), str(backup or ""))
@@ -285,10 +309,18 @@ class ImportExportService:
             errors.append(CSVRowIssue(row_number, "description", "Description required."))
         minimum = row.get("minimum_quantity", "0") or "0"
         if self._parse_non_negative_int(minimum) is None:
-            errors.append(CSVRowIssue(row_number, "minimum_quantity", "Minimum quantity must be a non-negative integer."))
+            errors.append(
+                CSVRowIssue(
+                    row_number,
+                    "minimum_quantity",
+                    "Minimum quantity must be a non-negative integer.",
+                )
+            )
         location = row.get("default_location", "Stock") or "Stock"
         if location not in self.store.locations:
-            errors.append(CSVRowIssue(row_number, "default_location", "Default location does not exist."))
+            errors.append(
+                CSVRowIssue(row_number, "default_location", "Default location does not exist.")
+            )
         active = row.get("active", "")
         if active and self._parse_bool(active) is None:
             errors.append(CSVRowIssue(row_number, "active", "Active must be true or false."))
@@ -317,9 +349,13 @@ class ImportExportService:
             errors.append(CSVRowIssue(row_number, "lot_number", "Lot number required."))
         quantity = self._parse_positive_int(row.get("quantity", ""))
         if quantity is None:
-            errors.append(CSVRowIssue(row_number, "quantity", "Quantity must be a positive integer."))
+            errors.append(
+                CSVRowIssue(row_number, "quantity", "Quantity must be a positive integer.")
+            )
         if key in seen:
-            errors.append(CSVRowIssue(row_number, "lot_number", "Duplicate part/location/lot row in CSV."))
+            errors.append(
+                CSVRowIssue(row_number, "lot_number", "Duplicate part/location/lot row in CSV.")
+            )
         seen.add(key)
         return errors
 
@@ -336,22 +372,38 @@ class ImportExportService:
         if not parent:
             errors.append(CSVRowIssue(row_number, "parent_part_number", "Parent part required."))
         elif parent not in self.store.parts:
-            errors.append(CSVRowIssue(row_number, "parent_part_number", "Parent part does not exist."))
+            errors.append(
+                CSVRowIssue(row_number, "parent_part_number", "Parent part does not exist.")
+            )
         if not component:
-            errors.append(CSVRowIssue(row_number, "component_part_number", "Component part required."))
+            errors.append(
+                CSVRowIssue(row_number, "component_part_number", "Component part required.")
+            )
         elif component not in self.store.parts:
-            errors.append(CSVRowIssue(row_number, "component_part_number", "Component part does not exist."))
+            errors.append(
+                CSVRowIssue(row_number, "component_part_number", "Component part does not exist.")
+            )
         if parent and component and parent == component:
-            errors.append(CSVRowIssue(row_number, "component_part_number", "A part cannot contain itself."))
+            errors.append(
+                CSVRowIssue(row_number, "component_part_number", "A part cannot contain itself.")
+            )
         if self._parse_positive_int(row.get("quantity_per", "")) is None:
-            errors.append(CSVRowIssue(row_number, "quantity_per", "Quantity per must be a positive integer."))
+            errors.append(
+                CSVRowIssue(row_number, "quantity_per", "Quantity per must be a positive integer.")
+            )
         if key in seen:
-            errors.append(CSVRowIssue(row_number, "component_part_number", "Duplicate parent/component row in CSV."))
+            errors.append(
+                CSVRowIssue(
+                    row_number, "component_part_number", "Duplicate parent/component row in CSV."
+                )
+            )
         seen.add(key)
         return errors
 
     def _validate_bom_cycles(self, rows: list[tuple[int, dict[str, str]]]) -> list[CSVRowIssue]:
-        graph = {parent: set(components) for parent, components in self.store.bom_components.items()}
+        graph = {
+            parent: set(components) for parent, components in self.store.bom_components.items()
+        }
         for _, row in rows:
             parent = row.get("parent_part_number", "").strip().upper()
             component = row.get("component_part_number", "").strip().upper()
@@ -362,23 +414,36 @@ class ImportExportService:
             parent = row.get("parent_part_number", "").strip().upper()
             component = row.get("component_part_number", "").strip().upper()
             if parent and component and self._path_exists(graph, component, parent):
-                errors.append(CSVRowIssue(row_number, "component_part_number", "This component would create a circular BOM."))
+                errors.append(
+                    CSVRowIssue(
+                        row_number,
+                        "component_part_number",
+                        "This component would create a circular BOM.",
+                    )
+                )
         return errors
 
-    def _path_exists(self, graph: dict[str, set[str]], start: str, target: str, seen: set[str] | None = None) -> bool:
+    def _path_exists(
+        self, graph: dict[str, set[str]], start: str, target: str, seen: set[str] | None = None
+    ) -> bool:
         seen = seen or set()
         if start in seen:
             return False
         if start == target:
             return True
         seen.add(start)
-        return any(self._path_exists(graph, child, target, seen) for child in graph.get(start, set()))
+        return any(
+            self._path_exists(graph, child, target, seen) for child in graph.get(start, set())
+        )
 
     def _part_import_row(self, row: dict[str, str]) -> dict[str, object]:
         return {
             "part_number": row.get("part_number", "").strip().upper(),
             "description": row.get("description", "").strip(),
-            "minimum_quantity": self._parse_non_negative_int(row.get("minimum_quantity", "0") or "0") or 0,
+            "minimum_quantity": self._parse_non_negative_int(
+                row.get("minimum_quantity", "0") or "0"
+            )
+            or 0,
             "location": row.get("default_location", "Stock") or "Stock",
             "active": self._parse_bool(row.get("active", "")) if row.get("active", "") else True,
         }

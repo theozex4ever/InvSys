@@ -29,8 +29,8 @@ import pytest
 # ship — happy path
 # ===========================================================================
 
-class TestShipHappyPath:
 
+class TestShipHappyPath:
     def test_balance_decreases_by_shipped_quantity(self, part_in_store):
         # Arrange: part_in_store has 10 units in Stock
         # Act
@@ -70,8 +70,7 @@ class TestShipHappyPath:
     def test_shipment_record_fields(self, part_in_store):
         # All optional fields are supplied here so we can verify full storage.
         sn = part_in_store.ship(
-            "TEST-001", 3, "Stock", "Acme Corp", "bob", "LOT-1",
-            carrier="FedEx", tracking="1Z999"
+            "TEST-001", 3, "Stock", "Acme Corp", "bob", "LOT-1", carrier="FedEx", tracking="1Z999"
         )
         shipment = part_in_store.shipments[0]
 
@@ -119,8 +118,8 @@ class TestShipHappyPath:
 # ship — validation / guards
 # ===========================================================================
 
-class TestShipValidation:
 
+class TestShipValidation:
     def test_insufficient_stock_raises_value_error(self, part_in_store):
         # part_in_store has 10 in Stock; request 11
         with pytest.raises(ValueError, match="Not enough stock"):

@@ -22,10 +22,7 @@ def test_complete_standard_and_nested_bom_workflows_survive_restart(tmp_path):
         store.add_bom_component("KIT", "SUB", 2)
         store.add_bom_component("SUB", "LEAF", 3)
         store.add_bom_component("KIT", "LEAF", 1)
-        assert (
-            bridge.search_parts({"query": "Review LEAF"})["data"][0]["part_number"]
-            == "LEAF"
-        )
+        assert bridge.search_parts({"query": "Review LEAF"})["data"][0]["part_number"] == "LEAF"
         assert bridge.save_operator("Pat")["ok"]
         assert bridge.save_theme("dark")["ok"]
 
@@ -86,9 +83,7 @@ def test_complete_standard_and_nested_bom_workflows_survive_restart(tmp_path):
         shortage = bridge.preview_bom_ship({**bom, "quantity": 3})["data"]
         assert not shortage["plan"]["ready"]
         before = {p: bridge.stock_context(p) for p in ("KIT", "SUB", "LEAF")}
-        assert not bridge.ship_bom(
-            {**bom, "quantity": 3, "review_id": shortage["review_id"]}
-        )["ok"]
+        assert not bridge.ship_bom({**bom, "quantity": 3, "review_id": shortage["review_id"]})["ok"]
         assert {p: bridge.stock_context(p) for p in before} == before
         review = bridge.preview_bom_ship(bom)["data"]
         assert bridge.receive({**receipt, "lot_number": "0", "quantity": 2})["ok"]
@@ -108,10 +103,7 @@ def test_complete_standard_and_nested_bom_workflows_survive_restart(tmp_path):
             dict(part_number="LEAF", lot_number="A", location="Stock", quantity=3),
             dict(part_number="LEAF", lot_number="B", location="Stock", quantity=9),
         ]
-        assert (
-            int(bom_number.rsplit("-", 1)[1])
-            == int(standard_number.rsplit("-", 1)[1]) + 1
-        )
+        assert int(bom_number.rsplit("-", 1)[1]) == int(standard_number.rsplit("-", 1)[1]) + 1
         assert [bridge.part_detail(p)["data"]["quantity"] for p in before] == [
             10,
             10,
@@ -119,10 +111,7 @@ def test_complete_standard_and_nested_bom_workflows_survive_restart(tmp_path):
         ]
         assert bridge.dashboard()["data"]["shipment_count"] == 2
         for tx in bom_trace["transactions"]:
-            assert (
-                bridge.history_detail(tx["transaction_id"])["data"]["shipment"]
-                == bom_trace
-            )
+            assert bridge.history_detail(tx["transaction_id"])["data"]["shipment"] == bom_trace
         history = bridge.history({})["data"]
         assert history["total"] == 10
         contexts = {p: bridge.stock_context(p)["data"] for p in before}

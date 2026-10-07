@@ -49,20 +49,15 @@ def test_catalog_search_filters_sort_and_balances(tmp_path):
     store.receive("A", 2, "Stock", "L1", "Pat")
     store.receive("A", 1, "Receiving", "L2", "Pat")
     bridge = InventoryBridge(store)
-    assert [
-        p["part_number"] for p in bridge.search_parts({"query": "bearing"})["data"]
-    ] == ["A", "C"]
-    assert [
-        p["part_number"] for p in bridge.search_parts({"status": "inactive"})["data"]
-    ] == ["C"]
-    assert [
-        p["part_number"] for p in bridge.search_parts({"low_stock": True})["data"]
-    ] == ["A"]
+    assert [p["part_number"] for p in bridge.search_parts({"query": "bearing"})["data"]] == [
+        "A",
+        "C",
+    ]
+    assert [p["part_number"] for p in bridge.search_parts({"status": "inactive"})["data"]] == ["C"]
+    assert [p["part_number"] for p in bridge.search_parts({"low_stock": True})["data"]] == ["A"]
     assert [
         p["part_number"]
-        for p in bridge.search_parts({"sort": "part_number", "descending": True})[
-            "data"
-        ]
+        for p in bridge.search_parts({"sort": "part_number", "descending": True})["data"]
     ] == ["C", "B", "A"]
     detail = bridge.part_detail("a")["data"]
     assert detail["quantity"] == 3 and detail["low_stock"] is True

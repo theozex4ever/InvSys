@@ -40,9 +40,7 @@ def desktop_read(bridge, name):
     return getattr(bridge, name)("A")
 
 
-@pytest.mark.parametrize(
-    "name", ["search_parts", "dashboard", "part_detail", "stock_context"]
-)
+@pytest.mark.parametrize("name", ["search_parts", "dashboard", "part_detail", "stock_context"])
 def test_read_query_count_does_not_grow_with_unrelated_inventory(inventory, name):
     store, bridge = inventory
     store.add_part("A", "Selected part", minimum_quantity=5)
@@ -66,9 +64,7 @@ def test_read_query_count_does_not_grow_with_unrelated_inventory(inventory, name
     assert counts[1] <= 12, counts
 
 
-@pytest.mark.parametrize(
-    "name", ["search_parts", "dashboard", "part_detail", "stock_context"]
-)
+@pytest.mark.parametrize("name", ["search_parts", "dashboard", "part_detail", "stock_context"])
 def test_read_holds_one_snapshot_while_another_store_commits(inventory, name):
     store, bridge = inventory
     store.add_part("A", "Selected part", minimum_quantity=5)
@@ -105,17 +101,13 @@ def test_catalog_preserves_unicode_matching_and_descending_ties(inventory):
     store.add_part("A", "Straße", minimum_quantity=1)
     store.add_part("B", "STRASSE", minimum_quantity=1)
     store.add_part("C", "Other")
-    result = bridge.search_parts(
-        {"query": "strasse", "sort": "description", "descending": True}
-    )
+    result = bridge.search_parts({"query": "strasse", "sort": "description", "descending": True})
     assert result["ok"]
     assert [part["part_number"] for part in result["data"]] == ["B", "A"]
     assert all(part["low_stock"] for part in result["data"])
     assert [
         part["part_number"]
-        for part in bridge.search_parts({"sort": "quantity", "descending": True})[
-            "data"
-        ]
+        for part in bridge.search_parts({"sort": "quantity", "descending": True})["data"]
     ] == ["C", "B", "A"]
 
 

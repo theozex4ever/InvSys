@@ -29,8 +29,8 @@ import pytest
 # receive — happy path
 # ===========================================================================
 
-class TestReceiveHappyPath:
 
+class TestReceiveHappyPath:
     def test_balance_increases_by_received_quantity(self, blank_store):
         # Arrange
         blank_store.add_part("ABC-1", "Widget A")
@@ -121,6 +121,7 @@ class TestReceiveHappyPath:
 # receive — validation
 # ===========================================================================
 
+
 class TestReceiveValidation:
     """
     Tests that confirm receive rejects inputs that would corrupt inventory.
@@ -139,11 +140,14 @@ class TestReceiveValidation:
         with pytest.raises(ValueError, match="Invalid location"):
             blank_store.receive("ABC-1", 1, "Narnia", "LOT-1", "alice")
 
-    @pytest.mark.parametrize("qty, label", [
-        (0,  "zero"),
-        (-1, "negative"),
-        (-99, "large negative"),
-    ])
+    @pytest.mark.parametrize(
+        "qty, label",
+        [
+            (0, "zero"),
+            (-1, "negative"),
+            (-99, "large negative"),
+        ],
+    )
     def test_non_positive_quantity_raises_value_error(self, blank_store, qty, label):
         blank_store.add_part("ABC-1", "Widget A")
 

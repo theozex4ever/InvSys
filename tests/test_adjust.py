@@ -22,8 +22,8 @@ import pytest
 # adjust — happy path
 # ===========================================================================
 
-class TestAdjustHappyPath:
 
+class TestAdjustHappyPath:
     def test_balance_is_set_to_new_count(self, part_in_store):
         # Arrange: part_in_store has 10 in Stock
         # Act: physical count shows 8
@@ -50,7 +50,9 @@ class TestAdjustHappyPath:
 
     def test_returns_positive_diff_when_counting_up(self, part_in_store):
         # Started at 10, counted 14 → diff should be +4
-        diff = part_in_store.adjust("TEST-001", "Stock", "LOT-1", 14, "dave", "Re-count found extras")
+        diff = part_in_store.adjust(
+            "TEST-001", "Stock", "LOT-1", 14, "dave", "Re-count found extras"
+        )
 
         assert diff == 4
 
@@ -108,8 +110,8 @@ class TestAdjustHappyPath:
 # adjust — validation / guards
 # ===========================================================================
 
-class TestAdjustValidation:
 
+class TestAdjustValidation:
     def test_negative_new_count_raises(self, part_in_store):
         with pytest.raises(ValueError, match="New count cannot be negative"):
             part_in_store.adjust("TEST-001", "Stock", "LOT-1", -1, "dave", "Error")

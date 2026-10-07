@@ -41,6 +41,7 @@ import pytest
 # add_part — happy path
 # ===========================================================================
 
+
 class TestAddPartHappyPath:
     """Tests that confirm add_part works correctly for valid inputs."""
 
@@ -97,6 +98,7 @@ class TestAddPartHappyPath:
 # add_part — validation
 # ===========================================================================
 
+
 class TestAddPartValidation:
     """
     Tests that confirm add_part rejects invalid inputs.
@@ -105,22 +107,22 @@ class TestAddPartValidation:
     Adding a new invalid case is as simple as appending a row to the list.
     """
 
-    @pytest.mark.parametrize("part_number, description, minimum_quantity, location, expected_msg", [
-        # --- part_number ---
-        ("",      "Widget", 0, "Stock", "Part number required"),
-        ("   ",   "Widget", 0, "Stock", "Part number required"),   # whitespace-only
-
-        # --- description ---
-        ("P-1", "",        0, "Stock", "Description required"),
-        ("P-1", "   ",     0, "Stock", "Description required"),    # whitespace-only
-
-        # --- minimum_quantity ---
-        ("P-1", "Widget", -1, "Stock", "Minimum quantity cannot be negative"),
-
-        # --- location ---
-        ("P-1", "Widget",  0, "Nowhere", "Invalid location"),
-        ("P-1", "Widget",  0, "",        "Invalid location"),
-    ])
+    @pytest.mark.parametrize(
+        "part_number, description, minimum_quantity, location, expected_msg",
+        [
+            # --- part_number ---
+            ("", "Widget", 0, "Stock", "Part number required"),
+            ("   ", "Widget", 0, "Stock", "Part number required"),  # whitespace-only
+            # --- description ---
+            ("P-1", "", 0, "Stock", "Description required"),
+            ("P-1", "   ", 0, "Stock", "Description required"),  # whitespace-only
+            # --- minimum_quantity ---
+            ("P-1", "Widget", -1, "Stock", "Minimum quantity cannot be negative"),
+            # --- location ---
+            ("P-1", "Widget", 0, "Nowhere", "Invalid location"),
+            ("P-1", "Widget", 0, "", "Invalid location"),
+        ],
+    )
     def test_invalid_input_raises_value_error(
         self,
         blank_store,
@@ -152,6 +154,7 @@ class TestAddPartValidation:
 # ===========================================================================
 # stock_at and total_stock
 # ===========================================================================
+
 
 class TestStockQueries:
     """Tests for the two balance query helpers."""
@@ -195,6 +198,7 @@ class TestStockQueries:
 # low_stock
 # ===========================================================================
 
+
 class TestLowStock:
     """
     Tests for the low-stock alert logic.
@@ -225,6 +229,7 @@ class TestLowStock:
         blank_store.set_part_active("OLD-1", False)
 
         assert all(part.part_number != "OLD-1" for part in blank_store.low_stock())
+
     def test_part_above_minimum_is_not_returned(self, blank_store):
         blank_store.add_part("ABC-1", "Widget A", minimum_quantity=5)
         blank_store.receive("ABC-1", 10, "Stock", "LOT-1", "tester")  # 10 > 5 → ok
@@ -251,10 +256,10 @@ class TestLowStock:
     def test_only_low_parts_appear_when_mixed(self, blank_store):
         # Two parts: one below minimum, one above
         blank_store.add_part("LOW-1", "Low Part", minimum_quantity=5)
-        blank_store.receive("LOW-1", 2, "Stock", "LOT-1", "tester")    # low
+        blank_store.receive("LOW-1", 2, "Stock", "LOT-1", "tester")  # low
 
         blank_store.add_part("OK-1", "OK Part", minimum_quantity=5)
-        blank_store.receive("OK-1", 10, "Stock", "LOT-1", "tester")    # fine
+        blank_store.receive("OK-1", 10, "Stock", "LOT-1", "tester")  # fine
 
         low_numbers = {p.part_number for p in blank_store.low_stock()}
 

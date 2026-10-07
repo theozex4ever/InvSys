@@ -99,9 +99,7 @@ class TestLedgerInvariant:
 
 
 class TestShortageMessages:
-    def test_ship_beyond_available_reports_quantities_and_changes_nothing(
-        self, db_store
-    ):
+    def test_ship_beyond_available_reports_quantities_and_changes_nothing(self, db_store):
         db_store.add_part("PART", "Standard part")
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         before = snapshot(db_store)
@@ -118,16 +116,12 @@ class TestShortageMessages:
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         before = snapshot(db_store)
 
-        with pytest.raises(
-            ValueError, match=r"^Not enough stock\. Available: 0, requested: 3\.$"
-        ):
+        with pytest.raises(ValueError, match=r"^Not enough stock\. Available: 0, requested: 3\.$"):
             db_store.ship("PART", 3, "Receiving", "Acme", "bob", "LOT-1")
 
         assert snapshot(db_store) == before
 
-    def test_move_beyond_available_reports_quantities_and_changes_nothing(
-        self, db_store
-    ):
+    def test_move_beyond_available_reports_quantities_and_changes_nothing(self, db_store):
         db_store.add_part("PART", "Standard part")
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         before = snapshot(db_store)
@@ -144,9 +138,7 @@ class TestShortageMessages:
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         before = snapshot(db_store)
 
-        with pytest.raises(
-            ValueError, match=r"^Not enough stock\. Available: 0, requested: 5\.$"
-        ):
+        with pytest.raises(ValueError, match=r"^Not enough stock\. Available: 0, requested: 5\.$"):
             db_store.move("PART", 5, "Receiving", "Stock", "LOT-1", "carol")
 
         assert snapshot(db_store) == before
@@ -158,9 +150,7 @@ class TestMutationNotifications:
         db_store.add_part("PART", "Standard part")
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         calls = []
-        db_store.subscribe(
-            lambda: calls.append(db_store.stock_at("PART", "Stock", "LOT-1"))
-        )
+        db_store.subscribe(lambda: calls.append(db_store.stock_at("PART", "Stock", "LOT-1")))
         return db_store, calls
 
     @pytest.mark.parametrize(
@@ -168,23 +158,17 @@ class TestMutationNotifications:
         [
             (lambda store: store.ship("PART", 4, "Stock", "Acme", "bob", "LOT-1"), 6),
             (
-                lambda store: store.move(
-                    "PART", 4, "Stock", "Shipping Bench", "LOT-1", "carol"
-                ),
+                lambda store: store.move("PART", 4, "Stock", "Shipping Bench", "LOT-1", "carol"),
                 6,
             ),
             (
-                lambda store: store.adjust(
-                    "PART", "Stock", "LOT-1", 7, "dave", "Recount"
-                ),
+                lambda store: store.adjust("PART", "Stock", "LOT-1", 7, "dave", "Recount"),
                 7,
             ),
         ],
         ids=["ship", "move", "adjust"],
     )
-    def test_subscriber_is_called_once_after_commit(
-        self, stocked, mutation, expected_stock
-    ):
+    def test_subscriber_is_called_once_after_commit(self, stocked, mutation, expected_stock):
         store, calls = stocked
 
         mutation(store)
@@ -196,9 +180,7 @@ class TestMutationNotifications:
         "mutation",
         [
             lambda store: store.ship("PART", 11, "Stock", "Acme", "bob", "LOT-1"),
-            lambda store: store.move(
-                "PART", 11, "Stock", "Shipping Bench", "LOT-1", "carol"
-            ),
+            lambda store: store.move("PART", 11, "Stock", "Shipping Bench", "LOT-1", "carol"),
             lambda store: store.adjust("PART", "Stock", "NO-LOT", 7, "dave", "Recount"),
         ],
         ids=["ship", "move", "adjust"],
@@ -284,7 +266,4 @@ class TestSharedTimestamp:
 
         ticking_store.ship("PART", 4, "Stock", "Acme", "bob", "LOT-1")
 
-        assert (
-            ticking_store.transactions[0].timestamp
-            == ticking_store.shipments[0].timestamp
-        )
+        assert ticking_store.transactions[0].timestamp == ticking_store.shipments[0].timestamp

@@ -11,12 +11,16 @@ from PySide6.QtWidgets import QLabel, QWidget
 from inventory_control.ui.widgets import ToastManager
 
 
-def make_manager(qtbot, *, display_ms: int = 20, fade_in_ms: int = 1, fade_out_ms: int = 10) -> ToastManager:
+def make_manager(
+    qtbot, *, display_ms: int = 20, fade_in_ms: int = 1, fade_out_ms: int = 10
+) -> ToastManager:
     parent = QWidget()
     parent.resize(640, 480)
     qtbot.addWidget(parent)
     parent.show()
-    return ToastManager(parent, display_ms=display_ms, fade_in_ms=fade_in_ms, fade_out_ms=fade_out_ms)
+    return ToastManager(
+        parent, display_ms=display_ms, fade_in_ms=fade_in_ms, fade_out_ms=fade_out_ms
+    )
 
 
 def toast_messages(manager: ToastManager) -> list[str]:

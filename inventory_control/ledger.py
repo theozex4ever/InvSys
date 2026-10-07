@@ -28,9 +28,7 @@ class InsufficientStock(ValueError):
         available: int,
         requested: int,
     ) -> None:
-        super().__init__(
-            f"Not enough stock. Available: {available}, requested: {requested}."
-        )
+        super().__init__(f"Not enough stock. Available: {available}, requested: {requested}.")
         self.part_number = part_number
         self.lot_number = lot_number
         self.location = location
@@ -63,9 +61,7 @@ def post(
     )
     available = balance.quantity if balance is not None else 0
     if available + delta < 0:
-        raise InsufficientStock(
-            part.part_number, lot.lot_number, location.name, available, -delta
-        )
+        raise InsufficientStock(part.part_number, lot.lot_number, location.name, available, -delta)
     if balance is None:
         balance = InventoryBalanceRecord(
             part_id=part.id,

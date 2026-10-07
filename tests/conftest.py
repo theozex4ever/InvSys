@@ -90,6 +90,7 @@ def qtbot():
 # blank_store
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def blank_store(monkeypatch):
     """
@@ -120,6 +121,7 @@ def blank_store(monkeypatch):
 # store  (seeded — normal startup state)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def store():
     """
@@ -145,6 +147,7 @@ def store():
 # ---------------------------------------------------------------------------
 # part_in_store  (blank store + one known part with stock)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def part_in_store(blank_store):
