@@ -51,7 +51,6 @@ def snapshot(store):
 
 
 class TestLedgerInvariant:
-
     def test_balances_equal_sum_of_transactions_after_mixed_activity(self, db_store):
         db_store.add_part("KIT", "Kit")
         db_store.add_part("SUB", "Subassembly")
@@ -68,8 +67,18 @@ class TestLedgerInvariant:
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         db_store.import_inventory_receipts(
             [
-                {"part_number": "PART", "lot_number": "LOT-2", "quantity": 4, "location": "Receiving"},
-                {"part_number": "MAT-1", "lot_number": "L1", "quantity": 2, "location": "Stock"},
+                {
+                    "part_number": "PART",
+                    "lot_number": "LOT-2",
+                    "quantity": 4,
+                    "location": "Receiving",
+                },
+                {
+                    "part_number": "MAT-1",
+                    "lot_number": "L1",
+                    "quantity": 2,
+                    "location": "Stock",
+                },
             ],
             "importer",
         )
@@ -90,13 +99,16 @@ class TestLedgerInvariant:
 
 
 class TestShortageMessages:
-
-    def test_ship_beyond_available_reports_quantities_and_changes_nothing(self, db_store):
+    def test_ship_beyond_available_reports_quantities_and_changes_nothing(
+        self, db_store
+    ):
         db_store.add_part("PART", "Standard part")
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         before = snapshot(db_store)
 
-        with pytest.raises(ValueError, match=r"^Not enough stock\. Available: 10, requested: 11\.$"):
+        with pytest.raises(
+            ValueError, match=r"^Not enough stock\. Available: 10, requested: 11\.$"
+        ):
             db_store.ship("PART", 11, "Stock", "Acme", "bob", "LOT-1")
 
         assert snapshot(db_store) == before
@@ -106,17 +118,23 @@ class TestShortageMessages:
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         before = snapshot(db_store)
 
-        with pytest.raises(ValueError, match=r"^Not enough stock\. Available: 0, requested: 3\.$"):
+        with pytest.raises(
+            ValueError, match=r"^Not enough stock\. Available: 0, requested: 3\.$"
+        ):
             db_store.ship("PART", 3, "Receiving", "Acme", "bob", "LOT-1")
 
         assert snapshot(db_store) == before
 
-    def test_move_beyond_available_reports_quantities_and_changes_nothing(self, db_store):
+    def test_move_beyond_available_reports_quantities_and_changes_nothing(
+        self, db_store
+    ):
         db_store.add_part("PART", "Standard part")
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         before = snapshot(db_store)
 
-        with pytest.raises(ValueError, match=r"^Not enough stock\. Available: 10, requested: 12\.$"):
+        with pytest.raises(
+            ValueError, match=r"^Not enough stock\. Available: 10, requested: 12\.$"
+        ):
             db_store.move("PART", 12, "Stock", "Shipping Bench", "LOT-1", "carol")
 
         assert snapshot(db_store) == before
@@ -126,32 +144,47 @@ class TestShortageMessages:
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         before = snapshot(db_store)
 
-        with pytest.raises(ValueError, match=r"^Not enough stock\. Available: 0, requested: 5\.$"):
+        with pytest.raises(
+            ValueError, match=r"^Not enough stock\. Available: 0, requested: 5\.$"
+        ):
             db_store.move("PART", 5, "Receiving", "Stock", "LOT-1", "carol")
 
         assert snapshot(db_store) == before
 
 
 class TestMutationNotifications:
-
     @pytest.fixture
     def stocked(self, db_store):
         db_store.add_part("PART", "Standard part")
         db_store.receive("PART", 10, "Stock", "LOT-1", "alice")
         calls = []
-        db_store.subscribe(lambda: calls.append(db_store.stock_at("PART", "Stock", "LOT-1")))
+        db_store.subscribe(
+            lambda: calls.append(db_store.stock_at("PART", "Stock", "LOT-1"))
+        )
         return db_store, calls
 
     @pytest.mark.parametrize(
         "mutation, expected_stock",
         [
             (lambda store: store.ship("PART", 4, "Stock", "Acme", "bob", "LOT-1"), 6),
-            (lambda store: store.move("PART", 4, "Stock", "Shipping Bench", "LOT-1", "carol"), 6),
-            (lambda store: store.adjust("PART", "Stock", "LOT-1", 7, "dave", "Recount"), 7),
+            (
+                lambda store: store.move(
+                    "PART", 4, "Stock", "Shipping Bench", "LOT-1", "carol"
+                ),
+                6,
+            ),
+            (
+                lambda store: store.adjust(
+                    "PART", "Stock", "LOT-1", 7, "dave", "Recount"
+                ),
+                7,
+            ),
         ],
         ids=["ship", "move", "adjust"],
     )
-    def test_subscriber_is_called_once_after_commit(self, stocked, mutation, expected_stock):
+    def test_subscriber_is_called_once_after_commit(
+        self, stocked, mutation, expected_stock
+    ):
         store, calls = stocked
 
         mutation(store)
@@ -163,7 +196,9 @@ class TestMutationNotifications:
         "mutation",
         [
             lambda store: store.ship("PART", 11, "Stock", "Acme", "bob", "LOT-1"),
-            lambda store: store.move("PART", 11, "Stock", "Shipping Bench", "LOT-1", "carol"),
+            lambda store: store.move(
+                "PART", 11, "Stock", "Shipping Bench", "LOT-1", "carol"
+            ),
             lambda store: store.adjust("PART", "Stock", "NO-LOT", 7, "dave", "Recount"),
         ],
         ids=["ship", "move", "adjust"],
@@ -181,8 +216,18 @@ class TestMutationNotifications:
 
         store.import_inventory_receipts(
             [
-                {"part_number": "PART", "lot_number": "LOT-1", "quantity": 1, "location": "Stock"},
-                {"part_number": "PART", "lot_number": "LOT-1", "quantity": 2, "location": "Stock"},
+                {
+                    "part_number": "PART",
+                    "lot_number": "LOT-1",
+                    "quantity": 1,
+                    "location": "Stock",
+                },
+                {
+                    "part_number": "PART",
+                    "lot_number": "LOT-1",
+                    "quantity": 2,
+                    "location": "Stock",
+                },
             ],
             "importer",
         )
@@ -198,7 +243,6 @@ class TestMutationNotifications:
 
 
 class TestSharedTimestamp:
-
     @pytest.fixture
     def ticking_store(self, db_store, monkeypatch):
         ticks = count()
@@ -227,7 +271,11 @@ class TestSharedTimestamp:
 
         shipment = ticking_store.shipments[0]
         rows = ticking_store.transactions[:3]
-        assert [row.tx_type for row in rows] == ["SHIP_BOM", "BOM_CONSUME", "BOM_CONSUME"]
+        assert [row.tx_type for row in rows] == [
+            "SHIP_BOM",
+            "BOM_CONSUME",
+            "BOM_CONSUME",
+        ]
         assert {row.timestamp for row in rows} == {shipment.timestamp}
 
     def test_standard_shipment_row_shares_the_shipment_timestamp(self, ticking_store):
@@ -236,4 +284,7 @@ class TestSharedTimestamp:
 
         ticking_store.ship("PART", 4, "Stock", "Acme", "bob", "LOT-1")
 
-        assert ticking_store.transactions[0].timestamp == ticking_store.shipments[0].timestamp
+        assert (
+            ticking_store.transactions[0].timestamp
+            == ticking_store.shipments[0].timestamp
+        )
