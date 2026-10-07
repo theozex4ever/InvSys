@@ -1,5 +1,3 @@
-from typing import Dict
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -55,9 +53,9 @@ class MainWindow(QMainWindow):
         side.addSpacing(16)
 
         self.stack = QStackedWidget()
-        self.nav_buttons: Dict[str, QPushButton] = {}
-        self.group_bars: Dict[str, QTabBar] = {}
-        self.group_stacks: Dict[str, QStackedWidget] = {}
+        self.nav_buttons: dict[str, QPushButton] = {}
+        self.group_bars: dict[str, QTabBar] = {}
+        self.group_stacks: dict[str, QStackedWidget] = {}
         self.views = {
             "dashboard": DashboardView(self.navigate, self.open_part, self.open_history),
             "parts": PartsView(self.toast),

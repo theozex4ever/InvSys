@@ -7,8 +7,8 @@ import inventory_control.ui.main_window as main_window_module
 import inventory_control.ui.views as views_module
 import inventory_control.ui.widgets as widgets_module
 from inventory_control.store import InventoryStore
-from inventory_control.ui.main_window import MainWindow
 from inventory_control.ui.bom_flowchart import BOMFlowchart, capacity_level
+from inventory_control.ui.main_window import MainWindow
 from inventory_control.ui.views import (
     BOMView,
     DashboardView,

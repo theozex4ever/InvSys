@@ -1,10 +1,10 @@
-from collections.abc import Iterator
+import logging
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime
-import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any
 
 from sqlalchemy import Select, desc, func, or_, select
 from sqlalchemy.engine import Engine
@@ -36,9 +36,9 @@ from inventory_control.orm import (
     LocationRecord,
     LotRecord,
     PartRecord,
+    SettingRecord,
     ShipmentComponentRecord,
     ShipmentRecord,
-    SettingRecord,
 )
 
 logger = logging.getLogger(__name__)
@@ -56,18 +56,18 @@ class InventoryStore:
         self.engine: Engine = create_inventory_engine(db_path)
         bootstrap_database(self.engine)
         self.session_factory: sessionmaker[Session] = create_session_factory(self.engine)
-        self._subscribers: List[Callable[[], None]] = []
+        self._subscribers: list[Callable[[], None]] = []
         if seed:
             self.seed()
 
     @property
-    def parts(self) -> Dict[str, Part]:
+    def parts(self) -> dict[str, Part]:
         with self.session_factory() as session:
             rows = session.scalars(select(PartRecord).order_by(PartRecord.part_number)).all()
             return {row.part_number: self._part_dto(row) for row in rows}
 
     @property
-    def locations(self) -> List[str]:
+    def locations(self) -> list[str]:
         with self.session_factory() as session:
             return list(
                 session.scalars(
@@ -78,10 +78,10 @@ class InventoryStore:
             )
 
     @property
-    def balances(self) -> Dict[str, Dict[str, int]]:
+    def balances(self) -> dict[str, dict[str, int]]:
         with self.session_factory() as session:
-            result: Dict[str, Dict[str, int]] = {
-                part.part_number: {location: 0 for location in self.locations}
+            result: dict[str, dict[str, int]] = {
+                part.part_number: dict.fromkeys(self.locations, 0)
                 for part in session.scalars(select(PartRecord)).all()
             }
             rows = session.execute(
@@ -99,10 +99,10 @@ class InventoryStore:
             return result
 
     @property
-    def bom_components(self) -> Dict[str, Dict[str, int]]:
+    def bom_components(self) -> dict[str, dict[str, int]]:
         with self.session_factory() as session:
             rows = session.scalars(select(BOMComponentRecord)).all()
-            result: Dict[str, Dict[str, int]] = {}
+            result: dict[str, dict[str, int]] = {}
             for row in rows:
                 result.setdefault(row.parent_part.part_number, {})[
                     row.component_part.part_number
@@ -110,7 +110,7 @@ class InventoryStore:
             return result
 
     @property
-    def transactions(self) -> List[Transaction]:
+    def transactions(self) -> list[Transaction]:
         with self.session_factory() as session:
             rows = session.scalars(
                 select(InventoryTransactionRecord).order_by(desc(InventoryTransactionRecord.id))
@@ -118,7 +118,7 @@ class InventoryStore:
             return [self._transaction_dto(row) for row in rows]
 
     @property
-    def shipments(self) -> List[Shipment]:
+    def shipments(self) -> list[Shipment]:
         with self.session_factory() as session:
             rows = session.scalars(select(ShipmentRecord).order_by(desc(ShipmentRecord.id))).all()
             return [self._shipment_dto(row) for row in rows]
@@ -580,7 +580,7 @@ class InventoryStore:
             part.updated_at = now
 
     def import_inventory_receipts(
-        self, rows: List[dict[str, Any]], operator: str, notify: bool = True
+        self, rows: list[dict[str, Any]], operator: str, notify: bool = True
     ) -> int:
         with self._mutation(notify) as (session, timestamp):
             for row in rows:
@@ -597,7 +597,7 @@ class InventoryStore:
                 )
         return len(rows)
 
-    def import_parts(self, rows: List[dict[str, Any]], notify: bool = True) -> int:
+    def import_parts(self, rows: list[dict[str, Any]], notify: bool = True) -> int:
         with self._mutation(notify) as (session, now):
             for row in rows:
                 part_number = self._normalize_part_number(str(row["part_number"]))
@@ -633,7 +633,7 @@ class InventoryStore:
                     part.updated_at = now
         return len(rows)
 
-    def import_bom_components(self, rows: List[dict[str, Any]], notify: bool = True) -> int:
+    def import_bom_components(self, rows: list[dict[str, Any]], notify: bool = True) -> int:
         with self._mutation(notify) as (session, _):
             for row in rows:
                 parent = self._normalize_part_number(str(row["parent_part_number"]))
@@ -734,7 +734,7 @@ class InventoryStore:
                 is not None
             )
 
-    def bom_children(self, part_number: str) -> List[BOMComponent]:
+    def bom_children(self, part_number: str) -> list[BOMComponent]:
         parent = self._normalize_part_number(part_number)
         with self.session_factory() as session:
             part = self._part(session, parent)
@@ -804,7 +804,7 @@ class InventoryStore:
 
     def lots_for_part(
         self, part_number: str, location: str | None = None, positive_only: bool = False
-    ) -> List[Lot]:
+    ) -> list[Lot]:
         part_number = self._normalize_part_number(part_number)
         with self.session_factory() as session:
             part = self._part(session, part_number)
@@ -827,7 +827,7 @@ class InventoryStore:
             rows = session.scalars(stmt).unique().all()
             return [Lot(part_number, row.lot_number, row.active) for row in rows]
 
-    def lot_balances(self, part_number: str, location: str | None = None) -> List[LotBalance]:
+    def lot_balances(self, part_number: str, location: str | None = None) -> list[LotBalance]:
         part_number = self._normalize_part_number(part_number)
         with self.session_factory() as session:
             part = self._part(session, part_number)
@@ -1013,7 +1013,7 @@ class InventoryStore:
             )
         return diff
 
-    def low_stock(self) -> List[Part]:
+    def low_stock(self) -> list[Part]:
         return [
             p
             for p in self.parts.values()
@@ -1284,8 +1284,8 @@ class InventoryStore:
     def _bom_availability_in_session(
         self, session: Session, part: PartRecord, qty: int, location: LocationRecord
     ) -> BOMAvailability:
-        required: Dict[str, int] = {}
-        parts: Dict[str, PartRecord] = {}
+        required: dict[str, int] = {}
+        parts: dict[str, PartRecord] = {}
         tree = self._bom_structure(session, part, qty, 1, required, parts)
         stock_by_id = dict(
             session.execute(
@@ -1349,7 +1349,7 @@ class InventoryStore:
             )
             .order_by(PartRecord.part_number, LotRecord.lot_number)
         ).all()
-        lots_by_part: Dict[str, list[tuple[str, int]]] = {}
+        lots_by_part: dict[str, list[tuple[str, int]]] = {}
         for part_number, lot_number, stock in rows:
             lots_by_part.setdefault(part_number, []).append((lot_number, stock))
 
@@ -1385,8 +1385,8 @@ class InventoryStore:
         part: PartRecord,
         qty_required: int,
         quantity_per_parent: int,
-        requirements: Dict[str, int],
-        parts: Dict[str, PartRecord],
+        requirements: dict[str, int],
+        parts: dict[str, PartRecord],
     ) -> BOMTreeNode:
         parts[part.part_number] = part
         children = session.scalars(

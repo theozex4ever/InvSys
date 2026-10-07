@@ -1,12 +1,12 @@
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QBrush, QColor, QDesktopServices, QIntValidator
 from PySide6.QtWidgets import (
-    QComboBox,
     QCheckBox,
+    QComboBox,
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
@@ -26,9 +26,9 @@ from PySide6.QtWidgets import (
 from inventory_control.backup import backup_database
 from inventory_control.config import BACKUP_DIR, DB_PATH, EXPORT_DIR
 from inventory_control.import_export import ImportExportService
-from inventory_control.ui.store import STORE
 from inventory_control.models import BOMShipmentPlan
 from inventory_control.ui.bom_flowchart import BOMFlowchart, capacity_level
+from inventory_control.ui.store import STORE
 from inventory_control.ui.widgets import BaseView, Card, PartCombo, add_field, set_feedback
 
 
@@ -1162,7 +1162,7 @@ class MoveAdjustView(BaseView):
             current = STORE.stock_at(part, location, lot)
             diff = new_count - current
             operator = self.operator_getter()
-            if abs(diff) >= max(10, max(current // 2, 1)):
+            if abs(diff) >= max(10, current // 2, 1):
                 answer = QMessageBox.question(
                     self,
                     "Confirm large count correction",

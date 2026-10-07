@@ -177,18 +177,24 @@ class TestMutationNotifications:
         assert calls == [expected_stock]
 
     @pytest.mark.parametrize(
-        "mutation",
+        "mutation, message",
         [
-            lambda store: store.ship("PART", 11, "Stock", "Acme", "bob", "LOT-1"),
-            lambda store: store.move("PART", 11, "Stock", "Shipping Bench", "LOT-1", "carol"),
-            lambda store: store.adjust("PART", "Stock", "NO-LOT", 7, "dave", "Recount"),
+            (lambda store: store.ship("PART", 11, "Stock", "Acme", "bob", "LOT-1"), "Not enough"),
+            (
+                lambda store: store.move("PART", 11, "Stock", "Shipping Bench", "LOT-1", "carol"),
+                "Not enough",
+            ),
+            (
+                lambda store: store.adjust("PART", "Stock", "NO-LOT", 7, "dave", "Recount"),
+                "Lot not found",
+            ),
         ],
         ids=["ship", "move", "adjust"],
     )
-    def test_subscriber_is_not_called_after_rejection(self, stocked, mutation):
+    def test_subscriber_is_not_called_after_rejection(self, stocked, mutation, message):
         store, calls = stocked
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=message):
             mutation(store)
 
         assert calls == []

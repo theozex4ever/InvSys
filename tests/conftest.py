@@ -113,7 +113,7 @@ def blank_store(monkeypatch):
     Use blank_store when you want FULL control over initial state — you will
     add exactly the parts and stock you need for your test scenario.
     """
-    monkeypatch.setattr(InventoryStore, "seed", lambda self: None)
+    monkeypatch.setattr(InventoryStore, "seed", lambda _self: None)
     return InventoryStore()
 
 

@@ -24,7 +24,6 @@ ever changes the insertion order, these tests will fail and catch the change.
 
 import pytest
 
-
 # ===========================================================================
 # move — happy path
 # ===========================================================================
@@ -130,10 +129,8 @@ class TestMoveValidation:
             part_in_store.move("TEST-001", 11, "Stock", "Shipping Bench", "LOT-1", "carol")
 
     def test_insufficient_stock_does_not_change_either_balance(self, part_in_store):
-        try:
+        with pytest.raises(ValueError, match="Not enough stock"):
             part_in_store.move("TEST-001", 99, "Stock", "Shipping Bench", "LOT-1", "carol")
-        except ValueError:
-            pass
 
         assert part_in_store.stock_at("TEST-001", "Stock") == 10
         assert part_in_store.stock_at("TEST-001", "Shipping Bench") == 0
@@ -141,10 +138,8 @@ class TestMoveValidation:
     def test_insufficient_stock_does_not_create_transactions(self, part_in_store):
         tx_count_before = len(part_in_store.transactions)
 
-        try:
+        with pytest.raises(ValueError, match="Not enough stock"):
             part_in_store.move("TEST-001", 99, "Stock", "Shipping Bench", "LOT-1", "carol")
-        except ValueError:
-            pass
 
         assert len(part_in_store.transactions) == tx_count_before
 

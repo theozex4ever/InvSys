@@ -17,7 +17,6 @@ adjust() returns the signed difference so the caller can display it:
 
 import pytest
 
-
 # ===========================================================================
 # adjust — happy path
 # ===========================================================================
@@ -133,20 +132,16 @@ class TestAdjustValidation:
             part_in_store.adjust("TEST-001", "Narnia", "LOT-1", 5, "dave", "Spot check")
 
     def test_failed_adjust_does_not_change_balance(self, part_in_store):
-        try:
+        with pytest.raises(ValueError, match="New count cannot be negative"):
             part_in_store.adjust("TEST-001", "Stock", "LOT-1", -1, "dave", "Error")
-        except ValueError:
-            pass
 
         assert part_in_store.stock_at("TEST-001", "Stock") == 10
 
     def test_failed_adjust_does_not_create_transaction(self, part_in_store):
         tx_count_before = len(part_in_store.transactions)
 
-        try:
+        with pytest.raises(ValueError, match="New count cannot be negative"):
             part_in_store.adjust("TEST-001", "Stock", "LOT-1", -1, "dave", "Error")
-        except ValueError:
-            pass
 
         assert len(part_in_store.transactions) == tx_count_before
 

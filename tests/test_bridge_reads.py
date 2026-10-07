@@ -92,7 +92,8 @@ def test_read_holds_one_snapshot_while_another_store_commits(inventory, name):
     assert during == before
     # Closing the read releases its snapshot; the next request sees the commit.
     after = desktop_read(bridge, name)
-    assert after["ok"] and after != before
+    assert after["ok"]
+    assert after != before
     assert bridge.part_detail("A")["data"]["quantity"] == 8
 
 

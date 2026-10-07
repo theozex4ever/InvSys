@@ -1,4 +1,5 @@
-from typing import Callable, List
+from collections.abc import Callable
+from typing import ClassVar
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer, Signal
 from PySide6.QtGui import QColor
@@ -51,7 +52,12 @@ class Card(QFrame):
 
 class Toast(QFrame):
     dismiss_requested = Signal()
-    COLORS = {"success": "#178553", "error": "#d14343", "warning": "#f6c343", "info": "#2f6fed"}
+    COLORS: ClassVar[dict[str, str]] = {
+        "success": "#178553",
+        "error": "#d14343",
+        "warning": "#f6c343",
+        "info": "#2f6fed",
+    }
 
     def __init__(
         self,
@@ -126,7 +132,7 @@ class ToastManager:
         max_visible: int = 4,
     ) -> None:
         self.parent = parent
-        self.toasts: List[Toast] = []
+        self.toasts: list[Toast] = []
         self.display_ms = display_ms
         self.fade_in_ms = fade_in_ms
         self.fade_out_ms = fade_out_ms

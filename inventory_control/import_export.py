@@ -1,13 +1,12 @@
 import csv
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
 from inventory_control.backup import backup_database
 from inventory_control.config import BACKUP_DIR, DB_PATH, EXPORT_DIR
 from inventory_control.models import CSVPreview, CSVRowIssue, ExportResult, ImportResult
 from inventory_control.store import InventoryStore
-
 
 PARTS_HEADERS = ["part_number", "description", "default_location", "minimum_quantity", "active"]
 INVENTORY_HEADERS = [
@@ -156,7 +155,9 @@ class ImportExportService:
             "parts", path, rows, header_errors, warnings, self._validate_part_row
         )
 
-    def import_parts_csv(self, path: Path, operator: str) -> ImportResult:
+    # Parts and BOM links carry no operator column; the argument keeps every
+    # import entry point's signature uniform for the Settings view.
+    def import_parts_csv(self, path: Path, operator: str) -> ImportResult:  # noqa: ARG002
         preview = self.preview_parts_import_csv(path)
         self._require_importable(preview)
         rows = [
@@ -201,7 +202,7 @@ class ImportExportService:
             )
         return preview
 
-    def import_bom_csv(self, path: Path, operator: str) -> ImportResult:
+    def import_bom_csv(self, path: Path, operator: str) -> ImportResult:  # noqa: ARG002
         preview = self.preview_bom_import_csv(path)
         self._require_importable(preview)
         rows = [
@@ -263,7 +264,7 @@ class ImportExportService:
                         )
                 for row_number, raw in enumerate(reader, start=2):
                     normalized = {}
-                    for original, header in zip(reader.fieldnames, headers):
+                    for original, header in zip(reader.fieldnames, headers, strict=True):
                         normalized[header] = (raw.get(original) or "").strip()
                     rows.append((row_number, normalized))
         except OSError as exc:

@@ -359,7 +359,8 @@ class InventoryBridge:
     def ship_bom(self, request: Any) -> dict[str, Any]:
         def ship() -> dict[str, Any]:
             if not isinstance(request, dict):
-                raise ValueError("Invalid request fields.")
+                # ValueError maps to the bridge's VALIDATION response code.
+                raise ValueError("Invalid request fields.")  # noqa: TRY004
             fields = self._bom_request(
                 {key: value for key, value in request.items() if key != "review_id"}
             )

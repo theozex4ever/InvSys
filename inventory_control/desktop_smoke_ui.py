@@ -22,7 +22,7 @@ class _GuiActions(QObject):
     def perform(self) -> None:
         try:
             self.action()
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - reported to the probe's caller
             self.error = error
         finally:
             self.finished.set()

@@ -1,10 +1,11 @@
 import csv
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
-from inventory_control.backup import backup_database
 import inventory_control.backup as backup_mod
+from inventory_control.backup import backup_database
 from inventory_control.import_export import ImportExportService
 from inventory_control.store import InventoryStore
 
@@ -27,7 +28,7 @@ def write_csv(path, text):
 
 
 def read_csv(path):
-    with open(path, encoding="utf-8", newline="") as handle:
+    with Path(path).open(encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
 
 
@@ -133,7 +134,7 @@ def test_export_all_writes_five_files_with_same_timestamp(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("text", "field"),
+    "text, field",
     [
         ("description\nWidget", "part_number"),
         ("part_number,description\nABC-1,", "description"),
@@ -195,14 +196,14 @@ def test_parts_import_rejects_duplicate_rows_and_leaves_parts_unchanged(tmp_path
         """,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="CSV import has validation errors"):
         service.import_parts_csv(path, "alice")
 
     assert store.parts["ABC-1"].description == "Original"
 
 
 @pytest.mark.parametrize(
-    ("text", "field"),
+    "text, field",
     [
         ("part_number,location,quantity\nABC-1,Stock,5", "lot_number"),
         ("part_number,location,lot_number,quantity\nGHOST,Stock,LOT-1,5", "part_number"),
@@ -270,7 +271,7 @@ def test_inventory_failed_import_leaves_balances_and_transactions_unchanged(tmp_
         """,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="CSV import has validation errors"):
         service.import_inventory_csv(path, "alice")
 
     assert store.stock_at("ABC-1", "Stock") == 0
@@ -278,7 +279,7 @@ def test_inventory_failed_import_leaves_balances_and_transactions_unchanged(tmp_
 
 
 @pytest.mark.parametrize(
-    ("text", "field"),
+    "text, field",
     [
         (
             "parent_part_number,component_part_number,quantity_per\nGHOST,COMP-1,1",
@@ -366,7 +367,7 @@ def test_bom_failed_import_leaves_links_unchanged(tmp_path):
         """,
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="CSV import has validation errors"):
         service.import_bom_csv(path, "alice")
 
     assert store.bom_components["KIT"] == {"SCREW": 1}

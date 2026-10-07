@@ -60,7 +60,8 @@ def test_catalog_search_filters_sort_and_balances(tmp_path):
         for p in bridge.search_parts({"sort": "part_number", "descending": True})["data"]
     ] == ["C", "B", "A"]
     detail = bridge.part_detail("a")["data"]
-    assert detail["quantity"] == 3 and detail["low_stock"] is True
+    assert detail["quantity"] == 3
+    assert detail["low_stock"] is True
     assert detail["balances"] == [
         {
             "part_number": "A",
@@ -87,7 +88,8 @@ def test_creation_errors_and_restart(tmp_path):
     }
     assert "Stock" in bridge.locations()["data"]
     created = bridge.create_part(request)
-    assert created["ok"] and created["data"]["part_number"] == "A"
+    assert created["ok"]
+    assert created["data"]["part_number"] == "A"
     assert bridge.create_part(request)["error"] == {
         "code": "DUPLICATE",
         "message": "Part already exists.",
@@ -154,6 +156,7 @@ def test_catalog_reports_activity_and_stock_state_separately(tmp_path):
     assert bridge.part_detail("B")["data"]["low_stock"] is False
     store.set_part_active("A", False)
     part = bridge.part_detail("A")["data"]
-    assert part["active"] is False and part["low_stock"] is False
+    assert part["active"] is False
+    assert part["low_stock"] is False
     assert part["quantity"] == 3
     assert bridge.dashboard()["data"]["low_stock"] == []

@@ -24,7 +24,6 @@ each test.  For tests that only care about the outcome and not the setup,
 
 import pytest
 
-
 # ===========================================================================
 # receive — happy path
 # ===========================================================================
@@ -65,7 +64,7 @@ class TestReceiveHappyPath:
         # A transaction should now exist
         assert len(blank_store.transactions) == 1
 
-    def test_transaction_type_is_RECEIVE(self, blank_store):
+    def test_transaction_type_is_receive(self, blank_store):
         blank_store.add_part("ABC-1", "Widget A")
         blank_store.receive("ABC-1", 10, "Stock", "LOT-1", "alice")
 
@@ -158,19 +157,15 @@ class TestReceiveValidation:
         # If the call raises, the balance must be unchanged.
         blank_store.add_part("ABC-1", "Widget A")
 
-        try:
+        with pytest.raises(ValueError, match="Quantity must be greater than zero"):
             blank_store.receive("ABC-1", 0, "Stock", "LOT-1", "alice")
-        except ValueError:
-            pass
 
         assert blank_store.stock_at("ABC-1", "Stock") == 0
 
     def test_failed_receive_does_not_create_transaction(self, blank_store):
         blank_store.add_part("ABC-1", "Widget A")
 
-        try:
+        with pytest.raises(ValueError, match="Quantity must be greater than zero"):
             blank_store.receive("ABC-1", -5, "Stock", "LOT-1", "alice")
-        except ValueError:
-            pass
 
         assert len(blank_store.transactions) == 0

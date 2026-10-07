@@ -1,11 +1,12 @@
 """Scrollable, zoomable flowchart for a nested bill of materials."""
 
+from typing import ClassVar
+
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from inventory_control.models import BOMTreeNode
-
 
 CRITICAL_BUILD_LIMIT = 100
 LOW_BUILD_LIMIT = 500
@@ -26,7 +27,7 @@ class BOMFlowchart(QGraphicsView):
     ROW_GAP = 24
     MARGIN = 34
 
-    COLORS = {
+    COLORS: ClassVar[dict[str, tuple[str, str, str]]] = {
         "critical": ("#f16e75", "#51272d", "#e36a72"),
         "low": ("#f6c85f", "#4c3e23", "#d4aa45"),
         "ready": ("#80b5f6", "#243447", "#6389ae"),
