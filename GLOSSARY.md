@@ -16,6 +16,9 @@ A named place where stock is held. An inactive Location can still hold stock rec
 **Stock balance**:
 The quantity of a Part in a particular Lot at a Location. A Part's total stock includes its balances across all Lots and Locations.
 
+**Stock ledger**:
+The transaction log together with the Stock balances it accounts for. Every balance change is posted to the ledger as a transaction row in the same database transaction. Phantom BOM rows are recorded without a balance change.
+
 **Low stock**:
 An active Part whose total stock is at or below its positive minimum quantity. A Part with a minimum quantity of zero is not classified as low stock.
 
