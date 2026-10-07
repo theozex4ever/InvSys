@@ -66,5 +66,15 @@ motion styles. Operator and explicit theme choice use existing Python settings.
 
 See [desktop launch and validation](../docs/frontend/desktop.md).
 See [complete prototype acceptance and remaining gaps](../docs/frontend/prototype-acceptance.md).
+See [confirmed frontend polish decisions](../docs/frontend/polish-decisions.md).
+
+Dashboard shortage arrows open Receive with the Part selected; the Low-stock
+summary and View all action open filtered Parts. Receive reviews preview stock at
+the selected Location, while standard Ship reviews highlight the selected Lot.
+These estimates use the last availability read and never replace Python
+validation or shipment confirmation. BOM reviews emphasize actual component
+requirements and Lot allocations. Low stock stays amber, including an explicit
+No stock label at zero; blocked shipment shortages and errors use red.
+
 Part details have a contextual View History action; a failed transaction or
 shipment detail read offers Retry details inside the open drawer.

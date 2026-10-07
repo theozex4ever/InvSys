@@ -76,6 +76,9 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             raise RuntimeError(f"Native capture failed: {target}")
 
     def trap(dialog_id: str) -> None:
+        # Viewport captures resize the window; restore native focus before keys.
+        actions.run(activate)
+        wait("document.hasFocus()")
         run(f"""
             window.smokeDialog = document.querySelector('#{dialog_id}');
             window.smokeControls = Array.from(smokeDialog.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled)')).filter(e => e.getClientRects().length);
@@ -219,5 +222,103 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
         )
     print(
         "Desktop smoke: both themes, five pages at four sizes, labels/reachable actions, native Tab/Shift+Tab/Escape and focus restoration passed.",
+        flush=True,
+    )
+
+
+def check_stock_presentation(window: Any, wait: Any) -> None:
+    """Exercise stock-impact displays through the real bridge and rendered controls."""
+    run = window.evaluate_js
+    run("""
+        window.polishPart = '000-UI-PREVIEW';
+        window.polishSetup = null;
+        (async () => {
+            const api = window.pywebview.api;
+            const existing = await api.part_detail(polishPart);
+            if (existing.ok || existing.error.code !== 'NOT_FOUND') {
+                window.polishSetup = existing;
+                document.querySelector('[data-page=dashboard]').click();
+                return;
+            }
+            const created = await api.create_part({part_number:polishPart, description:'Stock preview acceptance', minimum_quantity:20, location:'Stock'});
+            if (!created.ok) { window.polishSetup = created; return; }
+            window.polishSetup = await api.receive({part_number:polishPart, quantity:17, location:'Stock', lot_number:'PREVIEW', operator:'Desktop smoke', reference:'UI-PREVIEW', notes:''});
+            document.querySelector('[data-page=dashboard]').click();
+        })();
+    """)
+    wait("window.polishSetup")
+    if not run("window.polishSetup.ok"):
+        raise RuntimeError("Stock presentation setup failed.")
+    wait(
+        "Array.from(document.querySelectorAll('#dashboard-data button')).some(b => b.getAttribute('aria-label') === 'Receive ' + polishPart)"
+    )
+    run(
+        "Array.from(document.querySelectorAll('#dashboard-data button')).find(b => b.getAttribute('aria-label') === 'Receive ' + polishPart).click()"
+    )
+    wait(
+        "document.querySelector('#receive-part_number').value === polishPart && !document.querySelector('#receive-submit').disabled"
+    )
+    run(
+        "document.querySelector('#receive-quantity').value='5'; document.querySelector('#receive-quantity').dispatchEvent(new Event('input', {bubbles:true}))"
+    )
+    wait("document.querySelector('#receive-quantity').value === '5'")
+    if not run(
+        "Array.from(document.querySelectorAll('#receive-review .review-row strong')).map(e => e.textContent).join('|') === '17|5|22'"
+    ):
+        raise RuntimeError(
+            f"Receipt preview must show location stock 17 + 5 = 22: {run('document.querySelector("#receive-review").textContent')}"
+        )
+    run(
+        "document.querySelector('#receive-quantity').value='1.5'; document.querySelector('#receive-quantity').dispatchEvent(new Event('input', {bubbles:true}))"
+    )
+    if not run(
+        "document.querySelector('#receive-review').textContent.includes('Enter a valid quantity') && !document.querySelector('#receive-review').textContent.includes('18.5')"
+    ):
+        raise RuntimeError(
+            "An invalid fractional quantity must not show a receipt estimate."
+        )
+    run("document.querySelector('[data-page=ship]').click()")
+    wait(
+        "!document.querySelector('#ship-review').textContent.includes('Reading current stock')"
+    )
+    run(
+        "document.querySelector('#ship-part_number').value=polishPart; document.querySelector('#ship-part_number').dispatchEvent(new Event('change'))"
+    )
+    wait("!document.querySelector('#ship-submit').disabled")
+    run("""
+        document.querySelector('#ship-lot_number').value='PREVIEW';
+        document.querySelector('#ship-quantity').value='5';
+        document.querySelector('#ship-quantity').dispatchEvent(new Event('input', {bubbles:true}));
+    """)
+    if not run(
+        "Array.from(document.querySelectorAll('#ship-review .review-row strong')).map(e => e.textContent).join('|') === '17|5|12'"
+    ):
+        raise RuntimeError("Shipment preview must show selected-lot stock 17 - 5 = 12.")
+    run(
+        "document.querySelector('#ship-quantity').value='18'; document.querySelector('#ship-quantity').dispatchEvent(new Event('input', {bubbles:true}))"
+    )
+    if not run(
+        "document.querySelector('#ship-review').textContent.includes('1 short') && document.querySelector('#ship-review').textContent.includes('Blocked — selected-lot shortage') && document.querySelector('#ship-review').textContent.includes('Low stock')"
+    ):
+        raise RuntimeError(
+            "Shipment shortage must remain distinct from part Low stock."
+        )
+    run(
+        "window.polishRead=null; window.pywebview.api.stock_context(polishPart).then(r => { window.polishRead=r; })"
+    )
+    wait("window.polishRead")
+    if not run(
+        "window.polishRead.ok && window.polishRead.data.part.quantity === 17 && window.polishRead.data.transactions.length === 1 && window.polishRead.data.shipments.length === 0"
+    ):
+        raise RuntimeError(
+            "Presentation previews must not change stock or create records."
+        )
+    for mode in ("receive", "ship"):
+        run(
+            f"document.querySelector('#{mode}-part_number').value=''; document.querySelector('#{mode}-quantity').value=''; document.querySelector('#{mode}-part_number').dispatchEvent(new Event('change'))"
+        )
+    run("document.querySelector('[data-page=dashboard]').click()")
+    print(
+        "Desktop smoke: contextual Receive, location/lot impact, invalid quantity, and shortage displays passed without mutations.",
         flush=True,
     )

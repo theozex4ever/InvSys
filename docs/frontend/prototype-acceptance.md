@@ -5,6 +5,9 @@ and the bounded workflow in [#6](https://github.com/theozex4ever/InvSys/issues/6
 This is a working desktop slice using approved layout A. The original PySide6
 application remains available; the complete frontend migration is unfinished.
 
+The subsequent 2026-10-04 presentation pass and its executed validation are
+recorded in [frontend polish decisions](polish-decisions.md#validation--2026-10-04).
+
 ## Reproduce the review
 
 From the repository root, use a virtual environment and the locked frontend:
