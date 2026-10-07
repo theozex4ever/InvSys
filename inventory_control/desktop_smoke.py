@@ -60,6 +60,9 @@ class DesktopSmoke:
                 "document.documentElement.scrollWidth <= innerWidth"
             ):
                 raise RuntimeError("Desktop page overflows horizontally.")
+            from inventory_control.desktop_smoke_ui import check_stock_presentation
+
+            check_stock_presentation(window, wait)
             self._stock_workflows(window, wait)
             self._bom_history_workflows(window, wait)
             self._history_read_recovery(window, wait)
