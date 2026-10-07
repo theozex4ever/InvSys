@@ -45,24 +45,29 @@ The store is SQLite-backed through SQLAlchemy while preserving a small UI-facing
 
 ```
 inventory_control/
-├── app.py                  # Entry point — wires store, style, and main window
+├── app.py                  # PySide6 entry point — startup backup, store, style, main window
+├── desktop.py              # pywebview entry point — launch options, logging, window
+├── bridge.py               # InventoryBridge — narrow validated use cases for the frontend
+├── desktop_smoke*.py       # Native desktop smoke check (--smoke-check)
 ├── backup.py               # SQLite backup helper with retention
+├── import_export.py        # CSV export and validated import preview/commit
 ├── config.py               # Path constants (data/, backups/, exports/, logs/)
 ├── db.py                   # SQLite engine/session setup and pragmas
 ├── migrations.py           # Lightweight schema bootstrap/version setting
-├── models.py               # Dataclasses / DTOs used by the UI-facing store
+├── models.py               # Detached dataclass DTOs returned by the store
 ├── orm.py                  # SQLAlchemy ORM tables
 ├── store.py                # InventoryStore — SQLite-backed service facade + subscriber pattern
 └── ui/
-    ├── main_window.py      # MainWindow + QStackedWidget navigation
-    ├── views.py            # Task-based views including BOM builder/visualizer
+    ├── store.py            # Shared operational store for the PySide6 UI
+    ├── main_window.py      # MainWindow + grouped sidebar navigation
+    ├── views.py            # Task-based views, including BOM and Settings
+    ├── bom_flowchart.py    # Nested BOM flowchart and build capacity
     ├── widgets.py          # Shared components: Card, BaseView, PartCombo, Toast, ToastManager, add_field()
-    └── style.py            # Global QSS theme (dark neutral, role-based object names)
+    └── style.py            # Global QSS theme
+frontend/                   # Optional pywebview frontend (Vite + TypeScript)
 ```
 
-**Data flow:** Views gather input → call `STORE` methods → display results via toast notifications. No business logic lives inside views.
-
-**Service boundary:** `InventoryStore` is now a SQLite-backed facade. The UI still calls store methods and never writes database rows directly.
+**Data flow:** Views gather input → call `STORE` methods → display results via toast notifications. No business logic lives inside views, and views never write database rows directly.
 
 Store notifications refresh subscribed views after mutations commit. A failed
 observer is logged without rejecting the committed operation or stopping other
@@ -136,10 +141,8 @@ python inventory_desktop.py --database /tmp/invsys-review/inventory.db
 
 Omit `--database` to use the existing operational data and startup backups.
 Built assets load offline without a frontend development server or HTTP server.
-See [desktop launch, scope, package smoke, and validation](docs/frontend/desktop.md).
-The complete working slice has [repeatable native acceptance checks and a
-remaining-gap record](docs/frontend/prototype-acceptance.md), including both
-shipment types, keyboard/layout checks, and restart persistence.
+See [desktop launch, scope, package smoke, and validation](docs/frontend/desktop.md)
+and the [frontend roadmap](docs/frontend/roadmap.md).
 
 ---
 
@@ -183,17 +186,6 @@ shared libraries, install `libegl1`, `libopengl0`, and `libxkbcommon0`, as CI do
 The optional pywebview GUI launch and installer packaging remain manual checks;
 see [desktop validation](docs/frontend/desktop.md).
 
-To verify the workflow itself before expanding it:
-
-1. Push this branch and open a pull request against `main`. Check that **Python
-   CI** and **Frontend CI** appear and all steps pass; open any step to read its log.
-2. On a disposable test branch with a pull request, add `tests/test_ci_probe.py`
-   containing `def test_ci_probe(): assert False`, then commit and push. Confirm
-   **Run Python and Qt tests** fails and **Python CI** turns red, while
-   **Frontend CI** still runs independently.
-3. Remove the probe, commit, and push again. Confirm the check returns to green.
-   Keep the deliberately failing probe out of `main`.
-
 The badge above shows the latest `main` result and links to the run history for
 portfolio viewers. CI reports failures; enforcing a passing check before merging
 requires a separate GitHub branch rule that requires both jobs to pass. This
@@ -221,7 +213,7 @@ The core tables are:
 
 | Table | Purpose |
 |---|---|
-| `parts` | Part master — number, description, category, UoM, min qty, active |
+| `parts` | Part master — number, description, min qty, default location, active |
 | `locations` | Named stock locations — active flag, no hard deletes |
 | `lots` | Lot master per part |
 | `inventory_balances` | Current qty per part/location — fast lookup only |
@@ -235,25 +227,23 @@ Shipment number format: `SHP-YYYYMMDD-0001` (counter resets per day).
 
 ---
 
-## Planned MVP Feature Scope
-
-**Must-have (in progress)**
-- CSV export (parts, inventory, transactions, shipments)
-- CSV export/import for BOM definitions
-- CSV import with row-level preview and validation
-- Manual backup button
-- Application log file (`logs/app.log`)
+## MVP Feature Scope
 
 **Done**
 - SQLite + SQLAlchemy persistence
 - Persistent nested BOM tables and BOM shipment component snapshots
 - Required lot tracking for stock-changing workflows
-- Automatic startup backups
+- Automatic startup backups and a manual backup button
+- CSV export (parts, inventory, transactions, shipments, BOM definitions)
+- CSV import (parts, inventory receipts, BOM) with row-level preview and validation
 - Service facade with regression and persistence tests
+
+**Remaining**
+- Application log file for the original application (`logs/app.log`)
+- PyInstaller packaging and MVP hardening
 
 **Should-have**
 - Barcode field on parts; barcode-compatible search input
-- CSV import preview screen before commit
 - Recent parts quick-select
 
 **Not in MVP**
@@ -276,7 +266,7 @@ Shipment number format: `SHP-YYYYMMDD-0001` (counter resets per day).
 | 4 | Receive / Ship UI | Done |
 | 5 | Move / Adjust UI | Done |
 | 6 | Dashboard + History | Done |
-| 7 | CSV import/export + backup | Planned |
+| 7 | CSV import/export + backup | Done |
 | 8 | MVP hardening + PyInstaller | Planned |
 
 ---

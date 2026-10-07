@@ -1,12 +1,7 @@
-# Inventory Control Quality Gate
+# Manual PySide6 smoke checks
 
-Run the automated gate before starting the database migration:
-
-```bash
-QT_QPA_PLATFORM=offscreen pytest
-```
-
-Manual usability smoke checks:
+The automated gate is in the repository `CLAUDE.md` and README. After UI changes
+to the original application, also check:
 
 - Add Part success shows a readable toast.
 - Adding the same part again shows a duplicate-part error toast.
