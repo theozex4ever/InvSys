@@ -7,8 +7,8 @@ import inventory_control.ui.main_window as main_window_module
 import inventory_control.ui.views as views_module
 import inventory_control.ui.widgets as widgets_module
 from inventory_control.store import InventoryStore
-from inventory_control.ui.main_window import MainWindow
 from inventory_control.ui.bom_flowchart import BOMFlowchart, capacity_level
+from inventory_control.ui.main_window import MainWindow
 from inventory_control.ui.views import (
     BOMView,
     DashboardView,
@@ -49,7 +49,9 @@ def test_blocked_bom_draft_does_not_fail_receipt(qtbot, tmp_path, monkeypatch, n
     receipt.receive()
 
     assert store.stock_at("KIT", "Stock", "KIT-L1") == 3
-    receipts = [tx for tx in store.transactions if tx.part_number == "KIT" and tx.tx_type == "RECEIVE"]
+    receipts = [
+        tx for tx in store.transactions if tx.part_number == "KIT" and tx.tx_type == "RECEIVE"
+    ]
     assert len(receipts) == 1
     assert receipts[0].quantity_change == 3
     assert toasts[-1][1] == "success"
@@ -140,7 +142,9 @@ def test_bom_shipping_auto_allocates_across_multiple_lots(qtbot, blank_store, mo
     assert view.ship_btn.isEnabled() is True
 
 
-def test_bom_shipping_requires_new_review_when_lots_change_during_confirmation(qtbot, blank_store, monkeypatch):
+def test_bom_shipping_requires_new_review_when_lots_change_during_confirmation(
+    qtbot, blank_store, monkeypatch
+):
     blank_store.add_part("KIT-1", "Kit")
     blank_store.add_part("COMP-1", "Component")
     blank_store.add_bom_component("KIT-1", "COMP-1", 5)
@@ -189,7 +193,10 @@ def test_move_and_adjust_are_separate_task_tabs(qtbot, blank_store, monkeypatch)
     qtbot.addWidget(view)
 
     assert isinstance(view.tabs, QTabWidget)
-    assert [view.tabs.tabText(index) for index in range(view.tabs.count())] == ["Move Stock", "Adjust Count"]
+    assert [view.tabs.tabText(index) for index in range(view.tabs.count())] == [
+        "Move Stock",
+        "Adjust Count",
+    ]
 
 
 def test_adjust_can_correct_a_fully_shipped_lot(qtbot, blank_store, monkeypatch):
@@ -302,7 +309,10 @@ def test_sidebar_groups_related_views_without_losing_routes(qtbot, blank_store, 
     assert list(window.nav_buttons) == ["dashboard", "catalog", "stock", "history", "settings"]
     assert [window.group_bars["catalog"].tabText(i) for i in range(2)] == ["Parts", "BOM"]
     assert [window.group_bars["stock"].tabText(i) for i in range(4)] == [
-        "Receive", "Ship", "Move", "Adjust"
+        "Receive",
+        "Ship",
+        "Move",
+        "Adjust",
     ]
 
     for key, section in [("bom", "catalog"), ("ship", "stock"), ("history", "history")]:
@@ -391,7 +401,8 @@ def test_required_highlight_clears_and_returns_with_field_value(qtbot, blank_sto
     view = PartsView(lambda *_: None)
     qtbot.addWidget(view)
     label = next(
-        item for item in view.findChildren(QLabel)
+        item
+        for item in view.findChildren(QLabel)
         if item.objectName() == "FieldLabel" and item.text() == "Part number"
     )
 
@@ -407,7 +418,9 @@ def test_required_highlight_clears_and_returns_with_field_value(qtbot, blank_sto
     assert label.property("missing") is True
 
 
-def test_required_part_selector_clears_highlight_only_for_valid_part(qtbot, blank_store, monkeypatch):
+def test_required_part_selector_clears_highlight_only_for_valid_part(
+    qtbot, blank_store, monkeypatch
+):
     blank_store.add_part("ABC-1", "Widget")
     monkeypatch.setattr(widgets_module, "STORE", blank_store)
     combo = PartCombo()

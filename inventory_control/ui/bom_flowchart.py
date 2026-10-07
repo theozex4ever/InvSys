@@ -1,11 +1,12 @@
 """Scrollable, zoomable flowchart for a nested bill of materials."""
 
+from typing import ClassVar
+
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from inventory_control.models import BOMTreeNode
-
 
 CRITICAL_BUILD_LIMIT = 100
 LOW_BUILD_LIMIT = 500
@@ -26,7 +27,7 @@ class BOMFlowchart(QGraphicsView):
     ROW_GAP = 24
     MARGIN = 34
 
-    COLORS = {
+    COLORS: ClassVar[dict[str, tuple[str, str, str]]] = {
         "critical": ("#f16e75", "#51272d", "#e36a72"),
         "low": ("#f6c85f", "#4c3e23", "#d4aa45"),
         "ready": ("#80b5f6", "#243447", "#6389ae"),
@@ -88,15 +89,24 @@ class BOMFlowchart(QGraphicsView):
                 path.cubicTo(QPointF(bend, start.y()), QPointF(bend, end.y()), end)
                 level = capacity_level(subtree_capacity[id(child)])
                 self.scene().addPath(path, QPen(QColor(self.COLORS[level][2]), 2))
-                self._text(f"×{child.quantity_per_parent}",
-                           x + self.NODE_WIDTH + 12, child_y + self.NODE_HEIGHT / 2 - 28,
-                           80, 10, "#abb6c5", bold=True)
+                self._text(
+                    f"×{child.quantity_per_parent}",
+                    x + self.NODE_WIDTH + 12,
+                    child_y + self.NODE_HEIGHT / 2 - 28,
+                    80,
+                    10,
+                    "#abb6c5",
+                    bold=True,
+                )
                 render(child)
             self._card(node, x, y, subtree_capacity[id(node)])
 
         render(root)
-        bounds = self.scene().itemsBoundingRect().adjusted(-self.MARGIN, -self.MARGIN,
-                                                            self.MARGIN, self.MARGIN)
+        bounds = (
+            self.scene()
+            .itemsBoundingRect()
+            .adjusted(-self.MARGIN, -self.MARGIN, self.MARGIN, self.MARGIN)
+        )
         self.scene().setSceneRect(bounds)
         self.resetTransform()
         self._fit_initial_zoom()
@@ -108,8 +118,9 @@ class BOMFlowchart(QGraphicsView):
         outline = QPainterPath()
         outline.addRoundedRect(rect, 10, 10)
         self.scene().addPath(outline, QPen(QColor(border), 1.5), QBrush(QColor(fill)))
-        self.scene().addRect(QRectF(x, y + 13, 4, self.NODE_HEIGHT - 26),
-                             QPen(Qt.NoPen), QBrush(QColor(accent)))
+        self.scene().addRect(
+            QRectF(x, y + 13, 4, self.NODE_HEIGHT - 26), QPen(Qt.NoPen), QBrush(QColor(accent))
+        )
         kind = "ASSEMBLY" if node.children else "MATERIAL"
         self._text(kind, x + 16, y + 10, 200, 9, accent, bold=True)
         self._text(node.part_number, x + 16, y + 30, 210, 13, "#f4f6f9", bold=True)
@@ -122,8 +133,17 @@ class BOMFlowchart(QGraphicsView):
         self._text(f"{buildable:,} final builds", x + 16, y + 82, 208, 11, accent, bold=True)
         self._node_count += 1
 
-    def _text(self, value: str, x: float, y: float, width: float, size: int,
-              color: str, *, bold: bool = False):
+    def _text(
+        self,
+        value: str,
+        x: float,
+        y: float,
+        width: float,
+        size: int,
+        color: str,
+        *,
+        bold: bool = False,
+    ):
         item = self.scene().addText(value)
         item.setDefaultTextColor(QColor(color))
         font = QFont("Segoe UI", size)
