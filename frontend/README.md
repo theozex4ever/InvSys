@@ -13,7 +13,7 @@ npm run build
 
 `npm run build` checks types and then builds the assets. CI runs `npm run check`
 and `npm run build:assets` as separate steps. Node must satisfy the locked Vite
-release's engine requirement (Node 20.19+ or 22.12+). No frontend test runner is
+release's engine requirement (Node 22.12+ or 24+). No frontend test runner is
 installed.
 
 `npm run dev` serves the UI, but a normal browser has no Python bridge, so it
@@ -35,3 +35,18 @@ server or build plugin. All icons and styles are bundled locally.
   submission reconciliation.
 - `src/history.ts`: History search, filters, paging, and the read-only drawer.
 - `src/styles.css`: design tokens and both themes.
+
+## Presentation and navigation
+
+Dashboard shortage arrows open Receive with the Part selected; the Low-stock
+summary and View all action open filtered Parts. Receive reviews preview stock at
+the selected Location, while standard Ship reviews highlight the selected Lot.
+These estimates use the last availability read and never replace Python
+validation or shipment confirmation. BOM reviews emphasize component
+requirements and Lot allocations. Low stock stays amber, with an explicit
+No stock label at zero; blocked shipment shortages and errors use red.
+
+Part details have a contextual View History action; failed transaction or
+shipment detail reads offer Retry details inside the open drawer.
+See [confirmed frontend polish decisions](../docs/frontend/polish-decisions.md)
+for the presentation scope and its executed native validation.

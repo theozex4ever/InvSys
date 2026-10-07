@@ -1,7 +1,9 @@
 # Manual PySide6 smoke checks
 
-The automated gate is in the repository `CLAUDE.md` and README. After UI changes
-to the original application, also check:
+The automated gate is documented in [CI guidance](../docs/ci.md), the repository
+`CLAUDE.md`, and README. Run `python -m pytest --cov` from the repository root
+with `pyproject.toml` configuration. After UI changes to the original application,
+also check:
 
 - Add Part success shows a readable toast.
 - Adding the same part again shows a duplicate-part error toast.

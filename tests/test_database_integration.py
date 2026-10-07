@@ -1,4 +1,7 @@
+import gc
 import sqlite3
+import warnings
+from contextlib import closing
 
 import pytest
 
@@ -88,6 +91,25 @@ def test_backup_database_creates_openable_copy_and_applies_retention(tmp_path):
     assert backup is not None
     backups = list(backup_dir.glob("inventory-*.db"))
     assert len(backups) == 1
-    with sqlite3.connect(backups[0]) as connection:
+    with closing(sqlite3.connect(backups[0])) as connection:
         part_count = connection.execute("SELECT COUNT(*) FROM parts").fetchone()[0]
     assert part_count == 1
+
+
+def test_backup_releases_sqlite_file_handles(tmp_path):
+    """Regression: ``with sqlite3.connect()`` commits but never closes.
+
+    Leaked handles keep backup files locked on Windows, so retention could not
+    delete old backups. Garbage-collecting after a backup must not find any
+    connection that was left open.
+    """
+    db_path = tmp_path / "inventory.db"
+    store = InventoryStore(db_path=db_path, seed=False)
+    store.add_part("ABC-1", "Widget")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        backup_database(db_path=db_path, backup_dir=tmp_path / "backups")
+        gc.collect()
+
+    assert [w for w in caught if issubclass(w.category, ResourceWarning)] == []

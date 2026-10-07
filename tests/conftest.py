@@ -37,6 +37,27 @@ from PySide6.QtWidgets import QApplication
 from inventory_control.store import InventoryStore
 
 
+@pytest.fixture(autouse=True)
+def _dispose_stores(monkeypatch):
+    """Close every store a test creates so SQLite connections never leak.
+
+    Tests build stores directly and through fixtures. Tracking construction
+    here disposes each engine at teardown, which keeps the suite clean under
+    ``-W error`` (an unclosed connection raises ResourceWarning).
+    """
+    created = []
+    original_init = InventoryStore.__init__
+
+    def tracking_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        created.append(self)
+
+    monkeypatch.setattr(InventoryStore, "__init__", tracking_init)
+    yield
+    for store in created:
+        store.engine.dispose()
+
+
 @pytest.fixture
 def qtbot():
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -69,6 +90,7 @@ def qtbot():
 # blank_store
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def blank_store(monkeypatch):
     """
@@ -91,13 +113,14 @@ def blank_store(monkeypatch):
     Use blank_store when you want FULL control over initial state — you will
     add exactly the parts and stock you need for your test scenario.
     """
-    monkeypatch.setattr(InventoryStore, "seed", lambda self: None)
+    monkeypatch.setattr(InventoryStore, "seed", lambda _self: None)
     return InventoryStore()
 
 
 # ---------------------------------------------------------------------------
 # store  (seeded — normal startup state)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def store():
@@ -124,6 +147,7 @@ def store():
 # ---------------------------------------------------------------------------
 # part_in_store  (blank store + one known part with stock)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def part_in_store(blank_store):

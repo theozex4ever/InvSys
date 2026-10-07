@@ -70,6 +70,7 @@ def test_failed_observer_does_not_reject_committed_receipt(tmp_path, caplog, err
 # Helper used throughout this module
 # ---------------------------------------------------------------------------
 
+
 def make_counter():
     """
     Returns (counter_list, callback_fn).
@@ -90,8 +91,8 @@ def make_counter():
 # subscribe + notify basics
 # ===========================================================================
 
-class TestSubscribeAndNotify:
 
+class TestSubscribeAndNotify:
     def test_subscriber_is_called_after_add_part(self, blank_store):
         count, cb = make_counter()
         blank_store.subscribe(cb)
@@ -150,8 +151,8 @@ class TestSubscribeAndNotify:
 # multiple subscribers
 # ===========================================================================
 
-class TestMultipleSubscribers:
 
+class TestMultipleSubscribers:
     def test_all_subscribers_are_called(self, blank_store):
         count_a, cb_a = make_counter()
         count_b, cb_b = make_counter()
@@ -190,6 +191,7 @@ class TestMultipleSubscribers:
 # ===========================================================================
 # notify=False flag
 # ===========================================================================
+
 
 class TestNotifyFalseFlag:
     """
