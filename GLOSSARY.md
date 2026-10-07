@@ -41,4 +41,4 @@ The number of final products that current leaf stock at a selected Location can 
 The store's automatic assignment of required leaf materials to positive-stock Lots at the shipping Location, in lot-number order. The operator reviews the assignment before shipping; a changed assignment requires another review.
 
 **Shipment review**:
-A point-in-time assessment of stock availability and expected consumption for a requested quantity of a Part at a Location. For a Part with a BOM, it includes the required leaf materials and their Lot allocations.
+A point-in-time assessment of stock availability and expected consumption for a requested quantity of a Part at a Location. For a Part with a BOM, it includes the required leaf materials and their BOM lot allocations.

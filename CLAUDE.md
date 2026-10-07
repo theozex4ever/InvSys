@@ -4,27 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Running and Validating
 
-The original PySide6 application uses Python 3.12+, PySide6, and SQLAlchemy:
-
-```bash
-pip install PySide6 SQLAlchemy
-python inventory_visualizer.py
-```
-
-The optional pywebview desktop frontend uses built local assets:
-
-```bash
-pip install -r requirements-desktop.txt
-npm ci --prefix frontend
-npm run build --prefix frontend
-python inventory_desktop.py --database /tmp/invsys-review/inventory.db
-```
+Python 3.12+. The original PySide6 application is `python inventory_visualizer.py`.
+The optional pywebview frontend needs `requirements-desktop.txt` and built assets
+(`npm ci --prefix frontend && npm run build --prefix frontend`), then
+`python inventory_desktop.py --database /tmp/invsys-review/inventory.db`.
 
 Omitting `--database` opens the existing operational database. For workflow smoke
 checks, use an explicit disposable database; these checks perform real writes.
-See `docs/frontend/desktop.md` for smoke commands, platform requirements,
-packaging limits, and executed validation. See `frontend/README.md` for the live
-frontend contract and `README.md` for project context.
+See `docs/frontend/desktop.md` for smoke commands, platform requirements, the
+bridge contract, and packaging limits; `docs/frontend/roadmap.md` for remaining
+migration phases and rules.
 
 Install the locked toolchain with
 `pip install --require-hashes -r requirements.lock.txt`. Run the automated gate
@@ -73,8 +62,7 @@ no HTTP server. `frontend/src/bridge.ts` defines the typed client and DTOs;
 `import_export.py` provides CSV export and validated import previews/commits.
 These utilities are available through the original application's Settings view.
 The optional frontend covers dashboard, Parts, Receive, standard/BOM Ship, and
-History. Its deferred workflows and migration status are documented in
-`docs/frontend/desktop.md`.
+History; other workflows remain in the original application.
 
 ## Key Design Rules
 

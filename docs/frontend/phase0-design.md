@@ -2,9 +2,8 @@
 
 Status: Phase 0 approved on 2026-09-30. Selected layout: A — Attention first.
 
-This records decisions for the static visual prototype described in GUIDANCE.md.
-The complete design was confirmed by the user. The standalone prototype was
-reviewed and approved, with layout A selected for subsequent implementation.
+These decisions remain the visual reference for new frontend pages. The
+throwaway prototype was reviewed and approved, with layout A selected.
 
 ## Visual verdict
 
@@ -87,35 +86,3 @@ All three variations are retained there; A is the approved design reference.
 
 Use scripted fixtures that preserve existing business rules. These demonstrations
 are presentation scenarios rather than a second implementation of inventory logic.
-
-## Visual acceptance gate
-
-Before Phase 1 integration:
-
-- The user approves required screens and demonstration flows in both light and
-  dark themes at 1366 × 768 and 1920 × 1080.
-- Keyboard navigation, drawer focus management and closing, readable tables,
-  reachable actions, and reduced motion work.
-- Smaller windows remain usable through scrolling without horizontal page scroll.
-- Move, Adjust, and Settings are clearly marked previews.
-- The prototype remains demonstrable without Python, pywebview, or database access.
-
-## Next step
-
-Proceed to Phase 1: prove pywebview loading, the narrow typed Python bridge, safe
-errors, and packaged frontend assets. Layout A is the approved visual reference.
-Retain the existing PySide6 application while migrating real workflows incrementally.
-
-## Prototype verification
-
-- Strict TypeScript checking and the Vite production build completed successfully.
-- Browser smoke checks exercised receipt validation and reset, draft retention,
-  standard selected-lot shortages, multi-lot BOM review, stale-allocation rejection
-  and re-review, History traceability, and unsaved part-edit confirmation.
-- Browser keyboard checks exercised Ctrl+K search, result activation, drawer focus
-  trapping, Escape, and page shortcuts.
-- Both themes and all three dashboard variants were checked for horizontal page
-  overflow at the agreed desktop viewport settings and at 1000 × 650.
-- Production output omits the development-only variant switcher.
-- Python code and live inventory are unaffected. No production integration tests
-  were added for this throwaway prototype.
