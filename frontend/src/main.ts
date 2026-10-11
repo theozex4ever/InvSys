@@ -1,11 +1,12 @@
 import './styles.css';
+import { bomWorkflow } from './bom';
 import { historyWorkflow } from './history';
 import { stockWorkflows } from './stock';
-import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History } from 'lucide';
+import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History, ListTree } from 'lucide';
 import { ready, read, RequestError, type Search, type Part, type PartDetail, type Dashboard } from './bridge';
 
 const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search: SearchIcon, Check, History } });
+const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search: SearchIcon, Check, History, ListTree } });
 const icon = (name: string) => `<i data-lucide="${name}" aria-hidden="true"></i>`;
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete the request.';
@@ -13,7 +14,7 @@ const status = (text: string, error = false) => `<div class="status ${error ? 'e
 const badges = (part: Part) => `<span class="badge ${part.active ? 'good' : 'neutral'}">${part.active ? 'Active' : 'Inactive'}</span> ${part.low_stock ? `<span class="badge warn">${part.quantity === 0 ? 'Low stock · No stock' : 'Low stock'}</span>` : ''}`;
 const search: Search = { query: '', status: 'all', low_stock: false, sort: 'part_number', descending: false };
 let api: Awaited<ReturnType<typeof ready>>;
-let page: 'dashboard' | 'parts' | 'receive' | 'ship' | 'history' = 'dashboard';
+let page: 'dashboard' | 'parts' | 'bom' | 'receive' | 'ship' | 'history' = 'dashboard';
 let searchVersion = 0;
 let dashboardVersion = 0;
 let detailVersion = 0;
@@ -28,7 +29,7 @@ let theme: 'light' | 'dark' = 'light';
 
 $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar" aria-label="Main navigation">
 <div class="brand"><div class="brand-mark">${icon('boxes')}</div><div><strong>INVSYS</strong><small>INVENTORY CONTROL</small></div></div>
-<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button><button class="nav-button" data-page="history" aria-label="History">${icon('history')}<span>History</span></button></nav>
+<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><button class="nav-button" data-page="bom" aria-label="BOM">${icon('list-tree')}<span>BOM</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button><button class="nav-button" data-page="history" aria-label="History">${icon('history')}<span>History</span></button></nav>
 <div class="sidebar-bottom"><button id="theme" class="nav-button" disabled aria-label="Switch to dark mode">${icon('moon')}<span>Dark mode</span></button><div class="local-status">STORED ON THIS DEVICE</div></div></aside>
 <div class="workspace"><header class="topbar"><div class="breadcrumb">Workspace / <strong id="page-name">Dashboard</strong></div>
 <div class="header-actions"><button id="global-search" class="global-search">${icon('search')}Search parts <kbd>Ctrl K</kbd></button><form id="operator-form" class="operator"><div><label for="operator">Operator</label><input id="operator" name="operator" placeholder="Your name" disabled></div><button id="save-operator" class="btn small" disabled>Save</button></form></div></header>
@@ -48,6 +49,7 @@ $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar" aria-label=
 <div id="create-error" role="alert"></div><button id="create-submit" class="btn primary">Create part</button></form></dialog>`;
 icons();
 const history = historyWorkflow(() => api);
+const bom = bomWorkflow(() => api);
 const stock = stockWorkflows(() => api, () => $<HTMLInputElement>('#operator').value, async () => { await Promise.all([loadParts(), loadDashboard(), history.load()]); }, (text, summary) => { notice(text); const element = document.createElement('div'); element.className = 'stock-toast'; element.setAttribute('role', 'status'); element.innerHTML = `${icon('check')}<span>${esc(summary ?? text)}</span>`; document.body.append(element); icons(); setTimeout(() => element.remove(), 5000); });
 
 // Native dialog focus can otherwise escape into the Qt browser chrome on Tab.
@@ -69,15 +71,16 @@ function notice(text: string, error = false) {
 }
 function navigate(next: typeof page, refresh = true) {
   if (page === 'history' && page !== next) history.leave();
+  if (page === 'bom' && page !== next) bom.leave();
   if ((page === 'receive' || page === 'ship') && page !== next) stock.leave();
   page = next;
-  for (const name of ['dashboard', 'parts', 'receive', 'ship', 'history']) $(`#${name}`).hidden = name !== next;
-  $('#page-name').textContent = next.charAt(0).toUpperCase() + next.slice(1);
+  for (const name of ['dashboard', 'parts', 'bom', 'receive', 'ship', 'history']) $(`#${name}`).hidden = name !== next;
+  $('#page-name').textContent = next === 'bom' ? 'BOM' : next.charAt(0).toUpperCase() + next.slice(1);
   document.querySelectorAll<HTMLElement>('[data-page]').forEach(button => {
     button.classList.toggle('active', button.dataset.page === next);
     if (button.dataset.page === next) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
-  if (api && refresh) { if (next === 'receive' || next === 'ship') void stock.open(next); else void (next === 'history' ? history.open() : next === 'dashboard' ? loadDashboard() : loadParts()); }
+  if (api && refresh) { if (next === 'receive' || next === 'ship') void stock.open(next); else void (next === 'history' ? history.open() : next === 'bom' ? bom.open() : next === 'dashboard' ? loadDashboard() : loadParts()); }
 }
 async function loadDashboard() {
   const version = ++dashboardVersion;

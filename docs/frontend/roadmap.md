@@ -66,6 +66,9 @@ transaction records match the PySide6 workflow, and balances refresh.
 
 ### 8. Interactive BOM Explorer
 
+BOM authoring (add/update/remove direct components) is delivered on its own BOM
+page; exploration below sits beside it and does not replace it.
+
 Nested BOM graph with pan/zoom/fit, node selection, an inspector (required,
 available, build capacity, locations, status, links to Part and History),
 subtree collapse/focus, breadcrumbs, and a build quantity input. Distinguish

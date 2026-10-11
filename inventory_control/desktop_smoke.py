@@ -10,6 +10,7 @@ class DesktopSmoke:
     def __init__(self, captures: Path) -> None:
         self.error: str | None = None
         self.stock_result: dict[str, Any] | None = None
+        self.bom_authoring: dict[str, Any] | None = None
         self.captures = captures
 
     def run(self, window: Any) -> None:
@@ -59,6 +60,9 @@ class DesktopSmoke:
             self._part_history_navigation(window, wait)
             self._refresh_reads(window, wait)
             self._bom_transport_recovery(window, wait)
+            from inventory_control.desktop_smoke_bom import check_bom_authoring
+
+            self.bom_authoring = check_bom_authoring(window, wait)
             from inventory_control.desktop_smoke_ui import check_ui
 
             check_ui(window, wait, self.captures, self.bom_part)

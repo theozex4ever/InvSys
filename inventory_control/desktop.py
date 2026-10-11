@@ -109,6 +109,15 @@ def main() -> int:
             ):
                 print("Desktop smoke failed: restart persistence.", file=sys.stderr)
                 return 1
+            authored = smoke.bom_authoring
+            if (
+                authored is None
+                or bridge.bom_definition(authored["parent"])["data"] != authored["definition"]
+                or bridge.shipment_detail(authored["shipment"]["shipment_number"])["data"]
+                != authored["shipment"]
+            ):
+                print("Desktop smoke failed: BOM authoring restart persistence.", file=sys.stderr)
+                return 1
             print("Desktop smoke: restart persistence passed; no HTTP server.")
         finally:
             reopened.engine.dispose()

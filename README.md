@@ -131,7 +131,7 @@ catalog: search/filter/sort, create parts, inspect lot/location stock, receive r
 lots, review and ship standard stock or existing nested BOM parents, and search
 History with persisted shipment/component traceability. Drafts survive session
 navigation; results and audit records survive restart. It uses the existing InventoryStore
-and SQLite schema and remembers operator/theme choices. BOM editing/exploration
+and SQLite schema and remembers operator/theme choices. BOM authoring is available on its BOM page; exploration
 and other workflows remain in the original PySide6 application.
 
 ```bash

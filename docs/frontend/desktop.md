@@ -1,7 +1,7 @@
 # Live desktop inventory workflows
 
 The pywebview frontend covers the dashboard, Parts catalog, Receive, standard and
-nested BOM Ship, and History, using [approved layout A](phase0-design.md). The
+nested BOM Ship, BOM authoring, and History, using [approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
 
@@ -44,7 +44,11 @@ absent, inspects its drawer, receives lots, ships standard stock, and exercises
 drafts, repeat entry, shortages, duplicate clicks, and lost-response reconciliation.
 It also prepares a fresh disposable nested/shared
 BOM, reviews a multi-lot allocation, rejects shortage and stale allocation,
-reconfirms, and inspects History and component snapshots.
+reconfirms, and inspects History and component snapshots. It then authors
+nested/shared definitions on the BOM page and exercises update, rejection,
+removal confirmation, duplicate clicks, a lost response with failed and then
+successful read-back, review invalidation after edits, and unchanged shipment
+snapshots, and verifies the result after reopening the store.
 It verifies the complete stock/audit result through a reopened store. Use a disposable file: these are real writes. Repeat the command to check
 startup backups and restart reads. No seed inventory is inserted by the launcher.
 
@@ -107,7 +111,7 @@ Deferred workflows are identified in the shell and drawer (see
 History record using its existing database transaction ID.
 
 The bridge exposes dashboard, preferences, save operator/theme, locations,
-part search/detail/create, stock context, receive, standard shipment preview,
+part search/detail/create, BOM definition read/save/remove, stock context, receive, standard shipment preview,
 standard ship, BOM preview/confirmation, searchable paged History, and
 transaction/shipment inspection. Stock context contains current part/lot/location balances,
 BOM presence, and that part's immutable transactions and shipments for recovery. It validates input shapes/types before using the store
@@ -185,10 +189,28 @@ even when a standard shipment has a custom reference. No identifiers or componen
 quantities are reconstructed in JavaScript. Success includes Inspect shipment;
 mutations and returning to History refresh reads while preserving filters.
 
+## BOM authoring
+
+The BOM page (`frontend/src/bom.ts`) maintains the direct components of nested
+definitions. `bom_definition` returns one Part's direct components and direct
+parents from one snapshot; `save_bom_component` adds a component or, when the
+link exists, updates its quantity; `remove_bom_component` requires
+`confirmed: true`. Self-reference, cycles, unknown Parts and quantities outside
+1–2147483647 are rejected by the store and bridge with no change. Each success
+returns the refreshed definition. Edits never write stock or audit records, and
+persisted shipment component snapshots are unaffected. A reviewed BOM shipment
+whose allocation no longer matches after an edit is rejected as `PLAN_CHANGED`
+and needs a fresh review.
+
+The page blocks duplicate submissions and preserves its draft on rejection. After
+a transport or internal failure it locks editing until the operator reads the
+authoritative definition and explicitly states whether the change applied; a
+failed read keeps the lock and nothing is retried automatically.
+
 ## Deferred workflows
 
 The shell directs operators to the original application for Move, Adjust, part
-editing/deactivation, location administration, BOM editing and exploration, CSV
+editing/deactivation, location administration, BOM exploration, CSV
 import/export, manual backup/restore, and operational Settings. Global search is
 part search only.
 
