@@ -57,6 +57,9 @@ class DesktopSmoke:
             self._bom_history_workflows(window, wait)
             self._history_read_recovery(window, wait)
             self._part_history_navigation(window, wait)
+            from inventory_control.desktop_smoke_parts import check_part_editing
+
+            check_part_editing(window, wait)
             self._refresh_reads(window, wait)
             self._bom_transport_recovery(window, wait)
             from inventory_control.desktop_smoke_ui import check_ui

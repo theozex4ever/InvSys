@@ -42,6 +42,9 @@ Importing the bridge does not initialize the original application's shared store
 The smoke command saves operator `Desktop smoke`, creates `DESKTOP-SMOKE` if
 absent, inspects its drawer, receives lots, ships standard stock, and exercises
 drafts, repeat entry, shortages, duplicate clicks, and lost-response reconciliation.
+It also creates the disposable `DESKTOP-EDIT` Part and exercises edit, unsaved-edit
+confirmation, validation, duplicate clicks, lost-response recovery (including a
+failed recovery read), stocked deactivation and reactivation.
 It also prepares a fresh disposable nested/shared
 BOM, reviews a multi-lot allocation, rejects shortage and stale allocation,
 reconfirms, and inspects History and component snapshots.
@@ -89,7 +92,13 @@ This package is a platform-specific smoke artifact, not a distributable release.
 
 Available: live dashboard counts/low-stock/activity, header operator save,
 remembered light/dark choice, catalog search/filter/sort, part creation, and
-read-only drawer with fields and lot/location balances. Low-stock entries open
+drawer with fields, lot/location balances, and Part editing: description, minimum
+quantity and default Location (the number is immutable), plus deactivate and
+reactivate without deletion. Deactivating a Part with stock names the units on
+hand and needs confirmation, which the bridge enforces. Cancelling or closing over
+unsaved edits asks first. A lost response locks the preserved edit until the
+operator reads the current Part and explicitly decides; mutations are never
+retried automatically. Low-stock entries open
 live parts; the attention panel shows five entries and links to all low-stock
 parts. Active and low-stock indicators are separate. Receive and standard Ship
 open from navigation, dashboard actions, and part details, adopting the selected
@@ -188,7 +197,7 @@ mutations and returning to History refresh reads while preserving filters.
 ## Deferred workflows
 
 The shell directs operators to the original application for Move, Adjust, part
-editing/deactivation, location administration, BOM editing and exploration, CSV
+location administration, BOM editing and exploration, CSV
 import/export, manual backup/restore, and operational Settings. Global search is
 part search only.
 
