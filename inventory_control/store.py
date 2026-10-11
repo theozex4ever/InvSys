@@ -676,13 +676,16 @@ class InventoryStore:
         component_part_number: str,
         quantity_per: int,
         notify: bool = True,
-    ) -> None:
+    ) -> bool:
+        """Add a direct component, or update an existing link; returns True when added."""
         parent = self._normalize_part_number(parent_part_number)
         component = self._normalize_part_number(component_part_number)
         if parent == component:
             raise ValueError("A part cannot contain itself.")
         if quantity_per <= 0:
             raise ValueError("Component quantity must be greater than zero.")
+        if quantity_per > 2**31 - 1:
+            raise ValueError("Component quantity cannot exceed 2147483647.")
         with self._mutation(notify) as (session, _):
             parent_part = self._require_part(session, parent)
             component_part = self._require_part(session, component)
@@ -704,6 +707,7 @@ class InventoryStore:
                 )
             else:
                 row.quantity_per = quantity_per
+        return row is None
 
     def remove_bom_component(
         self, parent_part_number: str, component_part_number: str, notify: bool = True

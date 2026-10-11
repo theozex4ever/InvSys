@@ -27,7 +27,7 @@ export function bomWorkflow(getAPI: () => API) {
   function lock() {
     const blocked = pending || uncertain;
     for (const name of ['parent', 'component', 'quantity']) control<HTMLInputElement | HTMLSelectElement>(name).disabled = blocked;
-    control<HTMLButtonElement>('refresh').disabled = pending;
+    control<HTMLButtonElement>('refresh').disabled = blocked;
     control<HTMLButtonElement>('submit').disabled = blocked || !parent;
     document.querySelectorAll<HTMLButtonElement>('#bom-definition button').forEach(button => { button.disabled = blocked; });
   }
@@ -48,17 +48,18 @@ export function bomWorkflow(getAPI: () => API) {
   function hint() {
     const number = select('component').value;
     const existing = definition?.part.part_number === parent ? definition.components.find(c => c.part_number === number) : undefined;
-    control('submit').textContent = existing ? 'Update quantity' : 'Add component';
+    const known = definition?.part.part_number === parent;
+    control('submit').textContent = existing ? 'Update quantity' : known ? 'Add component' : 'Save component';
     control('hint').textContent = existing ? `${number} is already on this BOM at ${existing.quantity_per} per parent. Saving updates that quantity instead of adding a second link.` : 'Saving an existing component updates its quantity. Stock is never changed here.';
   }
-  async function loadDefinition() {
-    const current = ++version; definition = null; render();
+  async function loadDefinition(keep = false) {
+    const current = ++version; if (!keep) definition = null; render();
     if (!parent) return;
     try {
       const loaded = await read(getAPI().bom_definition(parent));
       if (current === version) { definition = loaded; render(); }
     } catch (error) {
-      if (current === version) control('definition').innerHTML = `<div class="status error" role="alert">${esc(message(error))} Use Refresh to try again.</div>`;
+      if (current === version) { if (!keep) control('definition').innerHTML = `<div class="status error" role="alert">${esc(message(error))} Use Refresh to try again.</div>`; else feedback(`${message(error)} The displayed definition may be out of date. Use Refresh.`, true); }
     }
   }
   async function refresh() {
@@ -69,6 +70,8 @@ export function bomWorkflow(getAPI: () => API) {
       for (const name of ['parent', 'component']) { const element = select(name); const saved = element.value; element.innerHTML = options; element.value = saved; }
       parent = select('parent').value;
     } catch (error) { feedback(`${message(error)} Use Refresh to try again.`, true); return; }
+    // A change submitted while parts were loading owns the definition view.
+    if (pending || uncertain) return;
     feedback(''); await loadDefinition();
   }
   function ambiguous(error: unknown) {
@@ -78,11 +81,13 @@ export function bomWorkflow(getAPI: () => API) {
     const change = submitted!;
     const recovery = control('recovery'); recovery.hidden = false;
     recovery.innerHTML = `<h3>Verify uncertain change</h3>${pair('Submitted change', change.kind === 'save' ? `Set ${change.component} to ${change.quantity_per} per ${change.parent}` : `Remove ${change.component} from ${change.parent}`)}<p class="help">Your entries are preserved. Read the authoritative definition before deciding.</p><button class="btn" data-bom-recovery="read">Read current definition</button><div class="recovery-records" role="status" aria-live="polite"></div>`;
+    recovery.querySelector<HTMLElement>('[data-bom-recovery=read]')!.focus();
   }
   async function mutate(change: Change) {
     if (pending || uncertain) return;
     pending = true; submitted = { ...change }; ++version; lock(); result(''); feedback(change.kind === 'save' ? 'Saving…' : 'Removing…');
     if (dialog().open) { control<HTMLButtonElement>('remove-confirm').disabled = true; control<HTMLButtonElement>('remove-cancel').disabled = true; }
+    let refocus = false;
     try {
       const api = getAPI();
       if (change.kind === 'save') {
@@ -95,13 +100,15 @@ export function bomWorkflow(getAPI: () => API) {
         result(`Removed ${change.component} from ${change.parent}.`);
       }
       feedback('');
+      refocus = change.kind === 'save';
     } catch (error) {
       ambiguous(error);
       // A rejected change leaves the draft intact; re-read so the displayed definition is current.
-      if (!uncertain) void loadDefinition();
+      if (!uncertain) void loadDefinition(true);
     } finally {
       pending = false; dialog().close(); control<HTMLButtonElement>('remove-confirm').disabled = false; control<HTMLButtonElement>('remove-cancel').disabled = false;
       lock(); render();
+      if (refocus) select('component').focus();
     }
   }
   async function reconcile() {
@@ -114,13 +121,13 @@ export function bomWorkflow(getAPI: () => API) {
       definition = await read(getAPI().bom_definition(change.parent)); parent = change.parent; select('parent').value = parent;
       const current = definition.components.find(c => c.part_number === change.component);
       const matches = change.kind === 'save' ? current?.quantity_per === change.quantity_per : current === undefined;
-      records.innerHTML = `${pair('Current definition', matches ? 'Matches the submitted change' : 'Does not match the submitted change')}${pair(`${change.component} per ${change.parent}`, current ? current.quantity_per : 'Not on this BOM')}<p class="help">Choose what happened. Nothing is retried automatically.</p><button class="btn" data-bom-recovery="applied">The change is applied</button> <button class="btn" data-bom-recovery="absent">The change was not applied</button>`;
+      records.innerHTML = `${pair('Current definition', matches ? 'Matches the submitted change' : 'Does not match the submitted change')}${pair(`${change.component} per ${change.parent}`, current ? current.quantity_per : 'Not on this BOM')}<p class="help">Confirm what the authoritative read shows. Nothing is retried automatically.</p>${matches ? '<button class="btn" data-bom-recovery="applied">Confirm the change is applied</button>' : '<button class="btn" data-bom-recovery="absent">Confirm the change was not applied</button>'}`;
       reconciled = true; render();
     } catch (error) { records.textContent = `${message(error)} Completion remains uncertain. Read again before taking action.`; }
     finally { pending = false; lock(); }
   }
   control('form').addEventListener('input', hint); control('form').addEventListener('change', hint);
-  control('parent').addEventListener('change', () => { parent = select('parent').value; result(''); feedback(''); void loadDefinition(); });
+  control('parent').addEventListener('change', () => { parent = select('parent').value; select('component').value = ''; control<HTMLInputElement>('quantity').value = ''; result(''); feedback(''); void loadDefinition(); });
   control('refresh').onclick = () => { void refresh(); };
   control('form').addEventListener('submit', event => {
     event.preventDefault();
@@ -160,10 +167,7 @@ export function bomWorkflow(getAPI: () => API) {
   control('remove-confirm').onclick = () => { const number = removeTrigger?.dataset.bomRemove; if (number && parent) void mutate({ kind: 'remove', parent, component: number }); };
 
   return {
-    async open(number?: string) {
-      if (number && !uncertain && !pending) { if (!Array.from(select('parent').options).some(o => o.value === number)) select('parent').insertAdjacentHTML('beforeend', `<option value="${esc(number)}">${esc(number)}</option>`); select('parent').value = number; }
-      await refresh(); lock();
-    },
+    async open() { await refresh(); lock(); },
     leave() { if (!pending) { ++version; if (dialog().open) dialog().close(); } },
   };
 }

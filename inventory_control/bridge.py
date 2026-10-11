@@ -211,17 +211,11 @@ class InventoryBridge:
         def save() -> dict[str, Any]:
             fields = self._bom_link(request, {"quantity_per"})
             quantity = fields.get("quantity_per")
-            if type(quantity) is not int or not 0 < quantity <= 2**31 - 1:
-                raise ValueError(
-                    "Component quantity must be a whole number between 1 and 2147483647."
-                )
-            existing = any(
-                child.component_part_number == fields["component"]
-                for child in self._store.bom_children(fields["parent"])
-            )
-            self._store.add_bom_component(fields["parent"], fields["component"], quantity)
+            if type(quantity) is not int:
+                raise ValueError("Component quantity must be a whole number.")
+            added = self._store.add_bom_component(fields["parent"], fields["component"], quantity)
             return {
-                "action": "updated" if existing else "added",
+                "action": "added" if added else "updated",
                 "definition": self._bom_definition(fields["parent"]),
             }
 
