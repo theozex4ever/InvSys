@@ -7,8 +7,10 @@ from secrets import token_urlsafe
 from threading import RLock
 from typing import Any
 
+from inventory_control.backup import DEFAULT_RETENTION, backup_database, list_backups
 from inventory_control.models import BOMShipmentPlan
 from inventory_control.store import InventoryStore, ShipmentReviewNotFound
+from inventory_control.utilities import DesktopHost, UtilityContext
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +22,17 @@ class BridgeError(ValueError):
 
 
 class InventoryBridge:
-    def __init__(self, store: InventoryStore) -> None:
+    def __init__(
+        self,
+        store: InventoryStore,
+        utilities: UtilityContext | None = None,
+        host: DesktopHost | None = None,
+    ) -> None:
         # pywebview calls may run on separate threads; serialize this app's requests.
+        # Private names matter: pywebview publishes every public attribute recursively.
         self._store = store
+        self._utilities = utilities
+        self._host = host
         self._lock = RLock()
         self._bom_reviews: dict[str, tuple[dict[str, Any], BOMShipmentPlan]] = {}
 
@@ -394,3 +404,82 @@ class InventoryBridge:
             }
 
         return self._respond(ship)
+
+    def _launch(self) -> UtilityContext:
+        if self._utilities is None:
+            raise BridgeError("UNAVAILABLE", "Desktop utilities are not available in this launch.")
+        return self._utilities
+
+    def _utility_context(self) -> dict[str, Any]:
+        launch = self._launch()
+        latest = None
+        count = 0
+        backup_error = None
+        try:
+            backups = list_backups(launch.backups)
+        except OSError as error:
+            backup_error = f"Backups could not be read: {error.strerror or error}"
+        else:
+            count = len(backups)
+            if backups:
+                latest = {**asdict(backups[0]), "path": str(backups[0].path)}
+        return {
+            "database": str(launch.database),
+            "database_exists": launch.database.is_file(),
+            "backup_dir": str(launch.backups),
+            "export_dir": str(launch.exports),
+            "log_dir": str(launch.logs),
+            "latest_backup": latest,
+            "backup_count": count,
+            "backup_retention": DEFAULT_RETENTION,
+            "backup_error": backup_error,
+        }
+
+    def utility_context(self) -> dict[str, Any]:
+        return self._respond(self._utility_context)
+
+    def create_backup(self) -> dict[str, Any]:
+        def create() -> dict[str, Any]:
+            launch = self._launch()
+            try:
+                target = backup_database(launch.database, launch.backups, reason="manual")
+            except OSError as error:
+                raise BridgeError(
+                    "FILE_ERROR",
+                    f"Backup failed: {error.strerror or error}. Nothing was backed up; "
+                    f"check the backup folder {launch.backups} and try again.",
+                ) from error
+            if target is None:
+                raise BridgeError(
+                    "NOT_FOUND", f"No database file was found at {launch.database} to back up."
+                )
+            context = self._utility_context()
+            created = next((b for b in list_backups(launch.backups) if b.path == target), None)
+            if created is None:
+                raise BridgeError(
+                    "FILE_ERROR", f"Backup {target.name} was not found after writing."
+                )
+            return {"created": {**asdict(created), "path": str(target)}, "context": context}
+
+        return self._respond(create)
+
+    def open_folder(self, kind: Any) -> dict[str, Any]:
+        def open_selected() -> dict[str, str]:
+            launch = self._launch()
+            folders = {"backups": launch.backups, "exports": launch.exports}
+            if not isinstance(kind, str) or kind not in folders:
+                raise ValueError("Choose the backups or exports folder.")
+            folder = folders[kind]
+            if self._host is None:
+                raise BridgeError("UNAVAILABLE", "Folder access is not available in this launch.")
+            try:
+                folder.mkdir(parents=True, exist_ok=True)
+                self._host.open_folder(folder)
+            except OSError as error:
+                raise BridgeError(
+                    "FILE_ERROR",
+                    f"Could not open the {kind} folder {folder}: {error.strerror or error}",
+                ) from error
+            return {"folder": str(folder)}
+
+        return self._respond(open_selected)

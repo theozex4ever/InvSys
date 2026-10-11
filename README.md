@@ -273,9 +273,13 @@ Shipment number format: `SHP-YYYYMMDD-0001` (counter resets per day).
 2. Open the backups/ folder.
 3. Copy the desired backup file.
 4. Rename it to inventory.db.
-5. Replace data/inventory.db with it.
-6. Restart the app.
+5. Keep the current data/inventory.db (and any -wal/-shm files) somewhere safe.
+6. Replace data/inventory.db with the renamed backup.
+7. Restart the app.
 ```
+
+Stock changes made after the backup are not in it. Reconcile ledger activity recorded
+since the backup before resuming work; see `docs/frontend/desktop.md` for the full procedure.
 
 ---
 

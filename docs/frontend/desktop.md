@@ -37,7 +37,7 @@ python inventory_desktop.py --database /tmp/invsys-review/inventory.db
 python inventory_desktop.py --database /tmp/invsys-smoke/inventory.db --smoke-check
 ```
 
-An explicit database keeps backups and `logs/desktop.log` beside that database.
+An explicit database keeps backups, exports and `logs/desktop.log` beside that database.
 Importing the bridge does not initialize the original application's shared store.
 The smoke command saves operator `Desktop smoke`, creates `DESKTOP-SMOKE` if
 absent, inspects its drawer, receives lots, ships standard stock, and exercises
@@ -45,7 +45,9 @@ drafts, repeat entry, shortages, duplicate clicks, and lost-response reconciliat
 It also prepares a fresh disposable nested/shared
 BOM, reviews a multi-lot allocation, rejects shortage and stale allocation,
 reconfirms, and inspects History and component snapshots.
-It verifies the complete stock/audit result through a reopened store. Use a disposable file: these are real writes. Repeat the command to check
+It creates a manual backup in Settings, checks the latest-backup status and the folder
+requests (recorded, not opened, so the smoke never spawns a file manager), and shows a
+failed folder request as an error. It reopens the backup read-only. It verifies the complete stock/audit result through a reopened store. Use a disposable file: these are real writes. Repeat the command to check
 startup backups and restart reads. No seed inventory is inserted by the launcher.
 
 The retained smoke also exercises contextual part-to-History navigation, failed
@@ -185,12 +187,56 @@ even when a standard shipment has a custom reference. No identifiers or componen
 quantities are reconstructed in JavaScript. Success includes Inspect shipment;
 mutations and returning to History refresh reads while preserving filters.
 
+## Settings: backups and folders
+
+Settings is the shared destination for operational utilities. It shows the database
+and the backup, export and log folders chosen at launch: source launch uses `data/`,
+`backups/`, `exports/` and `logs/` under the checkout or `INVSYS_HOME`; an explicit
+`--database` keeps all three folders beside that file. Packaged launch still requires
+`--database`.
+
+- **Create backup** writes `inventory-YYYYMMDD-HHMMSS-manual.db` with SQLite's backup
+  API, keeps startup backups and applies the same retention of 20 newest files. The
+  page then shows the latest backup's name, time and size and the number on disk.
+  A missing database file or an unwritable/unreadable backup folder is reported as
+  an error; nothing is reported as created unless the file exists.
+- **Open backups/exports folder** asks the platform file manager (`xdg-open`, `open`
+  or `os.startfile`) to show the folder for the selected inventory, creating it when
+  absent. Only those two named folders can be requested. If the opener is missing or
+  fails, the error is shown instead of a success message.
+
+Python wiring: `UtilityContext` (`inventory_control/utilities.py`) is the launch-aware
+set of paths; `DesktopHost` is the narrow native interface (`open_folder`,
+`choose_file`) with `NativeHost` as the pywebview implementation. `InventoryBridge`
+accepts both and exposes `utility_context`, `create_backup` and `open_folder`.
+`choose_file` returns the chosen path or `None` on cancel and is the seam for the
+CSV import/export slices; it is not exposed to the page on its own. The bridge keeps
+`_utilities` and `_host` private because pywebview publishes every public attribute.
+The frontend side is `frontend/src/settings.ts`; later utilities add sections there.
+
+## Restore and rollback (closed app only)
+
+There is no in-app restore. To restore a backup:
+
+1. Close the application (and the original application) so nothing holds the database.
+2. Copy the current `inventory.db` **and** any `inventory.db-wal` / `inventory.db-shm`
+   files to a safe place outside the data folder. Do not delete them.
+3. Copy the chosen `inventory-*.db` backup to the data folder as `inventory.db`.
+4. Start the application with that database and inspect Parts, Lots and History.
+
+A backup contains only what had been recorded when it was made. Stock changes made
+after that backup exist only in the displaced database: restoring an older backup
+loses those transactions from the live ledger. Before resuming work, compare the
+displaced database's History against the restored one and re-enter or reconcile each
+receipt, shipment, move or count made since, through the normal workflows so every
+balance change gets a ledger row. Never restore over a database you have not kept a
+copy of.
+
 ## Deferred workflows
 
 The shell directs operators to the original application for Move, Adjust, part
-editing/deactivation, location administration, BOM editing and exploration, CSV
-import/export, manual backup/restore, and operational Settings. Global search is
-part search only.
+editing/deactivation, location administration, BOM editing and exploration, and CSV
+import/export. Global search is part search only.
 
 Not yet validated: Windows/macOS packages and installers, screen-reader review,
 human operator acceptance, and performance/release hardening. The native smoke is
