@@ -7,6 +7,9 @@ from typing import Any
 
 
 class DesktopSmoke:
+    # The explorer smoke receives this much extra Leaf stock to prove refreshed capacity.
+    explore_receipt = 70
+
     def __init__(self, captures: Path) -> None:
         self.error: str | None = None
         self.stock_result: dict[str, Any] | None = None
@@ -59,6 +62,7 @@ class DesktopSmoke:
             self._part_history_navigation(window, wait)
             self._refresh_reads(window, wait)
             self._bom_transport_recovery(window, wait)
+            self._bom_explore(window, wait)
             from inventory_control.desktop_smoke_ui import check_ui
 
             check_ui(window, wait, self.captures, self.bom_part)
@@ -664,5 +668,100 @@ class DesktopSmoke:
         self.bom_result = run("window.smokeBOMFinal")
         print(
             "Desktop smoke: BOM shortage, multi-lot review, stale rejection/reconfirmation, snapshots, History search/type/drawer and dashboard links passed.",
+            flush=True,
+        )
+
+    def _bom_explore(self, window: Any, wait: Any) -> None:
+        """The explorer shows Python's graph truth, navigates the view, and never writes."""
+        run = window.evaluate_js
+
+        def require(script: str, label: str) -> None:
+            if not run(script):
+                raise RuntimeError(f"Desktop BOM explorer smoke failed: {label}")
+
+        run("""
+            window.smokeExploreRequest = {part_number: window.smokeBOMPart, quantity: 2, location: 'Stock'};
+            Promise.all([window.smokeAPI.stock_context(window.smokeBOMLeaf), window.smokeAPI.history({})]).then(([stock, history]) => {
+                window.smokeExploreBefore = JSON.stringify([stock.data, history.data.total]);
+            });
+            window.smokeAPI.explore_bom(window.smokeExploreRequest).then(r => { window.smokeExploreTruth = r.data; });
+        """)
+        wait("window.smokeExploreBefore && window.smokeExploreTruth")
+        run("""
+            document.querySelector('[data-page=bom-explore]').click();
+        """)
+        wait("document.querySelector('#bomx-location').value === 'Stock'")
+        run("""
+            document.querySelector('#bomx-part').value = window.smokeBOMPart;
+            document.querySelector('#bomx-quantity').value = '2';
+            document.querySelector('#bomx-form').requestSubmit();
+        """)
+        wait("document.querySelectorAll('#bomx-canvas .bomx-node').length === 4")
+        require(
+            "document.querySelector('#bomx-location').value === 'Stock' && document.querySelector('#bomx-result .bomx-figure strong').textContent === window.smokeExploreTruth.buildable.toLocaleString()",
+            "capacity matches Python",
+        )
+        require(
+            "document.querySelector('#bomx-result').textContent.includes(window.smokeExploreTruth.level === 'critical' ? 'Critical capacity' : window.smokeExploreTruth.level === 'low' ? 'Low capacity' : 'Ready capacity') && document.querySelectorAll('#bomx-result tbody tr').length === window.smokeExploreTruth.requirements.length",
+            "capacity text and aggregated Leaf requirements",
+        )
+        # Fit, zoom and pan change only the view transform.
+        run(
+            "window.smokeFitted = document.querySelector('#bomx-canvas').getAttribute('transform'); document.querySelector('[data-bomx=in]').click();"
+        )
+        require(
+            "document.querySelector('#bomx-canvas').getAttribute('transform') !== window.smokeFitted",
+            "zoom in changes the view",
+        )
+        run("document.querySelector('[data-bomx=fit]').click()")
+        require(
+            "document.querySelector('#bomx-canvas').getAttribute('transform') === window.smokeFitted",
+            "fit restores the fitted view",
+        )
+        run(
+            "document.querySelector('#bomx-canvas [data-id=\"1\"]').dispatchEvent(new MouseEvent('click', {bubbles: true}))"
+        )
+        require(
+            "document.querySelector('#bomx-inspector').textContent.includes(window.smokeExploreTruth.tree.children[0].part_number)",
+            "node selection fills the inspector",
+        )
+        # A failed read must not leave a stale graph looking current.
+        run("""
+            window.smokeExploreAPI = window.smokeAPI.explore_bom;
+            window.smokeAPI.explore_bom = async () => ({ok: false, error: {code: 'INTERNAL', message: 'BOM read unavailable'}});
+            document.querySelector('#bomx-refresh').click();
+        """)
+        wait("document.querySelector('#bomx-result').textContent.includes('BOM read unavailable')")
+        require("!document.querySelector('#bomx-canvas')", "failed read removes the stale graph")
+        run("""
+            window.smokeAPI.explore_bom = window.smokeExploreAPI;
+            document.querySelector('#bomx-refresh').click();
+        """)
+        wait("document.querySelectorAll('#bomx-canvas .bomx-node').length === 4")
+        # Changed inventory is refreshed from Python, not cached.
+        run(f"window.smokeExploreReceipt = {self.explore_receipt};")
+        run("""
+            window.smokeAPI.receive({part_number: window.smokeBOMLeaf, quantity: window.smokeExploreReceipt, location: 'Stock', lot_number: 'EXPLORE', operator: 'Other', reference: 'EXPLORE', notes: ''})
+                .then(r => window.smokeAPI.explore_bom(window.smokeExploreRequest))
+                .then(r => { window.smokeExploreChanged = r.data; });
+        """)
+        wait("window.smokeExploreChanged")
+        run("document.querySelector('#bomx-refresh').click()")
+        wait(
+            "document.querySelector('#bomx-result .bomx-figure strong')?.textContent === window.smokeExploreChanged.buildable.toLocaleString() && window.smokeExploreChanged.buildable !== window.smokeExploreTruth.buildable"
+        )
+        run("""
+            Promise.all([window.smokeAPI.stock_context(window.smokeBOMLeaf), window.smokeAPI.history({})]).then(([stock, history]) => {
+                window.smokeExploreAfter = JSON.stringify([stock.data, history.data.total]);
+            });
+        """)
+        wait("window.smokeExploreAfter")
+        # Only the explicit receipt above may differ: exploring added no transactions.
+        require(
+            "JSON.parse(window.smokeExploreAfter)[1] === JSON.parse(window.smokeExploreBefore)[1] + 1",
+            "exploring wrote no transaction records",
+        )
+        print(
+            "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
             flush=True,
         )

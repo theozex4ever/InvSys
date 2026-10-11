@@ -1,7 +1,7 @@
 # Live desktop inventory workflows
 
 The pywebview frontend covers the dashboard, Parts catalog, Receive, standard and
-nested BOM Ship, and History, using [approved layout A](phase0-design.md). The
+nested BOM Ship, and History, and a read-only BOM explorer, using [approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
 
@@ -54,7 +54,9 @@ uncertain BOM reconciliation, including a failed recovery read. It uses real Qt
 keyboard events for all four dialogs and captures five pages and dialogs in both
 themes at four sizes to `smoke-captures/` beside the database. On Linux, use
 `QT_API=pyside6 QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion`
-to select PySide6 and exercise reduced-motion behavior.
+to select PySide6 and exercise reduced-motion behavior. The smoke also explores the
+disposable nested BOM, compares the graph with `explore_bom`, fits/zooms/selects,
+fails and refreshes a read, and checks that exploring adds no transactions.
 
 Built assets load directly over `file://` with `http_server=False`. An explicit
 file URI avoids pywebview automatically starting a server for a bare local path
@@ -143,6 +145,27 @@ case folding and the existing sort order.
 The read snapshot does not reserve stock or authorize a later shipment; mutations
 still validate at submission. The original PySide6 screens retain their existing
 read paths. No schema or inventory rules changed.
+
+## BOM explorer
+
+The BOM explorer page shows a nested BOM for a chosen assembly, Location and build
+quantity. `explore_bom` returns, from one read snapshot, the nested tree (each node
+with required quantity, quantity per parent, stock at the Location, Build capacity
+and capacity level), the Leaf requirements aggregated across all paths with their
+shortages, overall Build capacity, and the count of short materials. The tree is a
+phantom view: assembly stock is shown but never consumed. Capacity is Critical at
+100 or fewer final builds, Low through 500, otherwise Ready; this planning warning
+is independent of shortages for the requested quantity. A part without a BOM is
+returned as a single node. Inactive root parts can be explored; inactive
+components, circular definitions and BOMs expanding past 5,000 nodes return a
+`VALIDATION` error instead of a graph. Exploring never writes inventory.
+
+The graph is hand-built SVG (no graph library). Drag or the arrow keys pan the
+focused graph, Ctrl + wheel or +/− zoom, 0 or Fit fits, and arrow keys on a node move
+between parent, child and siblings. Status is shown as text and a glyph with a
+distinct border style, not by colour alone. A failed or stale read replaces the
+graph with the error; Refresh rereads authoritative data. Advanced focus/collapse,
+breadcrumbs and command search remain deferred.
 
 ## Drafts and uncertain submissions
 

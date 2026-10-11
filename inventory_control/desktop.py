@@ -105,7 +105,8 @@ def main() -> int:
                 != smoke.recovered_bom_result
                 or bridge.part_detail(smoke.bom_part)["data"]["quantity"] != 10
                 or bridge.part_detail(smoke.bom_sub)["data"]["quantity"] != 10
-                or bridge.part_detail(smoke.bom_leaf)["data"]["quantity"] != 8
+                or bridge.part_detail(smoke.bom_leaf)["data"]["quantity"]
+                != 8 + smoke.explore_receipt
             ):
                 print("Desktop smoke failed: restart persistence.", file=sys.stderr)
                 return 1

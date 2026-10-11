@@ -133,7 +133,7 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
         for width, height in ((1366, 768), (1920, 1080), (800, 650), (640, 480)):
             window.resize(width, height)
             time.sleep(0.15)
-            for page in ("dashboard", "parts", "receive", "ship", "history"):
+            for page in ("dashboard", "parts", "receive", "ship", "history", "bom-explore"):
                 run(f"document.querySelector('[data-page={page}]').click()")
                 wait(
                     f"!document.querySelector('#{page}').textContent.includes('Loading') && !document.querySelector('#{page}').textContent.includes('Reading current stock')"
@@ -207,6 +207,42 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
         "History restores origin and position",
     )
 
+    # BOM explorer: real keys pan, zoom and fit the focused graph and move between nodes.
+    window.resize(1366, 768)
+    run("document.querySelector('[data-page=bom-explore]').click()")
+    wait("document.querySelector('#bomx-canvas .bomx-node')")
+    actions.run(activate)
+    wait("document.hasFocus()")
+    run(
+        "window.smokeGraphFit=document.querySelector('#bomx-canvas').getAttribute('transform'); document.querySelector('#bomx-viewport').focus()"
+    )
+    require(
+        "getComputedStyle(document.activeElement).outlineStyle !== 'none'",
+        "graph viewport shows keyboard focus",
+    )
+    key(Qt.Key.Key_Right)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') !== smokeGraphFit")
+    key(Qt.Key.Key_0)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') === smokeGraphFit")
+    key(Qt.Key.Key_Plus)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') !== smokeGraphFit")
+    key(Qt.Key.Key_0)
+    key(Qt.Key.Key_Tab)
+    wait("document.activeElement.classList.contains('bomx-node')")
+    require(
+        "getComputedStyle(document.activeElement.querySelector('.bomx-card')).strokeWidth === '5px'",
+        "graph node shows keyboard focus",
+    )
+    run("window.smokeNode=document.activeElement.dataset.id")
+    key(Qt.Key.Key_Right)
+    wait(
+        "document.activeElement.dataset.id !== smokeNode && document.activeElement.classList.contains('bomx-node')"
+    )
+    key(Qt.Key.Key_Return)
+    wait(
+        "document.activeElement.getAttribute('aria-pressed') === 'true' && document.querySelectorAll('#bomx-canvas [aria-pressed=true]').length === 1"
+    )
+
     if run("matchMedia('(prefers-reduced-motion: reduce)').matches"):
         require(
             "getComputedStyle(document.querySelector('.nav-button')).transitionDuration === '0s'",
@@ -219,7 +255,7 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             flush=True,
         )
     print(
-        "Desktop smoke: both themes, five pages at four sizes, labels/reachable actions, native Tab/Shift+Tab/Escape and focus restoration passed.",
+        "Desktop smoke: both themes, six pages at four sizes, labels/reachable actions, native Tab/Shift+Tab/Escape and focus restoration passed.",
         flush=True,
     )
 
