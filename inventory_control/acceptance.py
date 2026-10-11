@@ -106,7 +106,7 @@ def create_fixture(directory: Path, *, large: bool = False) -> Path:
 
 def _add_large_workload(store: InventoryStore) -> None:
     # A bounded-depth tree measures breadth without hitting Python recursion limits.
-    numbers = ["PERF-ROOT"] + [f"PERF-{index:05d}" for index in range(1, 9996)]
+    numbers = ["PERF-ROOT"] + [f"PERF-{index:05d}" for index in range(1, 9995)]
     store.import_parts(
         [
             dict(

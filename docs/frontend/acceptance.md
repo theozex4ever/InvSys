@@ -228,7 +228,7 @@ and platform bundle commands are in [desktop.md](desktop.md).
 
 | ID | Operator actions and required observation | Present readiness |
 | --- | --- | --- |
-| A01 | Dashboard counts; open Low stock LEAF; search STANDARD, filter INACTIVE, numeric sort, inspect all balances; create unique Part then duplicate error | Delivered, bridge/native coverage |
+| A01 | Dashboard counts and initially empty Low stock; open LEAF from Parts; search STANDARD, filter INACTIVE, numeric sort, inspect all balances; create unique Part then duplicate error | Delivered, bridge/native coverage |
 | A02 | Receive STANDARD: default Receiving; choose Stock/NEW, qty 3, reference ACCEPT-NEW, Notes; blank Lot/invalid qty reject unchanged; success repeat-entry; leave/return preserves unsent fields | Delivered, native/API |
 | A03 | Ship STANDARD A: qty 11 rejects despite Location total 16; qty 2 confirms correct Lot remainder 8; cancel no writes; inspect number/recipient/carrier/tracking/reference and History | Delivered, API/native |
 | A04 | Ship KIT qty 4: shortage; qty 2: leaf requirement 14, B allocation 14, parent/intermediate unchanged. Review then receive LEAF Lot 0 to force changed allocation; old confirmation rejects without writes; explicitly review and confirm again | Delivered, API/native |
@@ -323,3 +323,30 @@ fixtures and repeatable scenarios; it does not claim future performance, package
 accessibility or operator approval. Coordinate future changes with one integration
 owner for navigation/API/launcher/smoke/styles/CI/locks. Use separate worktrees and
 merge one change at a time; one workflow lane alongside packaging is the default.
+
+Executed on 2026-10-11 on this Linux development workstation (Python 3.14,
+locked toolchain in `/tmp/invsys-ticket40-venv`; not a designated performance or
+package reference machine):
+
+- Workflow fixture regression: passed through bridge/store against temporary SQLite,
+  including baseline audit state, receipt/standard/BOM operations, historical trace
+  after definition edit, restart and refusal to touch an existing directory.
+- Strict mypy, Ruff lint/format, TypeScript checking, production frontend build and
+  self-contained asset/size checks: passed. No dependency/CI threshold changes.
+- Source native smoke twice on `/tmp/invsys-ticket40-native-xltgt57l/fixture/inventory.db`
+  with Qt/PySide6 and forced reduced motion: passed. Included real reads/writes,
+  confirmations/shortages, changed plans, drafts, duplicate clicks, ambiguous response
+  and failed-read recovery, History, native focus/keyboard, themes/sizes, reopened
+  persistence and absence of HTTP server. Two startup backups and 72 captures are
+  beside that disposable DB. Existing baseline audit records were not replaced.
+- Full randomized `python -m pytest --cov`: 372 passed in 218.94 seconds;
+  total branch-aware coverage 85.66%, above the unchanged 85% floor. Includes the
+  corrected large fixture: exactly 10,000 Parts, 100,000 transactions, 1,000 expanded
+  BOM nodes, 900 eligible stocked leaves, three Lots per tested leaf and ready review.
+  Full-run log: `/tmp/invsys-ticket40-full-tests.log`.
+- Independent Standards and Spec reviews against approved starting commit `d6d9911`:
+  no actionable findings.
+
+These source checks do not establish standalone Windows/macOS/Linux package
+acceptance, designated-machine timings, copied operational-data rehearsal, or
+human accessibility/operator sign-off. Those remain explicit retirement gates.
