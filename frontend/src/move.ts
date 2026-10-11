@@ -52,7 +52,7 @@ export function moveWorkflow(getAPI: () => API, operator: () => string, changed:
       control<HTMLElement>('result').innerHTML = `<div class="status success">${esc(text)}</div>`;
       clearEntry(); toast(text, `Move completion verified for ${submitted.part_number}.`);
     }
-    lock(); void changed();
+    renderLots(); lock(); void changed();
   };
 
   function lock() {
@@ -101,7 +101,11 @@ export function moveWorkflow(getAPI: () => API, operator: () => string, changed:
         const context = await read(api.stock_context(part));
         if (version !== state.version) return;
         state.context = context;
-        if (adoptLocation) control<HTMLSelectElement>('location').value = context.part.location;
+        if (adoptLocation) {
+          const source = control<HTMLSelectElement>('location'); source.value = context.part.location;
+          const target = control<HTMLSelectElement>('destination');
+          if (target.value === source.value) target.value = locations.find(l => l !== source.value) ?? '';
+        }
       }
       renderLots(); renderReview(); lock();
     } catch (error) {
@@ -144,6 +148,8 @@ export function moveWorkflow(getAPI: () => API, operator: () => string, changed:
       feedback(`${message(error)} No stock submission was sent.`, true);
     } finally {
       state.pending = false; lock(); renderReview();
+      // The operator left and returned during the review; return-time refresh was skipped while pending.
+      if (version !== state.version && active) void refresh();
     }
   }
   async function confirm() {
