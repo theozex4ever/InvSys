@@ -7,6 +7,10 @@ application stays until the frontend reaches agreed feature parity.
 For delivered behavior, launch, and the bridge contract, see [desktop.md](desktop.md).
 The approved visual reference is [layout A](phase0-design.md).
 
+The [frozen capability register and executable acceptance fixtures](acceptance.md)
+track every required migration workflow, deferred enhancement, native/operator
+scenario, approved workload and retirement evidence gate from tickets #39/#40.
+
 ## Progress
 
 | Phase | Goal | Status |

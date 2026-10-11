@@ -5,6 +5,9 @@ nested BOM Ship, and History, using [approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
 
+Use the [migration acceptance baseline](acceptance.md) for disposable workflow
+and large-workload inventories, capability classifications and retirement gates.
+
 ## Launch
 
 Install Python dependencies in your environment and build the frontend:
