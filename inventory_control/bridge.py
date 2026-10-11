@@ -186,6 +186,59 @@ class InventoryBridge:
 
         return self._respond(create)
 
+    def _bom_definition(self, part_number: Any) -> dict[str, Any]:
+        number = self._text(part_number, "Part number").upper()
+        definition = self._store.bom_definition(number)
+        if definition is None:
+            raise BridgeError("NOT_FOUND", "Part not found.")
+        return definition
+
+    def bom_definition(self, part_number: Any) -> dict[str, Any]:
+        """Direct components and direct parents of one Part's BOM definition."""
+        return self._respond(lambda: self._bom_definition(part_number))
+
+    def _bom_link(self, request: Any, optional: set[str]) -> dict[str, Any]:
+        fields = self._request(request, {"parent", "component"} | optional)
+        return {
+            **fields,
+            "parent": self._text(fields.get("parent"), "Parent part").upper(),
+            "component": self._text(fields.get("component"), "Component part").upper(),
+        }
+
+    def save_bom_component(self, request: Any) -> dict[str, Any]:
+        """Add a direct component, or update its quantity when already on the BOM."""
+
+        def save() -> dict[str, Any]:
+            fields = self._bom_link(request, {"quantity_per"})
+            quantity = fields.get("quantity_per")
+            if type(quantity) is not int or not 0 < quantity <= 2**31 - 1:
+                raise ValueError(
+                    "Component quantity must be a whole number between 1 and 2147483647."
+                )
+            existing = any(
+                child.component_part_number == fields["component"]
+                for child in self._store.bom_children(fields["parent"])
+            )
+            self._store.add_bom_component(fields["parent"], fields["component"], quantity)
+            return {
+                "action": "updated" if existing else "added",
+                "definition": self._bom_definition(fields["parent"]),
+            }
+
+        return self._respond(save)
+
+    def remove_bom_component(self, request: Any) -> dict[str, Any]:
+        """Remove one direct component after the operator confirmed the removal."""
+
+        def remove() -> dict[str, Any]:
+            fields = self._bom_link(request, {"confirmed"})
+            if fields.get("confirmed") is not True:
+                raise ValueError("Confirm the removal before removing a component.")
+            self._store.remove_bom_component(fields["parent"], fields["component"])
+            return {"definition": self._bom_definition(fields["parent"])}
+
+        return self._respond(remove)
+
     def _stock_context(self, part_number: Any) -> dict[str, Any]:
         number = self._text(part_number, "Part number").upper()
         context = self._store.stock_context(number)

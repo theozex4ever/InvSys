@@ -755,6 +755,46 @@ class InventoryStore:
                 for row in rows
             ]
 
+    def bom_definition(self, part_number: str) -> dict[str, Any] | None:
+        """One Part's direct BOM components and direct parents from one snapshot."""
+        number = self._normalize_part_number(part_number)
+        with self._read_snapshot() as session:
+            part = self._part(session, number)
+            if part is None:
+                return None
+
+            def summary(other: PartRecord, quantity_per: int) -> dict[str, Any]:
+                return {
+                    "part_number": other.part_number,
+                    "description": other.description,
+                    "active": other.active,
+                    "quantity_per": quantity_per,
+                    "has_bom": self._has_bom(session, other.part_number),
+                }
+
+            children = session.scalars(
+                select(BOMComponentRecord)
+                .where(BOMComponentRecord.parent_part_id == part.id)
+                .join(BOMComponentRecord.component_part)
+                .order_by(PartRecord.part_number)
+            ).all()
+            parents = session.scalars(
+                select(BOMComponentRecord)
+                .where(BOMComponentRecord.component_part_id == part.id)
+                .join(BOMComponentRecord.parent_part)
+                .order_by(PartRecord.part_number)
+            ).all()
+            return {
+                "part": {
+                    "part_number": part.part_number,
+                    "description": part.description,
+                    "active": part.active,
+                    "has_bom": bool(children),
+                },
+                "components": [summary(row.component_part, row.quantity_per) for row in children],
+                "used_in": [summary(row.parent_part, row.quantity_per) for row in parents],
+            }
+
     def bom_availability(self, part_number: str, qty: int, location: str) -> BOMAvailability:
         part_number = self._normalize_part_number(part_number)
         with self.session_factory() as session:
