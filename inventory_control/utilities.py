@@ -18,7 +18,7 @@ from typing import Any, Protocol
 from inventory_control.config import BACKUP_DIR, DB_PATH, EXPORT_DIR, LOG_DIR
 
 # How long to wait for an opener to fail before treating it as a launched file manager.
-_OPENER_GRACE_SECONDS = 3.0
+_OPENER_GRACE_SECONDS = 1.5
 
 
 @dataclass(frozen=True)
@@ -91,7 +91,7 @@ class NativeHost:
         import webview
 
         selection = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             directory=str(directory),
             allow_multiple=False,
             file_types=tuple(file_types),

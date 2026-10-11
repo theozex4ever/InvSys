@@ -190,6 +190,20 @@ def test_backup_without_a_database_file_reports_the_missing_database(tmp_path):
     assert not context.backups.exists()
 
 
+def test_a_database_that_cannot_be_backed_up_faithfully_is_not_reported_as_a_backup(tmp_path):
+    store, bridge, context = launch(tmp_path)
+    store.engine.dispose()
+    for sidecar in context.database.parent.glob("inventory.db-*"):
+        sidecar.unlink()
+    context.database.write_bytes(b"this is not a sqlite database" * 100)
+    result = bridge.create_backup()
+    assert result["ok"] is False
+    assert result["error"]["code"] == "FILE_ERROR"
+    assert "could not be verified" in result["error"]["message"]
+    assert backup_names(context.backups) == []
+    assert bridge.utility_context()["data"]["latest_backup"] is None
+
+
 def test_backup_file_failures_are_reported_and_leave_no_backup(tmp_path):
     _store, bridge, context = launch(tmp_path)
     context.backups.write_text("not a folder", encoding="utf-8")
@@ -219,6 +233,22 @@ def test_unwritable_backup_folder_is_reported_without_a_partial_backup(tmp_path)
         assert backup_names(context.backups) == []
     finally:
         context.backups.chmod(0o700)
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    reason="needs POSIX permissions enforced for the current user",
+)
+def test_unreadable_backup_folder_is_not_shown_as_having_no_backups(tmp_path):
+    _store, bridge, context = launch(tmp_path)
+    context.backups.mkdir()
+    context.backups.chmod(0)
+    try:
+        state = bridge.utility_context()["data"]
+    finally:
+        context.backups.chmod(0o700)
+    assert state["latest_backup"] is None
+    assert state["backup_error"]
 
 
 def test_open_folder_uses_the_selected_inventory_locations(tmp_path):

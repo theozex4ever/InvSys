@@ -1,13 +1,21 @@
 """Narrow desktop use cases. InventoryStore remains the inventory authority."""
 
 import logging
+import sqlite3
 from collections.abc import Callable
 from dataclasses import asdict
 from secrets import token_urlsafe
 from threading import RLock
 from typing import Any
 
-from inventory_control.backup import DEFAULT_RETENTION, backup_database, list_backups
+from inventory_control.backup import (
+    DEFAULT_RETENTION,
+    BackupInfo,
+    backup_database,
+    describe_backup,
+    list_backups,
+    verify_backup,
+)
 from inventory_control.models import BOMShipmentPlan
 from inventory_control.store import InventoryStore, ShipmentReviewNotFound
 from inventory_control.utilities import DesktopHost, UtilityContext
@@ -410,6 +418,9 @@ class InventoryBridge:
             raise BridgeError("UNAVAILABLE", "Desktop utilities are not available in this launch.")
         return self._utilities
 
+    def _backup(self, info: BackupInfo) -> dict[str, Any]:
+        return {**asdict(info), "path": str(info.path)}
+
     def _utility_context(self) -> dict[str, Any]:
         launch = self._launch()
         latest = None
@@ -422,7 +433,7 @@ class InventoryBridge:
         else:
             count = len(backups)
             if backups:
-                latest = {**asdict(backups[0]), "path": str(backups[0].path)}
+                latest = self._backup(backups[0])
         return {
             "database": str(launch.database),
             "database_exists": launch.database.is_file(),
@@ -453,13 +464,18 @@ class InventoryBridge:
                 raise BridgeError(
                     "NOT_FOUND", f"No database file was found at {launch.database} to back up."
                 )
-            context = self._utility_context()
-            created = next((b for b in list_backups(launch.backups) if b.path == target), None)
-            if created is None:
+            try:
+                verify_backup(target)
+                created = describe_backup(target)
+            except (sqlite3.Error, OSError) as error:
+                target.unlink(missing_ok=True)
                 raise BridgeError(
-                    "FILE_ERROR", f"Backup {target.name} was not found after writing."
-                )
-            return {"created": {**asdict(created), "path": str(target)}, "context": context}
+                    "FILE_ERROR",
+                    f"Backup {target.name} could not be verified ({error}) and was removed. "
+                    "The database file may be damaged; nothing was backed up.",
+                ) from error
+            context = self._utility_context()
+            return {"created": self._backup(created), "context": context}
 
         return self._respond(create)
 

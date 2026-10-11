@@ -219,9 +219,12 @@ The frontend side is `frontend/src/settings.ts`; later utilities add sections th
 There is no in-app restore. To restore a backup:
 
 1. Close the application (and the original application) so nothing holds the database.
-2. Copy the current `inventory.db` **and** any `inventory.db-wal` / `inventory.db-shm`
-   files to a safe place outside the data folder. Do not delete them.
-3. Copy the chosen `inventory-*.db` backup to the data folder as `inventory.db`.
+2. In the folder holding the database (`data/` for source launch, or the folder of the
+   `--database` file), move `inventory.db` **and** any `inventory.db-wal` and
+   `inventory.db-shm` files to a safe place outside it. Keep them; moving them away
+   also stops stale write-ahead files being applied to the restored database.
+3. Copy the chosen `inventory-*.db` backup from that inventory's `backups/` folder into
+   the database folder as `inventory.db`.
 4. Start the application with that database and inspect Parts, Lots and History.
 
 A backup contains only what had been recorded when it was made. Stock changes made
@@ -230,7 +233,8 @@ loses those transactions from the live ledger. Before resuming work, compare the
 displaced database's History against the restored one and re-enter or reconcile each
 receipt, shipment, move or count made since, through the normal workflows so every
 balance change gets a ledger row. Never restore over a database you have not kept a
-copy of.
+copy of. To undo a restore, close the app, set the restored files aside and move the
+displaced database files back together.
 
 ## Deferred workflows
 
