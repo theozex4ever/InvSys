@@ -394,3 +394,46 @@ class InventoryBridge:
             }
 
         return self._respond(ship)
+
+    def _move_request(self, request: Any, *, check_inventory: bool = True) -> dict[str, Any]:
+        # ``location`` is the source Location, matching the other stock requests.
+        values = self._stock_request(
+            request,
+            {"destination", "reference"},
+            check_inventory=check_inventory,
+        )
+        if not values["destination"]:
+            raise ValueError("Destination required.")
+        return values
+
+    def preview_move(self, request: Any) -> dict[str, Any]:
+        """Authoritative before/after stock for both Locations; writes nothing."""
+
+        def preview() -> dict[str, Any]:
+            fields = self._move_request(request, check_inventory=False)
+            review = self._store.review_move(
+                fields["part_number"],
+                fields["quantity"],
+                fields["location"],
+                fields["destination"],
+                fields["lot_number"],
+            )
+            return {"request": fields, **asdict(review)}
+
+        return self._respond(preview)
+
+    def move(self, request: Any) -> dict[str, Any]:
+        def move() -> dict[str, Any]:
+            fields = self._move_request(request)
+            self._store.move(
+                fields["part_number"],
+                fields["quantity"],
+                fields["location"],
+                fields["destination"],
+                fields["lot_number"],
+                fields["operator"],
+                reference=fields["reference"],
+            )
+            return self._stock_context(fields["part_number"])
+
+        return self._respond(move)

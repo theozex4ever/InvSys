@@ -54,6 +54,9 @@ class DesktopSmoke:
 
             check_stock_presentation(window, wait)
             self._stock_workflows(window, wait)
+            from inventory_control.desktop_smoke_move import check_move
+
+            check_move(window, wait)
             self._bom_history_workflows(window, wait)
             self._history_read_recovery(window, wait)
             self._part_history_navigation(window, wait)
