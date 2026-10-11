@@ -49,7 +49,7 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 27 | Location/quantity availability and shortages | Missing | Original BOM view; shipment preview covers shipping only |
 | 28 | Shared leaves aggregated in Build capacity | Missing | Store/BOM tests; dedicated explorer absent |
 | 29 | Critical <=100, low 101–500, separate from shortage | Missing | Original flowchart; shipment preview is not explorer parity |
-| 30 | Search/page immutable History; exact record inspection | Improved | Bridge History and native drawer/search smoke |
+| 30 | Search/page immutable History; exact record inspection | Missing | Paging and record/shipment drawers Improved; original Notes, Location, timestamp and transaction-type text search plus column sorting Missing; A16/A17 block retirement |
 | 31 | Historical per-Lot consumption survives definition edits | Improved | Bridge History and acceptance fixture restart tests |
 | 32 | Export Parts, Inventory, Transactions, Shipments, BOM | Missing | Original Export All / import-export service |
 | 33 | Select/preview three CSV import kinds; row errors/warnings | Missing | Original Settings / service; no new utilities |
@@ -140,9 +140,19 @@ Capacity warnings are critical <=100, low 101–500, otherwise healthy; shortage
 computed for requested builds separately. Shared leaves count once in aggregated
 requirements, even when shown at multiple paths.
 
-History defaults to all types/blank search; immutable table permits sort and clear
-filters. Original searches Part, Lot, operator and reference. Replacement adds
-paging and exact record/shipment drawers, persisted consumption and context links.
+History defaults to all types/blank search and permits clear filters. Original
+case-insensitive substring search covers timestamp, transaction type, Part, Lot,
+source Location, destination Location, operator, reference and Notes (even though
+Notes are not a table column). The immutable table shows the first 1,000 matches
+and permits ascending/descending sorting on all nine columns: Time, Type, Part,
+Lot, Qty, From, To, Operator and Reference; signed Qty sorts numerically.
+Replacement adds paging and exact record/shipment drawers, persisted consumption
+and context links. Its text search currently covers only Part, Lot, operator,
+reference and shipment number; the separate exact-type filter does not preserve
+transaction-type substring search. Records have fixed descending transaction-ID
+order and no column-sort controls. Notes, both Locations, timestamp and type text
+search, and all original column sorting are **Missing**, with no approved
+intentional change; A16/A17 must pass before retirement.
 Settings selects Parts/Inventory/BOM CSV, ordinary cancel makes no mutation;
 preview shows row/level/field/message, blocks invalid input, then confirms import
 (default No), revalidates and backs up before writes. Preserve actual per-kind
@@ -243,6 +253,8 @@ and platform bundle commands are in [desktop.md](desktop.md).
 | A13 | Double-click each mutation; simulated committed/lost response and unsent response preserve draft/lock. Failed recovery read remains locked; authoritative reads show exact Lot/operator/metadata; explicit completion/absence decision only; never auto-retry | Native delivered stock checks; future mutation coverage Missing |
 | A14 | Rehearse upgrade on a copy of representative pre-migration DB; compare Parts/Lots/balances/ledger/shipments/BOM snapshots before/after launch and restart; closed-app backup restore on a separate copy; record reconciled rollback | Copied-data/operator evidence Missing |
 | A15 | Each platform's standalone offline bundle, selected DB, two native runs, no HTTP/dev server, correct assets, startup backup, retained metadata/restart; all performance scenarios below | Three-platform package evidence Missing |
+| A16 | On a fresh workflow fixture, History text search `Disposable baseline` returns 8 receipt records; `Shipping Bench` returns both Move records; `MOVE_` matches MOVE_OUT and MOVE_IN without selecting a type; the baseline timestamp date matches all 15 records. Verify case-insensitive matching, source/destination Location searches, combination with exact-type filter and Clear filters; all records remain immutable | Replacement Missing: these current Notes, Location, timestamp and type text searches return zero; existing Part/Lot/operator/reference/shipment search remains required |
+| A17 | On a fresh workflow fixture, sort History ascending then descending by Time, Type, Part, Lot, Qty, From, To, Operator and Reference. Qty ascending starts at -9 and descending at +30, with signed numeric ordering; other columns follow displayed values. Verify the same matching record set and unchanged ledger after sorting, filtering, drawer inspection and restart | Replacement Missing: fixed descending-ID order and no column-sort controls |
 
 Future native checks extend the retained smoke at workflow boundaries. API tests
 use real temporary SQLite and observe success/error, unchanged state on rejection,
@@ -346,6 +358,12 @@ package reference machine):
   Full-run log: `/tmp/invsys-ticket40-full-tests.log`.
 - Independent Standards and Spec reviews against approved starting commit `d6d9911`:
   no actionable findings.
+- Follow-up PR review identified omitted original History capabilities. They are now
+  classified Missing under story 30 with retirement scenarios A16/A17. On a fresh
+  disposable fixture, original History matched Notes/Location/type/date searches
+  with counts 8/2/2/15; replacement matched zero for each. Original signed Qty sort
+  started at -9 ascending and +30 descending. No replacement History behavior was
+  changed; these remain required migration work.
 
 These source checks do not establish standalone Windows/macOS/Linux package
 acceptance, designated-machine timings, copied operational-data rehearsal, or
