@@ -1,7 +1,7 @@
 # Live desktop inventory workflows
 
 The pywebview frontend covers the dashboard, Parts catalog, Receive, standard and
-nested BOM Ship, and History, and a read-only BOM explorer, using [approved layout A](phase0-design.md). The
+nested BOM Ship, History, and a read-only BOM explorer, using [approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
 

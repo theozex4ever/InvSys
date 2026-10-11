@@ -6,12 +6,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
 
-from inventory_control.models import (
-    CRITICAL_BUILD_LIMIT,  # noqa: F401  # Re-exported for existing importers.
-    LOW_BUILD_LIMIT,  # noqa: F401  # Re-exported for existing importers.
-    BOMTreeNode,
-    capacity_level,
-)
+from inventory_control.models import BOMTreeNode, capacity_level
 
 
 class BOMFlowchart(QGraphicsView):

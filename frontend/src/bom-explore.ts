@@ -7,7 +7,7 @@ interface Placed { id: number; node: BOMExploreNode; x: number; y: number; paren
 interface View { x: number; y: number; k: number }
 
 const NODE_W = 236, NODE_H = 112, COL_GAP = 96, ROW_GAP = 20, MARGIN = 32;
-const MIN_ZOOM = 0.1, MAX_ZOOM = 3, PAN_STEP = 64;
+const MIN_ZOOM = 0.02, MAX_ZOOM = 3, PAN_STEP = 64;
 const LEVELS: Record<CapacityLevel, { label: string; glyph: string }> = {
   critical: { label: 'Critical', glyph: '▲' },
   low: { label: 'Low', glyph: '◆' },
@@ -23,7 +23,7 @@ const pair = (label: string, value: unknown) => `<div class="detail-pair"><span>
 
 export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: string) => void) {
   const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
-  let version = 0, searchVersion = 0, locationsLoaded = false, debounce: ReturnType<typeof setTimeout> | undefined;
+  let version = 0, searchVersion = 0, debounce: ReturnType<typeof setTimeout> | undefined;
   let placed: Placed[] = [];
   let result: BOMExploration | null = null;
   let requirements = new Map<string, BOMExploration['requirements'][number]>();
@@ -54,11 +54,9 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
   }
 
   async function loadLocations() {
-    if (locationsLoaded) return;
     const locations = await read(getAPI().locations());
     const previous = $<HTMLSelectElement>('#bomx-location').value;
     $('#bomx-location').innerHTML = locations.map(l => `<option ${l === (previous || 'Stock') ? 'selected' : ''}>${esc(l)}</option>`).join('');
-    locationsLoaded = true;
   }
 
   async function load() {
@@ -66,7 +64,7 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
     try {
       await loadLocations();
       const fields = request();
-      if (!fields) return;
+      if (!fields) { placed = []; result = null; $('#bomx-result').innerHTML = status('Correct the entries above to explore a BOM.'); return; }
       placed = []; result = null;
       $('#bomx-result').innerHTML = status('Loading current BOM and stock…');
       const data = await read(getAPI().explore_bom(fields));
@@ -130,8 +128,8 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
     requirements = new Map(data.requirements.map(req => [req.part_number, req]));
     const { request: asked } = data;
     const builds = (count: number) => `${count.toLocaleString()} ${count === 1 ? 'build' : 'builds'}`;
-    const summary = `<div class="bomx-summary" role="status"><div class="panel panel-body"><span class="eyebrow">Build capacity at ${esc(asked.location)}</span><div class="bomx-figure"><strong>${data.buildable.toLocaleString()}</strong><span>final ${data.buildable === 1 ? 'build' : 'builds'}</span>${levelBadge(data.level)}</div></div>
-<div class="panel panel-body"><span class="eyebrow">Requested ${esc(builds(asked.quantity))}</span><div class="bomx-figure"><strong>${data.has_bom ? (data.shortage_count ? `${data.shortage_count} short` : 'No shortage') : 'No BOM'}</strong>${data.has_bom ? `<span class="badge ${data.shortage_count ? 'bad' : 'good'}">${data.shortage_count ? '✕ Shipment shortage' : '✓ Shipment-ready'}</span>` : ''}</div></div></div>`;
+    const summary = `<div class="bomx-summary" role="status"><div class="panel panel-body"><span class="eyebrow">Build capacity at ${esc(asked.location)}</span><div class="bomx-figure">${data.has_bom ? `<strong>${data.buildable.toLocaleString()}</strong><span>final ${data.buildable === 1 ? 'build' : 'builds'}</span>${levelBadge(data.level)}` : '<strong>No BOM</strong>'}</div></div>
+<div class="panel panel-body"><span class="eyebrow">Requested ${esc(builds(asked.quantity))}</span><div class="bomx-figure"><strong>${data.has_bom ? (data.shortage_count ? `${data.shortage_count} short` : 'No shortage') : 'Nothing to expand'}</strong>${data.has_bom ? `<span class="badge ${data.shortage_count ? 'bad' : 'good'}">${data.shortage_count ? '✕ Shipment shortage' : '✓ Shipment-ready'}</span>` : ''}</div></div></div>`;
     if (!data.has_bom) {
       $('#bomx-result').innerHTML = `${summary}${status(`${data.tree.part_number} has no BOM components. ${data.tree.stock_available.toLocaleString()} on hand at ${asked.location}.`)}`;
       placed = []; return;
@@ -171,7 +169,7 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
     const req = node.children.length ? undefined : requirements.get(node.part_number);
     $('#bomx-inspector').innerHTML = `<h2>${esc(node.part_number)}</h2><p class="description">${esc(node.description)}</p><p style="margin:12px 0">${levelBadge(node.level)} <span class="badge neutral">${node.children.length ? 'Assembly' : 'Leaf material'}</span></p>
 ${pair('Quantity per parent', node.quantity_per_parent)}${pair('Required on this path', node.quantity_required)}${pair(`Available at ${result?.request.location ?? ''}`, node.stock_available)}${pair('Build capacity', `${node.capacity.toLocaleString()} ${node.capacity === 1 ? 'build' : 'builds'}`)}
-${req ? `${pair('Required across all paths', req.quantity_required)}${pair('Shortage for requested quantity', req.shortage ? `Short ${req.shortage}` : 'None')}` : '<p class="help">Assemblies are phantom: shipping consumes Leaf materials, never assembly stock.</p>'}
+${req ? `${pair('Required across all paths', req.quantity_required)}${pair('Shortage for requested quantity', req.shortage ? `Short ${req.shortage}` : 'None')}` : '<p class="help">Assembly capacity is the lowest capacity among its materials. Assemblies are phantom: shipping consumes Leaf materials, never assembly stock.</p>'}
 <div class="stock-context-actions"><button class="btn" data-part="${esc(node.part_number)}">Open part</button> <button class="btn" data-bomx-history="${esc(node.part_number)}">View History</button></div>`;
     if (focus) { ensureVisible(item); document.querySelector<SVGElement>(`#bomx-canvas [data-id="${id}"]`)?.focus({ preventScroll: true }); }
   }
