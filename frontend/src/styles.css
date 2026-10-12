@@ -218,3 +218,9 @@ dialog.drawer[open] { animation-name: drawer-in; }
 #settings .settings-panel { margin-top: 20px; }
 #settings-result:not(:empty) { margin-bottom: 20px; }
 .settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+#part-edit .help { margin-top: 6px; }
+#part-edit .status, #part-recovery .status { padding: 12px 0; }
+#part-recovery { margin-top: 24px; border-top: 1px solid var(--border); }
+#confirm-dialog { width: min(440px, 95vw); }

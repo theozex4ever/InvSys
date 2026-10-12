@@ -1,7 +1,7 @@
 # Live desktop inventory workflows
 
 The pywebview frontend covers the dashboard, Parts catalog, Receive, standard and
-nested BOM Ship, and History, using [approved layout A](phase0-design.md). The
+nested BOM Ship, Move, and History, using [approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
 
@@ -42,6 +42,9 @@ Importing the bridge does not initialize the original application's shared store
 The smoke command saves operator `Desktop smoke`, creates `DESKTOP-SMOKE` if
 absent, inspects its drawer, receives lots, ships standard stock, and exercises
 drafts, repeat entry, shortages, duplicate clicks, and lost-response reconciliation.
+It also creates the disposable `DESKTOP-EDIT` Part and exercises edit, unsaved-edit
+confirmation, validation, duplicate clicks, lost-response recovery (including a
+failed recovery read), stocked deactivation and reactivation.
 It also prepares a fresh disposable nested/shared
 BOM, reviews a multi-lot allocation, rejects shortage and stale allocation,
 reconfirms, and inspects History and component snapshots.
@@ -50,7 +53,11 @@ requests (recorded, not opened, so the smoke never spawns a file manager), and s
 failed folder request as an error. It reopens the backup read-only. It verifies the complete stock/audit result through a reopened store. Use a disposable file: these are real writes. Repeat the command to check
 startup backups and restart reads. No seed inventory is inserted by the launcher.
 
-The retained smoke also exercises contextual part-to-History navigation, failed
+The retained smoke also exercises Move on its own disposable `DESKTOP-MOVE` Part:
+drafts across navigation, same-Location rejection, duplicate clicks, Python
+before/after quantities, a lost response with a failed recovery read, stale-stock
+rejection and contextual entry, checking persisted balances and paired records.
+It also exercises contextual part-to-History navigation, failed
 History detail retry, explicit refresh after another operator's receipt, and
 uncertain BOM reconciliation, including a failed recovery read. It uses real Qt
 keyboard events for all four dialogs and captures five pages and dialogs in both
@@ -91,7 +98,13 @@ This package is a platform-specific smoke artifact, not a distributable release.
 
 Available: live dashboard counts/low-stock/activity, header operator save,
 remembered light/dark choice, catalog search/filter/sort, part creation, and
-read-only drawer with fields and lot/location balances. Low-stock entries open
+drawer with fields, lot/location balances, and Part editing: description, minimum
+quantity and default Location (the number is immutable), plus deactivate and
+reactivate without deletion. Deactivating a Part with stock names the units on
+hand and needs confirmation, which the bridge enforces. Cancelling or closing over
+unsaved edits asks first. A lost response locks the preserved edit until the
+operator reads the current Part and explicitly decides; mutations are never
+retried automatically. Low-stock entries open
 live parts; the attention panel shows five entries and links to all low-stock
 parts. Active and low-stock indicators are separate. Receive and standard Ship
 open from navigation, dashboard actions, and part details, adopting the selected
@@ -110,7 +123,7 @@ History record using its existing database transaction ID.
 
 The bridge exposes dashboard, preferences, save operator/theme, locations,
 part search/detail/create, stock context, receive, standard shipment preview,
-standard ship, BOM preview/confirmation, searchable paged History, and
+standard ship, BOM preview/confirmation, Move preview/confirmation, searchable paged History, and
 transaction/shipment inspection. Stock context contains current part/lot/location balances,
 BOM presence, and that part's immutable transactions and shipments for recovery. It validates input shapes/types before using the store
 and returns `{ok: true, data}` or `{ok: false, error: {code, message}}`. Stable
@@ -145,6 +158,28 @@ case folding and the existing sort order.
 The read snapshot does not reserve stock or authorize a later shipment; mutations
 still validate at submission. The original PySide6 screens retain their existing
 read paths. No schema or inventory rules changed.
+
+## Move
+
+Move transfers a positive-stock Lot between Locations (`frontend/src/move.ts`).
+The form takes Part, source (From), destination (To), Lot, quantity, optional
+reference and the header operator. Opening it from a Part adopts that Part's
+default Location as the source; otherwise source starts at Stock and destination
+at Shipping Bench when those Locations exist. The Lot list offers only Lots with
+stock at the source. `preview_move` reads source and destination Lot and Location
+totals before and after from one snapshot (`review_move`) and writes nothing; the
+confirmation dialog shows those authoritative numbers for both Locations. `move`
+calls `InventoryStore.move`, which posts `MOVE_OUT` and `MOVE_IN` in one database
+transaction, then returns the refreshed stock context. Same-Location, unknown
+Lot/Location, inactive Part, and insufficient stock reject with readable messages
+and no writes; a review never reserves stock, so a stale confirmation is
+rejected at submission and availability is re-read.
+
+Drafts survive navigation and availability refreshes on return. Duplicate
+submissions are blocked while a request is pending. An ambiguous transport or
+internal failure locks the draft until the operator reads current stock and audit
+records and states whether the move completed; a failed recovery read keeps the
+lock. After confirmed success the dashboard, Parts, and History reload.
 
 ## Drafts and uncertain submissions
 
@@ -240,9 +275,10 @@ displaced database files back together.
 
 ## Deferred workflows
 
-The shell directs operators to the original application for Move, Adjust, part
-editing/deactivation, location administration, BOM editing and exploration, and CSV
-import/export. Global search is part search only.
+The shell directs operators to the original application for Adjust,
+location administration, BOM editing and exploration, and CSV
+import/export. Backup restoration requires closing the app as described above.
+Global search is part search only.
 
 Not yet validated: Windows/macOS packages and installers, screen-reader review,
 human operator acceptance, and performance/release hardening. The native smoke is

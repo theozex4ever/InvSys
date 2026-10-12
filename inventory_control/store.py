@@ -24,6 +24,7 @@ from inventory_control.models import (
     ComponentConsumption,
     Lot,
     LotBalance,
+    MoveReview,
     Part,
     Shipment,
     StandardShipmentReview,
@@ -369,6 +370,62 @@ class InventoryStore:
                 raise ShipmentReviewNotFound("Part not found.")
             return BOMShipmentReview(plan, availability.buildable, context)
 
+    def review_move(
+        self, part_number: str, qty: int, source: str, target: str, lot_number: str
+    ) -> MoveReview:
+        """Source and destination stock before and after a move, from one snapshot."""
+        number = self._normalize_part_number(part_number)
+        lot_number = self._normalize_lot_number(lot_number)
+        with self._read_snapshot() as session:
+            context = self._read_stock_context(session, number)
+            if context is None:
+                raise ShipmentReviewNotFound("Part not found.")
+            if not context["part"]["active"]:
+                raise ValueError(
+                    f"Part {number} is inactive. Reactivate it before recording inventory activity."
+                )
+            if source not in context["locations"]:
+                raise ValueError("Invalid location.")
+            if target not in context["locations"]:
+                raise ValueError("Invalid destination location.")
+            if qty <= 0:
+                raise ValueError("Quantity must be greater than zero.")
+            if source == target:
+                raise ValueError("Source and destination cannot match.")
+            part = self._part(session, number)
+            if part is None or self._lot(session, part.id, lot_number) is None:
+                raise ShipmentReviewNotFound("Lot not found.")
+            balances = context["part"]["balances"]
+
+            def lot_stock(location: str) -> int:
+                return next(
+                    (
+                        b["quantity"]
+                        for b in balances
+                        if b["location"] == location and b["lot_number"] == lot_number
+                    ),
+                    0,
+                )
+
+            available = lot_stock(source)
+            if qty > available:
+                raise ValueError(
+                    f"Not enough stock in selected lot. Available: {available}, requested: {qty}."
+                )
+            totals = context["part"]["location_balances"]
+            target_available = lot_stock(target)
+            return MoveReview(
+                available,
+                available - qty,
+                target_available,
+                target_available + qty,
+                totals.get(source, 0),
+                totals.get(source, 0) - qty,
+                totals.get(target, 0),
+                totals.get(target, 0) + qty,
+                context,
+            )
+
     def _history_record(
         self, row: InventoryTransactionRecord, shipment_number: str | None
     ) -> dict[str, Any]:
@@ -573,6 +630,29 @@ class InventoryStore:
                 part.default_location_id = location_row.id
                 part.active = active
                 part.updated_at = now
+
+    def update_part(
+        self,
+        part_number: str,
+        description: str,
+        minimum_quantity: int,
+        location: str,
+        notify: bool = True,
+    ) -> None:
+        """Edit catalog fields of an existing Part; number and active state are kept."""
+        part_number = self._normalize_part_number(part_number)
+        if not description.strip():
+            raise ValueError("Description required.")
+        if minimum_quantity < 0:
+            raise ValueError("Minimum quantity cannot be negative.")
+        with self._mutation(notify) as (session, now):
+            part = self._part(session, part_number)
+            if part is None:
+                raise ValueError("Part not found.")
+            part.default_location_id = self._require_location(session, location).id
+            part.description = description.strip()
+            part.minimum_quantity = minimum_quantity
+            part.updated_at = now
 
     def set_part_active(self, part_number: str, active: bool, notify: bool = True) -> None:
         part_number = self._normalize_part_number(part_number)
