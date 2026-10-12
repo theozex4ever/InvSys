@@ -162,10 +162,10 @@ export function adjustWorkflow(getAPI: () => API, operator: () => string, change
   async function send(submission: CountSubmission) {
     if (state.pending || state.uncertain) return;
     state.submitted = submission; state.before = state.context?.transactions.length ?? 0;
-    state.pending = true; ++state.version; lock(); feedback('Recording count correction…');
+    state.pending = true; ++state.version; lock(); feedback('Recording count correction…'); control<HTMLElement>('result').textContent = '';
     try {
       const result = await read(getAPI().adjust_count(submission));
-      state.context = result.context;
+      state.context = result.context; renderLots();
       const text = `Corrected ${submission.part_number} lot ${submission.lot_number} at ${submission.location} from ${submission.expected} to ${submission.counted} (${signed(result.difference)}). Updated total stock: ${result.context.part.quantity}.`;
       control<HTMLElement>('result').innerHTML = `<div class="status success">${esc(text)}</div>`;
       clearEntry(); feedback('Ready for the next count.'); toast(text, `Count corrected for ${submission.part_number}.`); void changed();
@@ -201,7 +201,7 @@ export function adjustWorkflow(getAPI: () => API, operator: () => string, change
       active = true;
       if (dialog().open && !state.pending) dialog().close();
       if (state.pending) { ++state.version; return; }
-      if (state.uncertain) return;
+      if (state.uncertain) { if (number && number !== state.submitted?.part_number) feedback('Verify the uncertain count correction for the earlier part before starting another.', true); return; }
       if (number && value('part_number') !== number) {
         const select = control<HTMLSelectElement>('part_number');
         if (!Array.from(select.options).some(o => o.value === number)) select.insertAdjacentHTML('beforeend', `<option value="${esc(number)}">${esc(number)}</option>`);

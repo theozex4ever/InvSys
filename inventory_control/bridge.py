@@ -408,10 +408,10 @@ class InventoryBridge:
             "location": self._text(fields.get("location"), "Location"),
             "lot_number": self._text(fields.get("lot_number"), "Lot").upper(),
         }
-        for key, label in (
-            ("counted", "Counted quantity"),
-            *(("expected", "Expected quantity"),) * submit,
-        ):
+        numbers = [("counted", "Counted quantity")]
+        if submit:
+            numbers.append(("expected", "Expected quantity"))
+        for key, label in numbers:
             value = fields.get(key)
             if type(value) is not int or not 0 <= value <= 2**31 - 1:
                 raise ValueError(f"{label} must be a whole number between 0 and 2147483647.")

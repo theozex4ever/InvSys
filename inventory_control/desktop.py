@@ -94,7 +94,7 @@ def main() -> int:
             or smoke.recovered_bom_result is None
             or smoke.adjust_result is None
         ):
-            print("Desktop smoke failed: BOM results were not captured.", file=sys.stderr)
+            print("Desktop smoke failed: BOM or adjust results were not captured.", file=sys.stderr)
             return 1
         reopened = InventoryStore(database, seed=False)
         try:
