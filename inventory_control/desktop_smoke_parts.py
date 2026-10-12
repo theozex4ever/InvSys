@@ -320,8 +320,10 @@ def check_part_editing(window: Any, smoke_wait: Any) -> None:
         f"!!document.querySelector('#parts-data [data-part={PART}]') && document.querySelector('#parts-data tr.selected')"
     )
     run("document.querySelector('#close-drawer').click()")
-    wait("!document.querySelector('#drawer').open")
-    require(f"document.activeElement.dataset.part === '{PART}'", "closing restores catalog focus")
+    # close() clears open before the queued close handler restores catalog focus.
+    wait(
+        f"!document.querySelector('#drawer').open && document.activeElement.dataset.part === '{PART}'"
+    )
     # Hand the catalog back with the search the following smoke steps expect.
     run(
         "document.querySelector('#query').value='DESKTOP-SMOKE'; document.querySelector('#query').dispatchEvent(new Event('input'))"
