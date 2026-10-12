@@ -62,7 +62,8 @@ no HTTP server. `frontend/src/bridge.ts` defines the typed client and DTOs;
 `import_export.py` provides CSV export and validated import previews/commits.
 These utilities are available through the original application's Settings view.
 The optional frontend covers dashboard, Parts, Receive, standard/BOM Ship,
-History, and the read-only BOM explorer; other workflows remain in the original application.
+History, the read-only BOM explorer, and Settings backups/folder access
+(`utilities.py`, `settings.ts`); other workflows remain in the original application.
 
 ## Key Design Rules
 

@@ -3,14 +3,17 @@
 import argparse
 import importlib.util
 import logging
+import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from inventory_control.backup import backup_database
 from inventory_control.bridge import InventoryBridge
-from inventory_control.config import BACKUP_DIR, DB_PATH, LOG_DIR, PROJECT_ROOT
+from inventory_control.config import PROJECT_ROOT
 from inventory_control.store import InventoryStore
+from inventory_control.utilities import NativeHost, UtilityContext
 
 if TYPE_CHECKING:
     from inventory_control.desktop_smoke import DesktopSmoke
@@ -51,28 +54,32 @@ def main() -> int:
     import webview
     import webview.http as webview_http
 
-    database = args.database.resolve() if args.database else DB_PATH
-    backups = database.parent / "backups" if args.database else BACKUP_DIR
-    logs = database.parent / "logs" if args.database else LOG_DIR
-    logs.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(filename=logs / "desktop.log", level=logging.INFO)
-    backup_database(db_path=database, backup_dir=backups, reason="startup")
+    context = UtilityContext.for_launch(args.database)
+    database = context.database
+    context.logs.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(filename=context.logs / "desktop.log", level=logging.INFO)
+    backup_database(db_path=database, backup_dir=context.backups, reason="startup")
     store = InventoryStore(database, seed=False)
     smoke: DesktopSmoke | None = None
+    # The smoke records folder requests instead of opening a file manager window.
+    opened_folders: list[Path] = []
+    host = NativeHost(opener=opened_folders.append) if args.smoke_check else NativeHost()
     try:
         window = webview.create_window(
             "InvSys",
             url=(assets / "index.html").as_uri(),
-            js_api=InventoryBridge(store),
+            js_api=InventoryBridge(store, context, host),
             width=1366,
             height=768,
             min_size=(640, 480),
         )
+        host.attach(window)
         # file:// avoids pywebview's automatic server for bare filesystem paths.
         if args.smoke_check:
             from inventory_control import desktop_smoke
 
             smoke = desktop_smoke.DesktopSmoke(database.parent / "smoke-captures")
+            smoke.opened_folders = opened_folders
             smoke.prepare_bom(store)
             webview.start(smoke.run, (window,), gui="qt", http_server=False)
             if smoke.error:
@@ -92,6 +99,14 @@ def main() -> int:
         if smoke.bom_result is None or smoke.recovered_bom_result is None:
             print("Desktop smoke failed: BOM results were not captured.", file=sys.stderr)
             return 1
+        if smoke.backup_path is None or not smoke.backup_path.is_file():
+            print("Desktop smoke failed: manual backup file is missing.", file=sys.stderr)
+            return 1
+        if smoke.backup_path.parent != context.backups:
+            print(
+                "Desktop smoke failed: backup left the selected database folder.", file=sys.stderr
+            )
+            return 1
         reopened = InventoryStore(database, seed=False)
         try:
             bridge = InventoryBridge(reopened)
@@ -110,7 +125,15 @@ def main() -> int:
             ):
                 print("Desktop smoke failed: restart persistence.", file=sys.stderr)
                 return 1
-            print("Desktop smoke: restart persistence passed; no HTTP server.")
+            # Immutable read-only: inspecting a backup must not change it or leave WAL sidecars.
+            with closing(
+                sqlite3.connect(f"{smoke.backup_path.as_uri()}?mode=ro&immutable=1", uri=True)
+            ) as copy:
+                row = copy.execute("SELECT 1 FROM parts WHERE part_number = 'DESKTOP-SMOKE'")
+                if row.fetchone() is None:
+                    print("Desktop smoke failed: backup content.", file=sys.stderr)
+                    return 1
+            print("Desktop smoke: restart persistence and backup content passed; no HTTP server.")
         finally:
             reopened.engine.dispose()
     return 0
