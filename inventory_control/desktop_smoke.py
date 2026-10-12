@@ -60,6 +60,9 @@ class DesktopSmoke:
             self._bom_history_workflows(window, wait)
             self._history_read_recovery(window, wait)
             self._part_history_navigation(window, wait)
+            from inventory_control.desktop_smoke_parts import check_part_editing
+
+            check_part_editing(window, wait)
             self._refresh_reads(window, wait)
             self._bom_transport_recovery(window, wait)
             from inventory_control.desktop_smoke_ui import check_ui
@@ -78,12 +81,21 @@ class DesktopSmoke:
     def _history_read_recovery(self, window: Any, wait: Any) -> None:
         """A failed immutable read must offer recovery inside the open drawer."""
         run = window.evaluate_js
+        run("document.querySelector('#dashboard-data [data-history-id]').click()")
+        wait(
+            "document.querySelector('#history-detail').textContent.includes(window.smokeBOMNumber)"
+        )
         run("""
+            // Reopen before the previous dialog's queued close event is delivered.
+            window.smokeHistoryClosed = false;
+            document.querySelector('#history-drawer').addEventListener('close', () => { window.smokeHistoryClosed = true; }, {once:true});
+            document.querySelector('#history-close').click();
             window.smokeHistoryDetail = window.smokeAPI.history_detail;
             window.smokeAPI.history_detail = async () => ({ok:false, error:{code:'INTERNAL', message:'Read unavailable'}});
             document.querySelector('#dashboard-data [data-history-id]').click();
         """)
         wait("document.querySelector('#history-detail').textContent.includes('Read unavailable')")
+        wait("window.smokeHistoryClosed")
         if not run("!!document.querySelector('#history-detail [data-retry-detail]')"):
             raise RuntimeError("Failed History detail has no explicit retry action.")
         run("""

@@ -1,6 +1,7 @@
 import './styles.css';
 import { historyWorkflow } from './history';
 import { stockWorkflows } from './stock';
+import { partEditor } from './partEdit';
 import { moveWorkflow } from './move';
 import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History } from 'lucide';
 import { ready, read, RequestError, type Search, type Part, type PartDetail, type Dashboard } from './bridge';
@@ -19,6 +20,7 @@ let searchVersion = 0;
 let dashboardVersion = 0;
 let detailVersion = 0;
 let selected = '';
+let currentPart: PartDetail | null = null;
 let returnFocus: HTMLElement | null = null;
 let drawerScroll = { x: 0, y: 0 };
 let createReturnFocus: HTMLElement | null = null;
@@ -53,6 +55,8 @@ const stockChanged = async () => { await Promise.all([loadParts(), loadDashboard
 const stockToast = (text: string, summary?: string) => { notice(text); const element = document.createElement('div'); element.className = 'stock-toast'; element.setAttribute('role', 'status'); element.innerHTML = `${icon('check')}<span>${esc(summary ?? text)}</span>`; document.body.append(element); icons(); setTimeout(() => element.remove(), 5000); };
 const stock = stockWorkflows(() => api, () => $<HTMLInputElement>('#operator').value, stockChanged, stockToast);
 const move = moveWorkflow(() => api, () => $<HTMLInputElement>('#operator').value, stockChanged, stockToast);
+
+const editor = partEditor(() => api, { show: part => { currentPart = part; $('#drawer-data').innerHTML = detailHTML(part); icons(); $('#drawer-data').querySelector<HTMLElement>('[data-edit]')?.focus(); }, refresh: async () => { await Promise.all([loadParts(), loadDashboard()]); }, notice });
 
 // Native dialog focus can otherwise escape into the Qt browser chrome on Tab.
 for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
@@ -92,7 +96,7 @@ async function loadDashboard() {
     if (version !== dashboardVersion) return;
     $('#dashboard-data').innerHTML = `<div class="dashboard-grid"><div class="panel"><div class="panel-head"><div class="attention-heading"><span class="icon-tile">${icon('triangle-alert')}</span><div><h2>Needs attention</h2><p>Active parts at or below their minimum stock.</p></div></div><span class="badge warn">${data.low_stock.length} low</span></div>
 ${data.low_stock.length ? data.low_stock.slice(0, 5).map(p => `<div class="attention-row"><div><button class="part-id" data-part="${esc(p.part_number)}">${esc(p.part_number)}</button><div class="part-description description">${esc(p.description)}</div></div><div><div class="stock-meter"><strong>${p.quantity}</strong> / ${p.minimum_quantity} min</div><div class="meter" aria-hidden="true"><span style="width:${Math.min(100, p.minimum_quantity > 0 ? p.quantity / p.minimum_quantity * 100 : 0)}%"></span></div>${p.quantity === 0 ? '<span class="stock-label">No stock</span>' : ''}</div><button class="icon-btn" data-stock="receive" data-number="${esc(p.part_number)}" aria-label="Receive ${esc(p.part_number)}">${icon('arrow-right')}</button></div>`).join('') : status('No low-stock parts.')}<div class="table-footer"><button class="text-link" data-low-stock>View all low-stock parts ${icon('arrow-right')}</button></div></div>
-<div class="panel"><div class="panel-head"><h2>Quick actions</h2></div><div class="panel-body"><div class="quick-actions"><button class="action-tile" data-page="receive">${icon('arrow-down-to-line')}<strong>Receive stock</strong><small>Record incoming inventory</small></button><button class="action-tile" data-page="ship">${icon('arrow-up-from-line')}<strong>Ship stock</strong><small>Review lots and send</small></button><button class="action-tile" data-page="move">${icon('arrow-left-right')}<strong>Move stock</strong><small>Transfer a lot between locations</small></button><button class="action-tile" data-new>${icon('plus')}<strong>Create a part</strong><small>Add to your catalog</small></button></div><p class="help migration-note">For Adjust, BOM tools, editing, and Settings, open the original application.</p></div></div></div>
+<div class="panel"><div class="panel-head"><h2>Quick actions</h2></div><div class="panel-body"><div class="quick-actions"><button class="action-tile" data-page="receive">${icon('arrow-down-to-line')}<strong>Receive stock</strong><small>Record incoming inventory</small></button><button class="action-tile" data-page="ship">${icon('arrow-up-from-line')}<strong>Ship stock</strong><small>Review lots and send</small></button><button class="action-tile" data-page="move">${icon('arrow-left-right')}<strong>Move stock</strong><small>Transfer a lot between locations</small></button><button class="action-tile" data-new>${icon('plus')}<strong>Create a part</strong><small>Add to your catalog</small></button></div><p class="help migration-note">For Adjust, BOM tools and Settings, open the original application.</p></div></div></div>
 <div class="stats dashboard-stats"><div class="panel stat"><div class="stat-title">Active parts ${icon('package')}</div><div class="stat-value">${data.active_parts}</div><div class="stat-foot">In your catalog</div></div><button class="panel stat stat-button warning" data-low-stock aria-label="View low-stock parts"><span class="stat-title">Low-stock parts ${icon('triangle-alert')}</span><span class="stat-value">${data.low_stock.length}</span><span class="stat-foot">At or below minimum · View parts</span></button><div class="panel stat"><div class="stat-title">Recorded shipments ${icon('arrow-up-from-line')}</div><div class="stat-value">${data.shipment_count}</div><div class="stat-foot">Tracked in History</div></div></div>
 <div class="panel activity-panel"><div class="panel-head"><h2>Recent activity</h2><button class="text-link" data-page="history">View History ${icon('arrow-right')}</button></div>${data.activity.length ? data.activity.map(tx => `<div class="activity-item ${tx.tx_type === 'RECEIVE' ? 'receive' : tx.tx_type.startsWith('SHIP') ? 'ship' : 'other'}"><span class="icon-tile">${icon(tx.tx_type === 'RECEIVE' ? 'arrow-down-to-line' : tx.tx_type.startsWith('SHIP') ? 'arrow-up-from-line' : 'arrow-left-right')}</span><div><button class="text-link" data-history-id="${tx.transaction_id}">${esc(tx.part_number)} · ${tx.quantity_change > 0 ? '+' : ''}${tx.quantity_change}</button><p>${esc(tx.tx_type)} · ${esc(tx.operator)} · Lot ${esc(tx.lot_number || '—')} · ${esc(tx.location_from || tx.location_to)}</p></div><time>${esc(tx.timestamp)}</time></div>`).join('') : status('No inventory activity yet.')}</div>`;
     icons();
@@ -128,7 +132,7 @@ function detailHTML(part: PartDetail) {
 ${[['Total stock', part.quantity], ['Minimum quantity', part.minimum_quantity], ['Default location', part.location]].map(([label, value]) => `<div class="detail-pair"><span>${label}</span><strong>${esc(value)}</strong></div>`).join('')}
 <h3>Stock by location</h3>${Object.entries(part.location_balances).map(([location, qty]) => `<div class="detail-pair"><span>${esc(location)}</span><strong>${qty}</strong></div>`).join('') || status('No locations.')}
 <h3>Lot balances</h3>${part.balances.length ? `<div class="table-wrap"><table><thead><tr><th>Lot</th><th>Location</th><th class="num">Stock</th></tr></thead><tbody>${part.balances.map(b => `<tr><td>${esc(b.lot_number)}</td><td>${esc(b.location)}</td><td class="num">${b.quantity}</td></tr>`).join('')}</tbody></table></div>` : status('No lots received yet.')}
-<div class="stock-context-actions"><button class="btn primary" data-stock="receive" data-number="${esc(part.part_number)}">Receive stock</button> <button class="btn" data-stock="ship" data-number="${esc(part.part_number)}">Ship stock</button> <button class="btn" data-stock="move" data-number="${esc(part.part_number)}">Move stock</button> <button class="btn" data-part-history="${esc(part.part_number)}">View History</button></div><p class="help migration-note">To edit or deactivate this part, open the original application.</p></div>`;
+<div class="stock-context-actions"><button class="btn primary" data-stock="receive" data-number="${esc(part.part_number)}">Receive stock</button> <button class="btn" data-stock="ship" data-number="${esc(part.part_number)}">Ship stock</button> <button class="btn" data-stock="move" data-number="${esc(part.part_number)}">Move stock</button> <button class="btn" data-part-history="${esc(part.part_number)}">View History</button></div><div class="stock-context-actions"><button class="btn" data-edit="${esc(part.part_number)}">Edit part</button> <button class="btn" data-active="${part.active ? 'off' : 'on'}" data-number="${esc(part.part_number)}">${part.active ? 'Deactivate part' : 'Reactivate part'}</button></div></div>`;
 }
 async function openPart(number: string, focus: HTMLElement | null = document.activeElement as HTMLElement) {
   selected = number;
@@ -137,12 +141,12 @@ async function openPart(number: string, focus: HTMLElement | null = document.act
   const version = ++detailVersion;
   $('#drawer-data').innerHTML = status('Loading part…');
   if (!$<HTMLDialogElement>('#drawer').open) { drawerScroll = { x: scrollX, y: scrollY }; $<HTMLDialogElement>('#drawer').showModal(); }
-  try { const part = await read(api.part_detail(number)); if (version === detailVersion) $('#drawer-data').innerHTML = detailHTML(part); }
+  try { const part = await read(api.part_detail(number)); if (version === detailVersion) { currentPart = part; $('#drawer-data').innerHTML = detailHTML(part); } }
   catch (error) { if (version === detailVersion) $('#drawer-data').innerHTML = `${status(message(error), true)}<button id="retry-detail" class="btn">Retry</button>`; }
 }
 function restoreFocus() {
   if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
-  else Array.from(document.querySelectorAll<HTMLElement>('[data-part]')).find(b => b.dataset.part === selected)?.focus({ preventScroll: true });
+  else Array.from(document.querySelectorAll<HTMLElement>('[data-part]')).find(b => b.dataset.part === selected && b.getClientRects().length > 0)?.focus({ preventScroll: true });
 }
 function openCreate(trigger: HTMLElement = document.activeElement as HTMLElement) {
   if (!api) return;
@@ -150,8 +154,9 @@ function openCreate(trigger: HTMLElement = document.activeElement as HTMLElement
   $<HTMLDialogElement>('#create-dialog').showModal();
   $<HTMLInputElement>('#number').focus();
 }
-$<HTMLDialogElement>('#drawer').addEventListener('close', () => { ++detailVersion; restoreFocus(); window.scrollTo(drawerScroll.x, drawerScroll.y); });
-$('#close-drawer').onclick = () => $<HTMLDialogElement>('#drawer').close();
+$<HTMLDialogElement>('#drawer').addEventListener('close', () => { ++detailVersion; editor.reset(); restoreFocus(); window.scrollTo(drawerScroll.x, drawerScroll.y); });
+$('#close-drawer').onclick = async () => { if (await editor.mayClose()) $<HTMLDialogElement>('#drawer').close(); };
+$<HTMLDialogElement>('#drawer').addEventListener('cancel', event => { if (editor.active()) { event.preventDefault(); $('#close-drawer').click(); } });
 $('#add-part').onclick = () => openCreate($('#add-part'));
 $<HTMLDialogElement>('#create-dialog').addEventListener('close', () => { if (createReturnFocus?.isConnected) createReturnFocus.focus({ preventScroll: true }); });
 $('#close-create').onclick = () => { if (!creating) $<HTMLDialogElement>('#create-dialog').close(); };
@@ -178,6 +183,8 @@ document.addEventListener('click', event => {
 $('#drawer-data').onclick = event => {
   const target = (event.target as HTMLElement).closest<HTMLElement>('button');
   if (target?.id === 'retry-detail') void openPart(selected, returnFocus);
+  if (target?.dataset.edit) void editor.edit(currentPart!);
+  if (target?.dataset.active) void editor.setActive(currentPart!, target.dataset.active === 'on');
   if (target?.dataset.partHistory && api) {
     $<HTMLDialogElement>('#drawer').close(); navigate('history', false);
     void history.open(target.dataset.partHistory);

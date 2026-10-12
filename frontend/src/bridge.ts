@@ -28,6 +28,8 @@ export interface Search {
   sort: 'part_number' | 'description' | 'quantity' | 'minimum_quantity'; descending: boolean;
 }
 export interface NewPart { part_number: string; description: string; minimum_quantity: number; location: string }
+export type UpdatePart = NewPart;
+export interface SetActive { part_number: string; active: boolean; confirm_stock?: boolean }
 export interface Receipt {
   part_number: string; quantity: number; location: string; lot_number: string;
   operator: string; reference: string; notes: string;
@@ -47,7 +49,7 @@ export interface MovePreview {
   source_location_before: number; source_location_after: number; destination_location_before: number; destination_location_after: number;
   context: StockContext;
 }
-export type Response<T> = { ok: true; data: T } | { ok: false; error: { code: 'VALIDATION' | 'DUPLICATE' | 'NOT_FOUND' | 'INTERNAL' | 'PLAN_CHANGED'; message: string } };
+export type Response<T> = { ok: true; data: T } | { ok: false; error: { code: 'VALIDATION' | 'DUPLICATE' | 'CONFIRMATION_REQUIRED' | 'NOT_FOUND' | 'INTERNAL' | 'PLAN_CHANGED'; message: string } };
 interface API {
   history(search: HistorySearch): Promise<Response<HistoryResults>>;
   history_detail(id: number): Promise<Response<HistoryDetail>>;
@@ -62,6 +64,8 @@ interface API {
   search_parts(search: Search): Promise<Response<Part[]>>;
   part_detail(number: string): Promise<Response<PartDetail>>;
   create_part(part: NewPart): Promise<Response<PartDetail>>;
+  update_part(part: UpdatePart): Promise<Response<PartDetail>>;
+  set_part_active(request: SetActive): Promise<Response<PartDetail>>;
   stock_context(number: string): Promise<Response<StockContext>>;
   receive(request: Receipt): Promise<Response<StockContext>>;
   preview_ship(request: ShipmentRequest): Promise<Response<ShipmentPreview>>;
@@ -77,7 +81,7 @@ export function ready(): Promise<API> {
   return new Promise((resolve, reject) => {
     const loaded = () => {
       const api = window.pywebview?.api;
-      if (api && ['dashboard', 'preferences', 'save_operator', 'save_theme', 'locations', 'search_parts', 'part_detail', 'create_part', 'stock_context', 'receive', 'preview_ship', 'ship', 'history', 'history_detail', 'shipment_detail', 'preview_bom_ship', 'ship_bom', 'preview_move', 'move'].every(method => typeof api[method as keyof API] === 'function')) { cleanup(); resolve(api); }
+      if (api && ['dashboard', 'preferences', 'save_operator', 'save_theme', 'locations', 'search_parts', 'part_detail', 'create_part', 'update_part', 'set_part_active', 'stock_context', 'receive', 'preview_ship', 'ship', 'history', 'history_detail', 'shipment_detail', 'preview_bom_ship', 'ship_bom', 'preview_move', 'move'].every(method => typeof api[method as keyof API] === 'function')) { cleanup(); resolve(api); }
     };
     const cleanup = () => { clearTimeout(timer); window.removeEventListener('pywebviewready', loaded); };
     const timer = setTimeout(() => {

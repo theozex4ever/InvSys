@@ -164,27 +164,63 @@ class InventoryBridge:
 
         return self._respond(read)
 
+    def _part_fields(self, request: Any) -> tuple[str, str, int, str]:
+        fields = self._request(
+            request, {"part_number", "description", "minimum_quantity", "location"}
+        )
+        number = self._text(fields.get("part_number"), "Part number").upper()
+        description = self._text(fields.get("description"), "Description")
+        location = self._text(fields.get("location"), "Location")
+        minimum = fields.get("minimum_quantity")
+        if type(minimum) is not int or minimum < 0 or minimum > 2**31 - 1:
+            raise ValueError("Minimum quantity must be a whole number between 0 and 2147483647.")
+        if location not in self._store.locations:
+            raise ValueError("Invalid location.")
+        return number, description, minimum, location
+
     def create_part(self, request: Any) -> dict[str, Any]:
         def create() -> dict[str, Any]:
-            fields = self._request(
-                request, {"part_number", "description", "minimum_quantity", "location"}
-            )
-            number = self._text(fields.get("part_number"), "Part number").upper()
-            description = self._text(fields.get("description"), "Description")
-            location = self._text(fields.get("location"), "Location")
-            minimum = fields.get("minimum_quantity")
-            if type(minimum) is not int or minimum < 0 or minimum > 2**31 - 1:
-                raise ValueError(
-                    "Minimum quantity must be a whole number between 0 and 2147483647."
-                )
-            if location not in self._store.locations:
-                raise ValueError("Invalid location.")
+            number, description, minimum, location = self._part_fields(request)
             if number in self._store.parts:
                 raise BridgeError("DUPLICATE", "Part already exists.")
             self._store.add_part(number, description, minimum, location)
             return self._detail(number)
 
         return self._respond(create)
+
+    def update_part(self, request: Any) -> dict[str, Any]:
+        """Edit description, minimum quantity and default Location; the number is immutable."""
+
+        def update() -> dict[str, Any]:
+            number, description, minimum, location = self._part_fields(request)
+            self._detail(number)
+            self._store.update_part(number, description, minimum, location)
+            return self._detail(number)
+
+        return self._respond(update)
+
+    def set_part_active(self, request: Any) -> dict[str, Any]:
+        """Deactivate or reactivate a Part. Deactivating stocked Parts needs confirmation."""
+
+        def change() -> dict[str, Any]:
+            fields = self._request(request, {"part_number", "active", "confirm_stock"})
+            number = self._text(fields.get("part_number"), "Part number").upper()
+            active = fields.get("active")
+            confirmed = fields.get("confirm_stock", False)
+            if type(active) is not bool or type(confirmed) is not bool:
+                raise ValueError("Active state and stock confirmation must be true or false.")
+            part = self._detail(number)
+            if part["active"] != active:
+                if not active and part["quantity"] > 0 and not confirmed:
+                    raise BridgeError(
+                        "CONFIRMATION_REQUIRED",
+                        f"{number} still has {part['quantity']} units on hand. "
+                        "Confirm to deactivate it anyway.",
+                    )
+                self._store.set_part_active(number, active)
+            return self._detail(number)
+
+        return self._respond(change)
 
     def _stock_context(self, part_number: Any) -> dict[str, Any]:
         number = self._text(part_number, "Part number").upper()

@@ -18,7 +18,7 @@ scenario, approved workload and retirement evidence gate from tickets #39/#40.
 | 0 | Static visual prototype | Complete |
 | 1 | pywebview + typed bridge, local assets, basic Linux package proof | Complete |
 | 2 | Live Attention first dashboard and workspace links | Complete |
-| 3 | Parts search/create/details delivered; editing/deactivation deferred | In Progress |
+| 3 | Parts search/create/details, editing and deactivation/reactivation | Complete |
 | 4 | Searchable immutable History and persisted shipment/component trace | Complete |
 | 5 | Real lot receiving, drafts, refresh, and recovery | Complete |
 | 6 | Move + Adjust | In Progress: Move delivered; Adjust pending |
@@ -46,11 +46,6 @@ Update this table when a phase meaningfully changes.
   and `prefers-reduced-motion` support.
 
 ## Remaining phases
-
-### 3. Parts editing
-
-Add part editing and deactivation (`active = False`, no hard deletes). Confirm
-before discarding unsaved edits.
 
 ### 6. Move and Adjust
 

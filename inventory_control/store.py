@@ -631,6 +631,29 @@ class InventoryStore:
                 part.active = active
                 part.updated_at = now
 
+    def update_part(
+        self,
+        part_number: str,
+        description: str,
+        minimum_quantity: int,
+        location: str,
+        notify: bool = True,
+    ) -> None:
+        """Edit catalog fields of an existing Part; number and active state are kept."""
+        part_number = self._normalize_part_number(part_number)
+        if not description.strip():
+            raise ValueError("Description required.")
+        if minimum_quantity < 0:
+            raise ValueError("Minimum quantity cannot be negative.")
+        with self._mutation(notify) as (session, now):
+            part = self._part(session, part_number)
+            if part is None:
+                raise ValueError("Part not found.")
+            part.default_location_id = self._require_location(session, location).id
+            part.description = description.strip()
+            part.minimum_quantity = minimum_quantity
+            part.updated_at = now
+
     def set_part_active(self, part_number: str, active: bool, notify: bool = True) -> None:
         part_number = self._normalize_part_number(part_number)
         with self._mutation(notify) as (session, now):
