@@ -28,7 +28,7 @@ export interface Search {
   sort: 'part_number' | 'description' | 'quantity' | 'minimum_quantity'; descending: boolean;
 }
 export interface NewPart { part_number: string; description: string; minimum_quantity: number; location: string }
-export interface UpdatePart extends NewPart {}
+export type UpdatePart = NewPart;
 export interface SetActive { part_number: string; active: boolean; confirm_stock?: boolean }
 export interface Receipt {
   part_number: string; quantity: number; location: string; lot_number: string;

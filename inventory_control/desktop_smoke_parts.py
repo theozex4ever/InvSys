@@ -66,6 +66,25 @@ def check_part_editing(window: Any, smoke_wait: Any) -> None:
         "document.querySelector('#part-edit').textContent.includes('cannot be changed') && document.querySelector('#part-save').disabled",
         "pristine form has Save disabled",
     )
+    # Both themes: the edit form fits and its actions stay reachable at small sizes.
+    original_theme = run("document.documentElement.dataset.theme")
+    for theme in ("light", "dark"):
+        run(
+            f"window.pywebview.api.save_theme('{theme}').then(r => {{ if (r.ok) document.documentElement.dataset.theme='{theme}'; }})"
+        )
+        wait(f"document.documentElement.dataset.theme === '{theme}'")
+        for width, height in ((1366, 768), (640, 480)):
+            window.resize(width, height)
+            time.sleep(0.15)
+            run("document.querySelector('#part-cancel').scrollIntoView({block:'nearest'})")
+            require(
+                "(() => { const d = document.querySelector('#drawer'); const r = document.querySelector('#part-cancel').getBoundingClientRect(); return document.documentElement.scrollWidth <= innerWidth && d.scrollWidth <= d.clientWidth && r.top >= 0 && r.bottom <= innerHeight; })()",
+                f"{theme} {width}: edit form fits",
+            )
+    window.resize(1366, 768)
+    run(
+        f"window.pywebview.api.save_theme('{original_theme}').then(() => {{ document.documentElement.dataset.theme='{original_theme}'; }})"
+    )
     run(
         "document.querySelector('#edit-description').value='Edited by smoke'; document.querySelector('#edit-description').dispatchEvent(new Event('input', {bubbles:true}))"
     )
@@ -253,6 +272,49 @@ def check_part_editing(window: Any, smoke_wait: Any) -> None:
     wait("document.querySelector('#drawer-data').textContent.includes('Deactivate part')")
     if not read_part()["active"]:
         raise RuntimeError("Reactivation did not persist.")
+    # Lost response after a deactivation: the drawer stays closable only through a discard
+    # confirmation, a failed recovery read keeps the lock, and nothing is retried.
+    run("""
+        window.smokeActive=window.smokeAPI.set_part_active; window.smokeActiveCalls=0;
+        window.smokeAPI.set_part_active=async fields => {
+            const result = await window.smokeActive(fields);
+            if (fields.confirm_stock) { window.smokeActiveCalls++; throw new Error('Lost response'); }
+            return result;
+        };
+        document.querySelector('#drawer-data [data-active=off]').click();
+    """)
+    wait("document.querySelector('#confirm-dialog').open")
+    run("document.querySelector('#confirm-accept').click()")
+    wait("!!document.querySelector('#part-recovery [data-recovery=read]')")
+    run("window.smokeAPI.set_part_active=window.smokeActive")
+    run("document.querySelector('#close-drawer').click()")
+    wait("document.querySelector('#confirm-dialog').open")
+    run("document.querySelector('#confirm-cancel').click()")
+    wait("!document.querySelector('#confirm-dialog').open")
+    require(
+        "document.querySelector('#drawer').open", "uncertain deactivation keeps the drawer open"
+    )
+    run("""
+        window.smokePartDetail=window.smokeAPI.part_detail;
+        window.smokeAPI.part_detail=async () => { throw new Error('Read unavailable'); };
+        document.querySelector('#part-recovery [data-recovery=read]').click();
+    """)
+    wait("document.querySelector('#part-recovery').textContent.includes('still uncertain')")
+    require(
+        "!document.querySelector('#part-recovery [data-decision]')", "failed read keeps the lock"
+    )
+    run(
+        "window.smokeAPI.part_detail=window.smokePartDetail; document.querySelector('#part-recovery [data-recovery=read]').click()"
+    )
+    wait("!!document.querySelector('#part-recovery [data-decision=accept]')")
+    require(
+        "document.querySelector('#part-recovery').textContent.includes('The change was saved') && window.smokeActiveCalls === 1",
+        "read-back shows the persisted deactivation without retrying",
+    )
+    run("document.querySelector('#part-recovery [data-decision=accept]').click()")
+    wait("document.querySelector('#drawer-data').textContent.includes('Reactivate part')")
+    run("document.querySelector('#drawer-data [data-active=on]').click()")
+    wait("document.querySelector('#drawer-data').textContent.includes('Deactivate part')")
     # The catalog re-reads after each success; wait for it before checking focus restoration.
     wait(
         f"!!document.querySelector('#parts-data [data-part={PART}]') && document.querySelector('#parts-data tr.selected')"
@@ -268,6 +330,6 @@ def check_part_editing(window: Any, smoke_wait: Any) -> None:
         "!!document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]') && !document.querySelector('#parts-data [data-part=DESKTOP-EDIT]')"
     )
     print(
-        "Desktop smoke: part edit, unsaved-edit confirmation, stocked deactivation, reactivation, duplicate clicks and lost-response recovery passed.",
+        "Desktop smoke: part edit in both themes, unsaved-edit confirmation, stocked deactivation, reactivation, duplicate clicks and lost-response recovery passed.",
         flush=True,
     )

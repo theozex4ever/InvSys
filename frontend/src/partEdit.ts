@@ -30,7 +30,8 @@ export function partEditor(getAPI: () => API, hooks: Hooks) {
     location: $<HTMLSelectElement>('#edit-location').value,
   });
   const isDirty = () => {
-    if (!editing || !form()) return false;
+    // Recovery-only views (an uncertain deactivation) have a form element but no fields.
+    if (!editing || !document.querySelector('#edit-description')) return false;
     const now = values();
     return now.description !== editing.description || now.minimum_quantity !== editing.minimum_quantity || now.location !== editing.location;
   };
@@ -52,17 +53,20 @@ export function partEditor(getAPI: () => API, hooks: Hooks) {
   }
 
   function lock(locked: boolean) {
-    form()?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>('input, select, button').forEach(control => { control.disabled = locked; });
+    form()?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>('input, select, button').forEach(control => { if (!control.closest('#part-recovery')) control.disabled = locked; });
     if (!locked) syncSave();
   }
   function syncSave() { const save = document.querySelector<HTMLButtonElement>('#part-save'); if (save) save.disabled = busy || !!uncertain || !isDirty(); }
 
   async function edit(part: PartDetail) {
-    if (busy) return;
-    editing = part;
+    if (busy || editing) return;
+    // busy keeps the drawer from closing or re-entering while locations load.
+    busy = true;
     let locations: string[];
     try { locations = await read(getAPI().locations()); }
-    catch (error) { editing = null; hooks.notice(message(error), true); return; }
+    catch (error) { hooks.notice(message(error), true); return; }
+    finally { busy = false; }
+    editing = part;
     if (!locations.includes(part.location)) locations = [part.location, ...locations];
     drawer().innerHTML = `<form id="part-edit" class="dialog-body" novalidate><div class="review-part">${esc(part.part_number)}</div><p class="help">The part number cannot be changed.</p><div class="form-grid" style="margin-top:16px">
 <div class="field full"><label for="edit-description">Description <span class="required">*</span></label><input id="edit-description" required value="${esc(part.description)}"></div>
@@ -76,8 +80,12 @@ export function partEditor(getAPI: () => API, hooks: Hooks) {
   }
 
   async function discard() {
+    if (busy) return;
     if ((isDirty() || uncertain) && !await confirm('Discard unsaved edits?', uncertain ? 'The outcome of your last save is unconfirmed. Discarding forgets your entries; reopen the part to read its current values.' : 'Your changes to this part have not been saved.', 'Discard edits', 'Keep editing')) return;
-    const previous = editing!; leave(); hooks.show(await current(previous));
+    // busy keeps the drawer open while the authoritative part is re-read.
+    busy = true;
+    const fresh = await current(editing!);
+    leave(); hooks.show(fresh);
   }
   async function current(fallback: PartDetail) {
     try { return await read(getAPI().part_detail(fallback.part_number)); }
@@ -167,8 +175,8 @@ export function partEditor(getAPI: () => API, hooks: Hooks) {
 
   return {
     edit, setActive,
-    /** True while the drawer holds a form, unsaved edits or an unconfirmed outcome. */
-    active: () => !!editing,
+    /** True while the drawer holds a form, unsaved edits, an unconfirmed outcome or an in-flight request. */
+    active: () => !!editing || busy,
     /** Asks before the drawer closes over unsaved work; resolves true when it may close. */
     async mayClose() {
       if (busy) return false;
