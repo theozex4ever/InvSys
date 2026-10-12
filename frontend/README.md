@@ -31,6 +31,8 @@ server or build plugin. All icons and styles are bundled locally.
   `pywebviewready` and reports a timeout with a reconnect action. Never falls
   back to fixture data or retries mutations.
 - `src/main.ts`: shell, dashboard, Parts catalog and drawer, dialogs, theme.
+- `src/partEdit.ts`: Part editing, deactivate/reactivate, discard confirmation, and
+  uncertain-save reconciliation inside the Part drawer.
 - `src/stock.ts`: Receive and standard/BOM Ship drafts, reviews, and uncertain
   submission reconciliation.
 - `src/history.ts`: History search, filters, paging, and the read-only drawer.

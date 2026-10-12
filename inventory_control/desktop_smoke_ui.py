@@ -133,7 +133,7 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
         for width, height in ((1366, 768), (1920, 1080), (800, 650), (640, 480)):
             window.resize(width, height)
             time.sleep(0.15)
-            for page in ("dashboard", "parts", "receive", "ship", "history", "bom-explore"):
+            for page in ("dashboard", "parts", "receive", "ship", "move", "history", "bom-explore"):
                 run(f"document.querySelector('[data-page={page}]').click()")
                 wait(
                     f"!document.querySelector('#{page}').textContent.includes('Loading') && !document.querySelector('#{page}').textContent.includes('Reading current stock')"
@@ -255,7 +255,7 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             flush=True,
         )
     print(
-        "Desktop smoke: both themes, six pages at four sizes, labels/reachable actions, native Tab/Shift+Tab/Escape and focus restoration passed.",
+        "Desktop smoke: both themes, seven pages at four sizes, labels/reachable actions, native Tab/Shift+Tab/Escape and focus restoration passed.",
         flush=True,
     )
 

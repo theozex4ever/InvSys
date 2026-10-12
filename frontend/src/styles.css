@@ -250,3 +250,8 @@ dialog.drawer[open] { animation-name: drawer-in; }
 .bomx-node:focus-visible .bomx-card { stroke: var(--cyan); stroke-width: 5; stroke-dasharray: none; }
 @media (max-width: 1100px) { .bomx-layout { grid-template-columns: 1fr; } .bomx-form { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .bomx-form { grid-template-columns: 1fr; } .bomx-viewport { height: clamp(260px, 50vh, 480px); } }
+.dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+#part-edit .help { margin-top: 6px; }
+#part-edit .status, #part-recovery .status { padding: 12px 0; }
+#part-recovery { margin-top: 24px; border-top: 1px solid var(--border); }
+#confirm-dialog { width: min(440px, 95vw); }

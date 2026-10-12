@@ -1,3 +1,4 @@
+import { message, pair, $, esc, status } from './presentation';
 import { read, type ready, type BOMExploration, type BOMExploreNode, type BOMExploreRequest, type CapacityLevel } from './bridge';
 
 // Read-only BOM explorer. Python supplies structure, requirements and capacity;
@@ -13,30 +14,25 @@ const LEVELS: Record<CapacityLevel, { label: string; glyph: string }> = {
   low: { label: 'Low', glyph: '◆' },
   ready: { label: 'Ready', glyph: '●' },
 };
-const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const status = (text: string, error = false) => `<div class="status ${error ? 'error' : ''}" role="${error ? 'alert' : 'status'}">${esc(text)}</div>`;
-const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to read the BOM.';
 const short = (text: string, length: number) => text.length > length ? `${text.slice(0, length - 1)}…` : text;
 const levelText = (level: CapacityLevel, builds: number) => `${LEVELS[level].glyph} ${LEVELS[level].label} capacity · ${builds.toLocaleString()} ${builds === 1 ? 'build' : 'builds'}`;
 const levelBadge = (level: CapacityLevel) => `<span class="badge ${level === 'critical' ? 'bad' : level === 'low' ? 'warn' : 'good'}">${LEVELS[level].glyph} ${LEVELS[level].label} capacity</span>`;
-const pair = (label: string, value: unknown) => `<div class="detail-pair"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
 
 export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: string) => void) {
-  const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
   let version = 0, searchVersion = 0, debounce: ReturnType<typeof setTimeout> | undefined;
   let placed: Placed[] = [];
   let result: BOMExploration | null = null;
   let requirements = new Map<string, BOMExploration['requirements'][number]>();
   let view: View = { x: 0, y: 0, k: 1 };
-  let fitted = true, selected = -1, active = 0, suppressClick = false;
+  let fitted = true, suppressClick = false;
   let contentW = 0, contentH = 0;
 
-  $('main').insertAdjacentHTML('beforeend', `<section id="bom-explore" hidden><div class="page-heading"><div><h1>BOM explorer</h1><p>Inspect nested structure, Leaf materials and Build capacity at a Location. Exploring never changes inventory.</p></div><button id="bomx-refresh" class="btn" disabled>Refresh</button></div>
+  $('main').insertAdjacentHTML('beforeend', `<section id="bom-explore" hidden><div class="page-heading"><div><h1>BOM explorer</h1><p>Read-only structure, Leaf materials and Build capacity by Location.</p></div><button id="bomx-refresh" class="btn" disabled>Refresh</button></div>
 <form id="bomx-form" class="panel panel-body bomx-form"><div class="field"><label for="bomx-part">Assembly part <span class="required">*</span></label><input id="bomx-part" name="part_number" list="bomx-parts" autocomplete="off" required><datalist id="bomx-parts"></datalist></div>
 <div class="field"><label for="bomx-location">Location <span class="required">*</span></label><select id="bomx-location" name="location" required></select></div>
 <div class="field"><label for="bomx-quantity">Build quantity <span class="required">*</span></label><input id="bomx-quantity" name="quantity" type="number" min="1" max="2147483647" step="1" value="1" required></div>
 <button id="bomx-submit" class="btn primary" disabled>Explore BOM</button></form>
-<div id="bomx-error" role="alert"></div><div id="bomx-result">${status('Choose an assembly part, Location and build quantity.')}</div></section>`);
+<div id="bomx-error" role="alert"></div><div id="bomx-result">${status('Choose an assembly, Location and quantity.')}</div></section>`);
 
   const form = () => $<HTMLFormElement>('#bomx-form');
   const viewport = () => document.querySelector<HTMLElement>('#bomx-viewport');
@@ -48,7 +44,7 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
     const quantity = Number(quantityText);
     const location = $<HTMLSelectElement>('#bomx-location').value;
     const problem = !part ? 'Enter an assembly part number.' : !location ? 'Choose a Location.'
-      : !/^\d+$/.test(quantityText) || quantity < 1 || quantity > 2147483647 ? 'Build quantity must be a whole number between 1 and 2147483647.' : '';
+      : !/^\d+$/.test(quantityText) || quantity < 1 || quantity > 2147483647 ? 'Enter a whole build quantity from 1 to 2147483647.' : '';
     $('#bomx-error').innerHTML = problem ? status(problem, true) : '';
     return problem ? null : { part_number: part, quantity, location };
   }
@@ -67,7 +63,7 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
       await loadLocations(current);
       if (current !== version) return;
       const fields = request();
-      if (!fields) { placed = []; result = null; $('#bomx-result').innerHTML = status('Correct the entries above to explore a BOM.'); return; }
+      if (!fields) { placed = []; result = null; $('#bomx-result').innerHTML = status('Correct the form to explore.'); return; }
       placed = []; result = null;
       $('#bomx-result').innerHTML = status('Loading current BOM and stock…');
       const data = await read(getAPI().explore_bom(fields));
@@ -77,7 +73,7 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
       // An unavailable read must not leave a graph on screen that looks current.
       if (current !== version) return;
       result = null; placed = [];
-      $('#bomx-result').innerHTML = `${status(message(error), true)}`;
+      $('#bomx-result').innerHTML = `${status(message(error, 'Unable to read the BOM.'), true)}`;
     }
   }
 
@@ -111,7 +107,7 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
     const { node } = item;
     const leafShort = !node.children.length ? requirements.get(node.part_number)?.shortage ?? 0 : 0;
     const stockLine = node.children.length ? `Stock ${node.stock_available.toLocaleString()} · not consumed` : `Need ${node.quantity_required.toLocaleString()} · Have ${node.stock_available.toLocaleString()}${leafShort ? ` · Short ${leafShort.toLocaleString()}` : ''}`;
-    return `<g class="bomx-node level-${node.level}" data-id="${item.id}" transform="translate(${item.x} ${item.y})" tabindex="${item.id === active ? 0 : -1}" role="button" aria-pressed="${item.id === selected}" aria-label="${esc(nodeLabel(item))}">
+    return `<g class="bomx-node level-${node.level}" data-id="${item.id}" transform="translate(${item.x} ${item.y})" tabindex="${item.id === 0 ? 0 : -1}" role="button" aria-pressed="false" aria-label="${esc(nodeLabel(item))}">
 <rect class="bomx-card" width="${NODE_W}" height="${NODE_H}" rx="10"/><rect class="bomx-accent" x="0" y="14" width="5" height="${NODE_H - 28}"/>
 <text class="bomx-kind" x="18" y="22">${node.children.length ? 'ASSEMBLY' : 'MATERIAL'}</text><text class="bomx-part" x="18" y="44">${esc(short(node.part_number, 24))}</text>
 <text class="bomx-desc" x="18" y="62">${esc(short(node.description, 30))}</text><text class="bomx-stock${leafShort ? ' short' : ''}" x="18" y="82">${esc(stockLine)}</text>
@@ -138,11 +134,11 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
       placed = []; return;
     }
     layout(data.tree);
-    selected = -1; active = 0; fitted = true;
+    fitted = true;
     const leaves = data.requirements.length;
     $('#bomx-result').innerHTML = `${summary}<div class="bomx-layout"><div class="panel"><div class="panel-head"><h2>Structure</h2><div class="bomx-tools" role="group" aria-label="Graph view controls"><button class="btn small" data-bomx="out" aria-label="Zoom out">−</button><output id="bomx-zoom" aria-label="Zoom level">100%</output><button class="btn small" data-bomx="in" aria-label="Zoom in">+</button><button class="btn small" data-bomx="fit">Fit</button><button class="btn small" data-bomx="reset">100%</button></div></div>
 <div id="bomx-viewport" class="bomx-viewport" tabindex="0" role="group" aria-label="BOM graph, ${placed.length} nodes" aria-describedby="bomx-hint"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><g id="bomx-canvas">${edgesSVG()}${placed.map(nodeSVG).join('')}</g></svg></div>
-<p id="bomx-hint" class="help bomx-hint">Capacity is a planning warning (Critical at 100 or fewer final builds, Low through 500); a shortage means the requested quantity cannot ship. They are independent. Drag to pan; Ctrl + wheel zooms. With the graph focused: arrow keys pan, + and − zoom, 0 fits. On a node: arrow keys move between nodes, Enter selects. ${placed.length} nodes, ${leaves} Leaf ${leaves === 1 ? 'material' : 'materials'}.</p></div>
+<p id="bomx-hint" class="help bomx-hint">Capacity: Critical ≤100 builds, Low ≤500; shortages use the requested quantity. Pan: drag or graph arrow keys. Zoom: Ctrl + wheel or +/−. Fit: 0. Nodes: arrows navigate, Enter selects. ${placed.length} nodes, ${leaves} Leaf ${leaves === 1 ? 'material' : 'materials'}.</p></div>
 <aside id="bomx-inspector" class="panel panel-body" aria-label="Selected node">${status('Select a node to inspect it.')}</aside></div>
 <div class="panel"><div class="panel-head"><h2>Leaf material requirements</h2><span class="badge neutral">Aggregated across all paths</span></div>${requirementsTable(data)}</div>`;
     fit(); select(0, false);
@@ -159,7 +155,6 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
   }
 
   function select(id: number, focus = true) {
-    selected = id; active = id;
     const item = placed[id];
     if (!item) return;
     document.querySelectorAll<SVGElement>('#bomx-canvas .bomx-node').forEach(element => {
@@ -172,7 +167,7 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
     const req = node.children.length ? undefined : requirements.get(node.part_number);
     $('#bomx-inspector').innerHTML = `<h2>${esc(node.part_number)}</h2><p class="description">${esc(node.description)}</p><p style="margin:12px 0">${levelBadge(node.level)} <span class="badge neutral">${node.children.length ? 'Assembly' : 'Leaf material'}</span></p>
 ${pair('Quantity per parent', node.quantity_per_parent)}${pair('Required on this path', node.quantity_required)}${pair(`Available at ${result?.request.location ?? ''}`, node.stock_available)}${pair('Build capacity', `${node.capacity.toLocaleString()} ${node.capacity === 1 ? 'build' : 'builds'}`)}
-${req ? `${pair('Required across all paths', req.quantity_required)}${pair('Shortage for requested quantity', req.shortage ? `Short ${req.shortage}` : 'None')}` : '<p class="help">Assembly capacity is the lowest capacity among its materials. Assemblies are phantom: shipping consumes Leaf materials, never assembly stock.</p>'}
+${req ? `${pair('Required across all paths', req.quantity_required)}${pair('Shortage for requested quantity', req.shortage ? `Short ${req.shortage}` : 'None')}` : '<p class="help">Capacity follows the limiting Leaf material; only Leaf stock is consumed.</p>'}
 <div class="stock-context-actions"><button class="btn" data-part="${esc(node.part_number)}">Open part</button> <button class="btn" data-bomx-history="${esc(node.part_number)}">View History</button></div>`;
     if (focus) { ensureVisible(item); document.querySelector<SVGElement>(`#bomx-canvas [data-id="${id}"]`)?.focus({ preventScroll: true }); }
   }
@@ -258,7 +253,7 @@ ${req ? `${pair('Required across all paths', req.quantity_required)}${pair('Shor
       const index = siblings.indexOf(item.id);
       const next = event.key === 'ArrowLeft' ? item.parent : event.key === 'ArrowRight' ? item.children[0] : siblings[index + (event.key === 'ArrowDown' ? 1 : -1)];
       if (next === undefined || next < 0) { event.preventDefault(); return; }
-      active = next; const other = placed[next]!; ensureVisible(other);
+      const other = placed[next]!; ensureVisible(other);
       document.querySelectorAll('#bomx-canvas .bomx-node').forEach(element => element.setAttribute('tabindex', Number((element as SVGElement).dataset.id) === next ? '0' : '-1'));
       document.querySelector<SVGElement>(`#bomx-canvas [data-id="${next}"]`)?.focus({ preventScroll: true });
     } else if (target.id === 'bomx-viewport' && event.key.startsWith('Arrow')) {
@@ -284,7 +279,7 @@ ${req ? `${pair('Required across all paths', req.quantity_required)}${pair('Shor
     /** Open the page, optionally pre-filling a part, and re-read authoritative data. */
     open(partNumber?: string) {
       if (partNumber) $<HTMLInputElement>('#bomx-part').value = partNumber;
-      if ($<HTMLInputElement>('#bomx-part').value.trim()) void load(); else { const current = ++version; void loadLocations(current).catch(error => { if (current === version) $('#bomx-error').innerHTML = status(message(error), true); }); }
+      if ($<HTMLInputElement>('#bomx-part').value.trim()) void load(); else { const current = ++version; void loadLocations(current).catch(error => { if (current === version) $('#bomx-error').innerHTML = status(message(error, 'Unable to read the BOM.'), true); }); }
       $('#bomx-part').focus();
     },
     /** Drop any in-flight read when the operator leaves the page. */
