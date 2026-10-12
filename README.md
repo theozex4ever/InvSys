@@ -128,7 +128,7 @@ No database setup required — default locations (`Receiving`, `Stock`, `Shippin
 
 The new pywebview shell provides a live Attention first dashboard and parts
 catalog: search/filter/sort, create parts, inspect lot/location stock, receive real
-lots, review and ship standard stock or existing nested BOM parents, and search
+lots, review and ship standard stock or existing nested BOM parents, move lots between locations, and search
 History with persisted shipment/component traceability. Drafts survive session
 navigation; results and audit records survive restart. It uses the existing InventoryStore
 and SQLite schema and remembers operator/theme choices. BOM authoring is available on its BOM page; exploration
@@ -273,9 +273,14 @@ Shipment number format: `SHP-YYYYMMDD-0001` (counter resets per day).
 2. Open the backups/ folder.
 3. Copy the desired backup file.
 4. Rename it to inventory.db.
-5. Replace data/inventory.db with it.
-6. Restart the app.
+5. Move the current data/inventory.db and any inventory.db-wal / inventory.db-shm
+   files somewhere safe (never leave the -wal/-shm files beside the restored file).
+6. Put the renamed backup at data/inventory.db.
+7. Restart the app.
 ```
+
+Stock changes made after the backup are not in it. Reconcile ledger activity recorded
+since the backup before resuming work; see `docs/frontend/desktop.md` for the full procedure.
 
 ---
 

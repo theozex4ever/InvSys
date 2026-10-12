@@ -1,12 +1,15 @@
 import './styles.css';
 import { bomWorkflow } from './bom';
 import { historyWorkflow } from './history';
+import { settingsWorkflow } from './settings';
 import { stockWorkflows } from './stock';
-import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History, ListTree } from 'lucide';
+import { partEditor } from './partEdit';
+import { moveWorkflow } from './move';
+import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History, ListTree, Settings } from 'lucide';
 import { ready, read, RequestError, type Search, type Part, type PartDetail, type Dashboard } from './bridge';
 
 const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search: SearchIcon, Check, History, ListTree } });
+const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search: SearchIcon, Check, History, ListTree, Settings } });
 const icon = (name: string) => `<i data-lucide="${name}" aria-hidden="true"></i>`;
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete the request.';
@@ -14,11 +17,12 @@ const status = (text: string, error = false) => `<div class="status ${error ? 'e
 const badges = (part: Part) => `<span class="badge ${part.active ? 'good' : 'neutral'}">${part.active ? 'Active' : 'Inactive'}</span> ${part.low_stock ? `<span class="badge warn">${part.quantity === 0 ? 'Low stock · No stock' : 'Low stock'}</span>` : ''}`;
 const search: Search = { query: '', status: 'all', low_stock: false, sort: 'part_number', descending: false };
 let api: Awaited<ReturnType<typeof ready>>;
-let page: 'dashboard' | 'parts' | 'bom' | 'receive' | 'ship' | 'history' = 'dashboard';
+let page: 'dashboard' | 'parts' | 'bom' | 'receive' | 'ship' | 'move' | 'history' | 'settings' = 'dashboard';
 let searchVersion = 0;
 let dashboardVersion = 0;
 let detailVersion = 0;
 let selected = '';
+let currentPart: PartDetail | null = null;
 let returnFocus: HTMLElement | null = null;
 let drawerScroll = { x: 0, y: 0 };
 let createReturnFocus: HTMLElement | null = null;
@@ -29,7 +33,8 @@ let theme: 'light' | 'dark' = 'light';
 
 $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar" aria-label="Main navigation">
 <div class="brand"><div class="brand-mark">${icon('boxes')}</div><div><strong>INVSYS</strong><small>INVENTORY CONTROL</small></div></div>
-<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><button class="nav-button" data-page="bom" aria-label="BOM">${icon('list-tree')}<span>BOM</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button><button class="nav-button" data-page="history" aria-label="History">${icon('history')}<span>History</span></button></nav>
+<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><button class="nav-button" data-page="bom" aria-label="BOM">${icon('list-tree')}<span>BOM</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button><button class="nav-button" data-page="move" aria-label="Move stock">${icon('arrow-left-right')}<span>Move</span></button><button class="nav-button" data-page="history" aria-label="History">${icon('history')}<span>History</span></button><div class="nav-group eyebrow">System</div><button class="nav-button" data-page="settings" aria-label="Settings">${icon('settings')}<span>Settings</span></button></nav>
+
 <div class="sidebar-bottom"><button id="theme" class="nav-button" disabled aria-label="Switch to dark mode">${icon('moon')}<span>Dark mode</span></button><div class="local-status">STORED ON THIS DEVICE</div></div></aside>
 <div class="workspace"><header class="topbar"><div class="breadcrumb">Workspace / <strong id="page-name">Dashboard</strong></div>
 <div class="header-actions"><button id="global-search" class="global-search">${icon('search')}Search parts <kbd>Ctrl K</kbd></button><form id="operator-form" class="operator"><div><label for="operator">Operator</label><input id="operator" name="operator" placeholder="Your name" disabled></div><button id="save-operator" class="btn small" disabled>Save</button></form></div></header>
@@ -50,7 +55,13 @@ $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar" aria-label=
 icons();
 const history = historyWorkflow(() => api);
 const bom = bomWorkflow(() => api);
-const stock = stockWorkflows(() => api, () => $<HTMLInputElement>('#operator').value, async () => { await Promise.all([loadParts(), loadDashboard(), history.load()]); }, (text, summary) => { notice(text); const element = document.createElement('div'); element.className = 'stock-toast'; element.setAttribute('role', 'status'); element.innerHTML = `${icon('check')}<span>${esc(summary ?? text)}</span>`; document.body.append(element); icons(); setTimeout(() => element.remove(), 5000); });
+const settings = settingsWorkflow(() => api);
+const stockChanged = async () => { await Promise.all([loadParts(), loadDashboard(), history.load()]); };
+const stockToast = (text: string, summary?: string) => { notice(text); const element = document.createElement('div'); element.className = 'stock-toast'; element.setAttribute('role', 'status'); element.innerHTML = `${icon('check')}<span>${esc(summary ?? text)}</span>`; document.body.append(element); icons(); setTimeout(() => element.remove(), 5000); };
+const stock = stockWorkflows(() => api, () => $<HTMLInputElement>('#operator').value, stockChanged, stockToast);
+const move = moveWorkflow(() => api, () => $<HTMLInputElement>('#operator').value, stockChanged, stockToast);
+
+const editor = partEditor(() => api, { show: part => { currentPart = part; $('#drawer-data').innerHTML = detailHTML(part); icons(); $('#drawer-data').querySelector<HTMLElement>('[data-edit]')?.focus(); }, refresh: async () => { await Promise.all([loadParts(), loadDashboard()]); }, notice });
 
 // Native dialog focus can otherwise escape into the Qt browser chrome on Tab.
 for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
@@ -73,14 +84,15 @@ function navigate(next: typeof page, refresh = true) {
   if (page === 'history' && page !== next) history.leave();
   if (page === 'bom' && page !== next) bom.leave();
   if ((page === 'receive' || page === 'ship') && page !== next) stock.leave();
+  if (page === 'move' && page !== next) move.leave();
   page = next;
-  for (const name of ['dashboard', 'parts', 'bom', 'receive', 'ship', 'history']) $(`#${name}`).hidden = name !== next;
+  for (const name of ['dashboard', 'parts', 'bom', 'receive', 'ship', 'move', 'history', 'settings']) $(`#${name}`).hidden = name !== next;
   $('#page-name').textContent = next === 'bom' ? 'BOM' : next.charAt(0).toUpperCase() + next.slice(1);
   document.querySelectorAll<HTMLElement>('[data-page]').forEach(button => {
     button.classList.toggle('active', button.dataset.page === next);
     if (button.dataset.page === next) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
-  if (api && refresh) { if (next === 'receive' || next === 'ship') void stock.open(next); else void (next === 'history' ? history.open() : next === 'bom' ? bom.open() : next === 'dashboard' ? loadDashboard() : loadParts()); }
+  if (api && refresh) { if (next === 'receive' || next === 'ship') void stock.open(next); else if (next === 'bom') void bom.open(); else if (next === 'settings') void settings.open(); else if (next === 'move') void move.open(); else void (next === 'history' ? history.open() : next === 'dashboard' ? loadDashboard() : loadParts()); }
 }
 async function loadDashboard() {
   const version = ++dashboardVersion;
@@ -90,7 +102,7 @@ async function loadDashboard() {
     if (version !== dashboardVersion) return;
     $('#dashboard-data').innerHTML = `<div class="dashboard-grid"><div class="panel"><div class="panel-head"><div class="attention-heading"><span class="icon-tile">${icon('triangle-alert')}</span><div><h2>Needs attention</h2><p>Active parts at or below their minimum stock.</p></div></div><span class="badge warn">${data.low_stock.length} low</span></div>
 ${data.low_stock.length ? data.low_stock.slice(0, 5).map(p => `<div class="attention-row"><div><button class="part-id" data-part="${esc(p.part_number)}">${esc(p.part_number)}</button><div class="part-description description">${esc(p.description)}</div></div><div><div class="stock-meter"><strong>${p.quantity}</strong> / ${p.minimum_quantity} min</div><div class="meter" aria-hidden="true"><span style="width:${Math.min(100, p.minimum_quantity > 0 ? p.quantity / p.minimum_quantity * 100 : 0)}%"></span></div>${p.quantity === 0 ? '<span class="stock-label">No stock</span>' : ''}</div><button class="icon-btn" data-stock="receive" data-number="${esc(p.part_number)}" aria-label="Receive ${esc(p.part_number)}">${icon('arrow-right')}</button></div>`).join('') : status('No low-stock parts.')}<div class="table-footer"><button class="text-link" data-low-stock>View all low-stock parts ${icon('arrow-right')}</button></div></div>
-<div class="panel"><div class="panel-head"><h2>Quick actions</h2></div><div class="panel-body"><div class="quick-actions"><button class="action-tile" data-page="receive">${icon('arrow-down-to-line')}<strong>Receive stock</strong><small>Record incoming inventory</small></button><button class="action-tile" data-page="ship">${icon('arrow-up-from-line')}<strong>Ship stock</strong><small>Review lots and send</small></button><button class="action-tile" data-new>${icon('plus')}<strong>Create a part</strong><small>Add to your catalog</small></button></div><p class="help migration-note">For Move, Adjust, BOM exploration, editing, and Settings, open the original application.</p></div></div></div>
+<div class="panel"><div class="panel-head"><h2>Quick actions</h2></div><div class="panel-body"><div class="quick-actions"><button class="action-tile" data-page="receive">${icon('arrow-down-to-line')}<strong>Receive stock</strong><small>Record incoming inventory</small></button><button class="action-tile" data-page="ship">${icon('arrow-up-from-line')}<strong>Ship stock</strong><small>Review lots and send</small></button><button class="action-tile" data-page="move">${icon('arrow-left-right')}<strong>Move stock</strong><small>Transfer a lot between locations</small></button><button class="action-tile" data-new>${icon('plus')}<strong>Create a part</strong><small>Add to your catalog</small></button></div><p class="help migration-note">For Adjust, BOM exploration and CSV import/export, open the original application.</p></div></div></div>
 <div class="stats dashboard-stats"><div class="panel stat"><div class="stat-title">Active parts ${icon('package')}</div><div class="stat-value">${data.active_parts}</div><div class="stat-foot">In your catalog</div></div><button class="panel stat stat-button warning" data-low-stock aria-label="View low-stock parts"><span class="stat-title">Low-stock parts ${icon('triangle-alert')}</span><span class="stat-value">${data.low_stock.length}</span><span class="stat-foot">At or below minimum · View parts</span></button><div class="panel stat"><div class="stat-title">Recorded shipments ${icon('arrow-up-from-line')}</div><div class="stat-value">${data.shipment_count}</div><div class="stat-foot">Tracked in History</div></div></div>
 <div class="panel activity-panel"><div class="panel-head"><h2>Recent activity</h2><button class="text-link" data-page="history">View History ${icon('arrow-right')}</button></div>${data.activity.length ? data.activity.map(tx => `<div class="activity-item ${tx.tx_type === 'RECEIVE' ? 'receive' : tx.tx_type.startsWith('SHIP') ? 'ship' : 'other'}"><span class="icon-tile">${icon(tx.tx_type === 'RECEIVE' ? 'arrow-down-to-line' : tx.tx_type.startsWith('SHIP') ? 'arrow-up-from-line' : 'arrow-left-right')}</span><div><button class="text-link" data-history-id="${tx.transaction_id}">${esc(tx.part_number)} · ${tx.quantity_change > 0 ? '+' : ''}${tx.quantity_change}</button><p>${esc(tx.tx_type)} · ${esc(tx.operator)} · Lot ${esc(tx.lot_number || '—')} · ${esc(tx.location_from || tx.location_to)}</p></div><time>${esc(tx.timestamp)}</time></div>`).join('') : status('No inventory activity yet.')}</div>`;
     icons();
@@ -126,7 +138,7 @@ function detailHTML(part: PartDetail) {
 ${[['Total stock', part.quantity], ['Minimum quantity', part.minimum_quantity], ['Default location', part.location]].map(([label, value]) => `<div class="detail-pair"><span>${label}</span><strong>${esc(value)}</strong></div>`).join('')}
 <h3>Stock by location</h3>${Object.entries(part.location_balances).map(([location, qty]) => `<div class="detail-pair"><span>${esc(location)}</span><strong>${qty}</strong></div>`).join('') || status('No locations.')}
 <h3>Lot balances</h3>${part.balances.length ? `<div class="table-wrap"><table><thead><tr><th>Lot</th><th>Location</th><th class="num">Stock</th></tr></thead><tbody>${part.balances.map(b => `<tr><td>${esc(b.lot_number)}</td><td>${esc(b.location)}</td><td class="num">${b.quantity}</td></tr>`).join('')}</tbody></table></div>` : status('No lots received yet.')}
-<div class="stock-context-actions"><button class="btn primary" data-stock="receive" data-number="${esc(part.part_number)}">Receive stock</button> <button class="btn" data-stock="ship" data-number="${esc(part.part_number)}">Ship stock</button> <button class="btn" data-part-history="${esc(part.part_number)}">View History</button></div><p class="help migration-note">To edit or deactivate this part, open the original application.</p></div>`;
+<div class="stock-context-actions"><button class="btn primary" data-stock="receive" data-number="${esc(part.part_number)}">Receive stock</button> <button class="btn" data-stock="ship" data-number="${esc(part.part_number)}">Ship stock</button> <button class="btn" data-stock="move" data-number="${esc(part.part_number)}">Move stock</button> <button class="btn" data-part-history="${esc(part.part_number)}">View History</button></div><div class="stock-context-actions"><button class="btn" data-edit="${esc(part.part_number)}">Edit part</button> <button class="btn" data-active="${part.active ? 'off' : 'on'}" data-number="${esc(part.part_number)}">${part.active ? 'Deactivate part' : 'Reactivate part'}</button></div></div>`;
 }
 async function openPart(number: string, focus: HTMLElement | null = document.activeElement as HTMLElement) {
   selected = number;
@@ -135,12 +147,12 @@ async function openPart(number: string, focus: HTMLElement | null = document.act
   const version = ++detailVersion;
   $('#drawer-data').innerHTML = status('Loading part…');
   if (!$<HTMLDialogElement>('#drawer').open) { drawerScroll = { x: scrollX, y: scrollY }; $<HTMLDialogElement>('#drawer').showModal(); }
-  try { const part = await read(api.part_detail(number)); if (version === detailVersion) $('#drawer-data').innerHTML = detailHTML(part); }
+  try { const part = await read(api.part_detail(number)); if (version === detailVersion) { currentPart = part; $('#drawer-data').innerHTML = detailHTML(part); } }
   catch (error) { if (version === detailVersion) $('#drawer-data').innerHTML = `${status(message(error), true)}<button id="retry-detail" class="btn">Retry</button>`; }
 }
 function restoreFocus() {
   if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
-  else Array.from(document.querySelectorAll<HTMLElement>('[data-part]')).find(b => b.dataset.part === selected)?.focus({ preventScroll: true });
+  else Array.from(document.querySelectorAll<HTMLElement>('[data-part]')).find(b => b.dataset.part === selected && b.getClientRects().length > 0)?.focus({ preventScroll: true });
 }
 function openCreate(trigger: HTMLElement = document.activeElement as HTMLElement) {
   if (!api) return;
@@ -148,8 +160,9 @@ function openCreate(trigger: HTMLElement = document.activeElement as HTMLElement
   $<HTMLDialogElement>('#create-dialog').showModal();
   $<HTMLInputElement>('#number').focus();
 }
-$<HTMLDialogElement>('#drawer').addEventListener('close', () => { ++detailVersion; restoreFocus(); window.scrollTo(drawerScroll.x, drawerScroll.y); });
-$('#close-drawer').onclick = () => $<HTMLDialogElement>('#drawer').close();
+$<HTMLDialogElement>('#drawer').addEventListener('close', () => { ++detailVersion; editor.reset(); restoreFocus(); window.scrollTo(drawerScroll.x, drawerScroll.y); });
+$('#close-drawer').onclick = async () => { if (await editor.mayClose()) $<HTMLDialogElement>('#drawer').close(); };
+$<HTMLDialogElement>('#drawer').addEventListener('cancel', event => { if (editor.active()) { event.preventDefault(); $('#close-drawer').click(); } });
 $('#add-part').onclick = () => openCreate($('#add-part'));
 $<HTMLDialogElement>('#create-dialog').addEventListener('close', () => { if (createReturnFocus?.isConnected) createReturnFocus.focus({ preventScroll: true }); });
 $('#close-create').onclick = () => { if (!creating) $<HTMLDialogElement>('#create-dialog').close(); };
@@ -162,8 +175,8 @@ document.addEventListener('click', event => {
   if (target.dataset.page) navigate(target.dataset.page as typeof page);
   if (target.dataset.part && api) void openPart(target.dataset.part, target);
   if (target.dataset.stock && api && !target.closest('#drawer-data')) {
-    const mode = target.dataset.stock as 'receive' | 'ship';
-    navigate(mode, false); void stock.open(mode, target.dataset.number);
+    const mode = target.dataset.stock as 'receive' | 'ship' | 'move';
+    navigate(mode, false); void (mode === 'move' ? move.open(target.dataset.number) : stock.open(mode, target.dataset.number));
   }
   if (target.hasAttribute('data-new')) openCreate(target);
   if (target.hasAttribute('data-low-stock')) {
@@ -176,17 +189,19 @@ document.addEventListener('click', event => {
 $('#drawer-data').onclick = event => {
   const target = (event.target as HTMLElement).closest<HTMLElement>('button');
   if (target?.id === 'retry-detail') void openPart(selected, returnFocus);
+  if (target?.dataset.edit) void editor.edit(currentPart!);
+  if (target?.dataset.active) void editor.setActive(currentPart!, target.dataset.active === 'on');
   if (target?.dataset.partHistory && api) {
     $<HTMLDialogElement>('#drawer').close(); navigate('history', false);
     void history.open(target.dataset.partHistory);
     $('#history-query').focus();
   }
   if (target?.dataset.stock && api) {
-    const mode = target.dataset.stock as 'receive' | 'ship';
-    $<HTMLDialogElement>('#drawer').close(); navigate(mode, false); void stock.open(mode, target.dataset.number);
+    const mode = target.dataset.stock as 'receive' | 'ship' | 'move';
+    $<HTMLDialogElement>('#drawer').close(); navigate(mode, false); void (mode === 'move' ? move.open(target.dataset.number) : stock.open(mode, target.dataset.number));
   }
 };
-$('#operator').addEventListener('input', () => stock.operatorChanged());
+$('#operator').addEventListener('input', () => { stock.operatorChanged(); move.operatorChanged(); });
 $('#global-search').onclick = () => { navigate('parts'); $('#query').focus(); };
 document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open]')) { event.preventDefault(); $('#global-search').click(); } });
 let debounce: ReturnType<typeof setTimeout>;
@@ -262,6 +277,7 @@ async function start() {
     document.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button[disabled], input[disabled]').forEach(control => { control.disabled = false; });
     await Promise.all([loadDashboard(), loadParts(), history.load()]);
     if (page === 'receive' || page === 'ship') await stock.open(page);
+    if (page === 'settings') await settings.open();
   } catch (error) {
     notice(message(error), true);
     $('#dashboard-data').innerHTML = status(message(error), true);

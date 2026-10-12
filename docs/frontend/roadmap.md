@@ -18,14 +18,14 @@ scenario, approved workload and retirement evidence gate from tickets #39/#40.
 | 0 | Static visual prototype | Complete |
 | 1 | pywebview + typed bridge, local assets, basic Linux package proof | Complete |
 | 2 | Live Attention first dashboard and workspace links | Complete |
-| 3 | Parts search/create/details delivered; editing/deactivation deferred | In Progress |
+| 3 | Parts search/create/details, editing and deactivation/reactivation | Complete |
 | 4 | Searchable immutable History and persisted shipment/component trace | Complete |
 | 5 | Real lot receiving, drafts, refresh, and recovery | Complete |
-| 6 | Move + Adjust | Not Started |
+| 6 | Move + Adjust | In Progress: Move delivered; Adjust pending |
 | 7 | Standard and nested BOM review/shipment with recovery | Complete |
 | 8 | Interactive BOM Explorer | Not Started |
 | 9 | Part search shortcut delivered; command search deferred | In Progress |
-| 10 | Operator/theme and startup backup delivered; operational utilities deferred | In Progress |
+| 10 | Operator/theme, startup/manual backup and folder access delivered; CSV utilities deferred | In Progress |
 | 11 | PySide6 retirement | Not Started |
 | 12 | Scripted native/keyboard/layout acceptance delivered; release hardening deferred | In Progress |
 
@@ -47,11 +47,6 @@ Update this table when a phase meaningfully changes.
 
 ## Remaining phases
 
-### 3. Parts editing
-
-Add part editing and deactivation (`active = False`, no hard deletes). Confirm
-before discarding unsaved edits.
-
 ### 6. Move and Adjust
 
 Separate experiences that may share components.
@@ -60,6 +55,8 @@ Separate experiences that may share components.
   preview for both locations. Python keeps the atomic `MOVE_OUT` + `MOVE_IN`.
 - **Adjust**: part, lot, location, expected and counted quantity, difference,
   and a required reason. Python creates the authoritative transaction.
+
+Move is delivered in the desktop frontend (see [desktop.md](desktop.md#move)).
 
 Exit: moves stay atomic, no negative stock, lot and reason behavior and
 transaction records match the PySide6 workflow, and balances refresh.
@@ -83,7 +80,8 @@ selection, Enter, Escape, and focus behavior must be predictable.
 
 ### 10. Settings, import/export, backup
 
-Expose the existing Python implementations: export parts, inventory,
+Backup, latest-backup status and folder opening are delivered in Settings (see
+`desktop.md`). Expose the remaining existing Python implementations: export parts, inventory,
 transactions, shipments, and BOM; import with select → preview → row errors →
 backup → commit; create backup, open its location, and show the latest backup.
 Never silently import malformed data. Include only meaningful settings.

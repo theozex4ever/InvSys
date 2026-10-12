@@ -32,6 +32,8 @@ export function historyWorkflow(getAPI: () => API) {
     }
   };
   dialog().addEventListener('close', () => {
+    // A queued close event can arrive after the drawer has already reopened.
+    if (dialog().open) return;
     ++detailVersion;
     detailID = null;
     const target = returnFocus?.isConnected ? returnFocus : document.querySelector<HTMLElement>(`#history [data-history-id="${selected}"]`) ?? $('#history-refresh');
