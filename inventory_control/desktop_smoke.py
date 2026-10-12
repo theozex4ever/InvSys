@@ -11,6 +11,8 @@ class DesktopSmoke:
         self.error: str | None = None
         self.stock_result: dict[str, Any] | None = None
         self.captures = captures
+        self.opened_folders: list[Path] = []
+        self.backup_path: Path | None = None
 
     def run(self, window: Any) -> None:
         def wait(script: str) -> None:
@@ -65,6 +67,7 @@ class DesktopSmoke:
             check_part_editing(window, wait)
             self._refresh_reads(window, wait)
             self._bom_transport_recovery(window, wait)
+            self._settings_utilities(window, wait)
             from inventory_control.desktop_smoke_ui import check_ui
 
             check_ui(window, wait, self.captures, self.bom_part)
@@ -77,6 +80,59 @@ class DesktopSmoke:
             self.error = str(error)
         finally:
             window.destroy()
+
+    def _settings_utilities(self, window: Any, wait: Any) -> None:
+        """Manual backup, latest-backup status and folder access for the selected database."""
+        run = window.evaluate_js
+        # Settings locks its buttons while a request runs and re-renders when it settles.
+        idle = "document.querySelectorAll('#settings button:disabled').length === 0"
+        run("document.querySelector('[data-page=settings]').click()")
+        wait("document.querySelector('#settings-data').textContent.includes('Latest backup')")
+        run("document.querySelector('[data-backup-create]').click()")
+        wait(
+            f"document.querySelector('#settings-result').textContent.includes('Backup created') && {idle}"
+        )
+        run("window.smokeAPI.utility_context().then(r => { window.smokeSettings = r.data; })")
+        wait("window.smokeSettings")
+        latest = run("window.smokeSettings.latest_backup")
+        if not latest or not latest["name"].endswith("-manual.db"):
+            raise RuntimeError("Manual backup is not the latest backup.")
+        if not run(
+            "document.querySelector('#settings-data').textContent.includes(window.smokeSettings.latest_backup.name) && !!document.querySelector('[data-backup-create]:not(:disabled)')"
+        ):
+            raise RuntimeError("Settings did not show the latest backup after creating it.")
+        self.backup_path = Path(latest["path"])
+        run("document.querySelector('[data-open-folder=backups]').click()")
+        wait(
+            f"document.querySelector('#settings-result').textContent.startsWith('Opened ') && {idle}"
+        )
+        run("document.querySelector('[data-open-folder=exports]').click()")
+        wait(
+            f"document.querySelector('#settings-result').textContent.includes(window.smokeSettings.export_dir) && {idle}"
+        )
+        expected = [
+            Path(run("window.smokeSettings.backup_dir")),
+            Path(run("window.smokeSettings.export_dir")),
+        ]
+        if self.opened_folders != expected:
+            raise RuntimeError(f"Folder access opened {self.opened_folders}, not {expected}.")
+        run("""
+            window.smokeOpenFolder = window.smokeAPI.open_folder;
+            window.smokeAPI.open_folder = async () => ({ok:false, error:{code:'FILE_ERROR', message:'Folder unavailable'}});
+            document.querySelector('[data-open-folder=exports]').click();
+        """)
+        wait(
+            "document.querySelector('#settings-result').textContent.includes('Folder unavailable')"
+        )
+        if not run(
+            "!document.querySelector('#settings-result').textContent.includes('Opened') && document.querySelector('#settings-result [role=alert]')"
+        ):
+            raise RuntimeError("A failed folder request was not reported as an error.")
+        run("window.smokeAPI.open_folder = window.smokeOpenFolder")
+        print(
+            "Desktop smoke: manual backup, latest-backup status and folder access passed.",
+            flush=True,
+        )
 
     def _history_read_recovery(self, window: Any, wait: Any) -> None:
         """A failed immutable read must offer recovery inside the open drawer."""

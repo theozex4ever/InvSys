@@ -214,6 +214,11 @@ dialog.drawer[open] { animation-name: drawer-in; }
 @keyframes surface-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes drawer-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
 @media (max-width: 720px) { .attention-row { grid-template-columns: minmax(0,1fr) 100px 34px; padding: 16px; gap: 8px; } .global-search kbd { display: none; } }
+#settings .panel-head { flex-wrap: wrap; }
+#settings .settings-panel { margin-top: 20px; }
+#settings-result:not(:empty) { margin-bottom: 20px; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
 .dialog-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 #part-edit .help { margin-top: 6px; }
 #part-edit .status, #part-recovery .status { padding: 12px 0; }
