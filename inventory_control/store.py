@@ -22,6 +22,7 @@ from inventory_control.models import (
     BOMShipmentReview,
     BOMTreeNode,
     ComponentConsumption,
+    CountCorrectionReview,
     Lot,
     LotBalance,
     MoveReview,
@@ -47,6 +48,10 @@ logger = logging.getLogger(__name__)
 
 class ShipmentReviewNotFound(ValueError):
     """A requested Part or Lot is absent from the shipment review snapshot."""
+
+
+class StockChanged(ValueError):
+    """Stock moved since the operator reviewed it; another review is required."""
 
 
 class InventoryStore:
@@ -352,6 +357,44 @@ class InventoryStore:
                 stock - qty,
                 context,
             )
+
+    def review_count_correction(
+        self, part_number: str, location: str, lot_number: str, counted: int
+    ) -> CountCorrectionReview:
+        """Expected stock, difference and confirmation need from one committed snapshot."""
+        number = self._normalize_part_number(part_number)
+        lot_number = self._normalize_lot_number(lot_number)
+        if counted < 0:
+            raise ValueError("New count cannot be negative.")
+        with self._read_snapshot() as session:
+            context = self._read_stock_context(session, number)
+            if context is None:
+                raise ShipmentReviewNotFound("Part not found.")
+            if location not in context["locations"]:
+                raise ValueError("Invalid location.")
+            # Only Lots already held at the Location (including zero stock) can be counted.
+            expected = next(
+                (
+                    balance["quantity"]
+                    for balance in context["part"]["balances"]
+                    if balance["location"] == location and balance["lot_number"] == lot_number
+                ),
+                None,
+            )
+            if expected is None:
+                raise ShipmentReviewNotFound("Lot not found at this location.")
+            return CountCorrectionReview(
+                expected,
+                counted,
+                counted - expected,
+                self.count_correction_needs_confirmation(expected, counted),
+                context,
+            )
+
+    @staticmethod
+    def count_correction_needs_confirmation(expected: int, counted: int) -> bool:
+        """Large corrections reach the larger of ten units or half the expected quantity."""
+        return abs(counted - expected) >= max(10, expected // 2, 1)
 
     def review_bom_shipment(self, part_number: str, qty: int, location: str) -> BOMShipmentReview:
         """Leaf allocation, capacity, and context from the same review snapshot."""
@@ -1066,6 +1109,8 @@ class InventoryStore:
         new_count: int,
         operator: str,
         reason: str,
+        *,
+        expected_count: int | None = None,
     ) -> int:
         part_number = self._normalize_part_number(part_number)
         if new_count < 0:
@@ -1076,7 +1121,13 @@ class InventoryStore:
             part = self._require_part(session, part_number)
             loc = self._require_location(session, location)
             lot = self._require_lot(session, part.id, lot_number)
-            diff = new_count - self._stock_at(session, part.id, loc.id, lot.id)
+            current = self._stock_at(session, part.id, loc.id, lot.id)
+            if expected_count is not None and current != expected_count:
+                raise StockChanged(
+                    f"Stock changed from {expected_count} to {current} since review. "
+                    "Review the count again."
+                )
+            diff = new_count - current
             ledger.post(
                 session,
                 timestamp,

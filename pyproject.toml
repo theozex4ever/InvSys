@@ -20,6 +20,7 @@ source = ["inventory_control"]
 omit = [
     "inventory_control/desktop_smoke.py",
     "inventory_control/desktop_smoke_ui.py",
+    "inventory_control/desktop_smoke_adjust.py",
     "inventory_control/desktop_smoke_parts.py",
     "inventory_control/desktop_smoke_move.py",
 ]
