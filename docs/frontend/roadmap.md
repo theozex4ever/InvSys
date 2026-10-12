@@ -21,7 +21,7 @@ scenario, approved workload and retirement evidence gate from tickets #39/#40.
 | 3 | Parts search/create/details delivered; editing/deactivation deferred | In Progress |
 | 4 | Searchable immutable History and persisted shipment/component trace | Complete |
 | 5 | Real lot receiving, drafts, refresh, and recovery | Complete |
-| 6 | Move + Adjust | Not Started |
+| 6 | Move + Adjust | In Progress (Adjust delivered; Move pending) |
 | 7 | Standard and nested BOM review/shipment with recovery | Complete |
 | 8 | Interactive BOM Explorer | Not Started |
 | 9 | Part search shortcut delivered; command search deferred | In Progress |

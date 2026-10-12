@@ -51,7 +51,7 @@ startup backups and restart reads. No seed inventory is inserted by the launcher
 The retained smoke also exercises contextual part-to-History navigation, failed
 History detail retry, explicit refresh after another operator's receipt, and
 uncertain BOM reconciliation, including a failed recovery read. It uses real Qt
-keyboard events for all four dialogs and captures five pages and dialogs in both
+keyboard events for all four dialogs and captures six pages and dialogs in both
 themes at four sizes to `smoke-captures/` beside the database. On Linux, use
 `QT_API=pyside6 QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion`
 to select PySide6 and exercise reduced-motion behavior.
@@ -185,9 +185,23 @@ even when a standard shipment has a custom reference. No identifiers or componen
 quantities are reconstructed in JavaScript. Success includes Inspect shipment;
 mutations and returning to History refresh reads while preserving filters.
 
+## Adjust Count
+
+The Adjust page reconciles a counted total for an existing Lot at a Location,
+including zero-stock Lots. `preview_count` returns Python's expected quantity,
+difference and whether the large-correction threshold (absolute difference of at
+least the larger of ten units or half the expected quantity, rounded down) requires
+confirmation. `adjust_count` re-reads the Lot, rejects a changed expected quantity
+(`STALE`) or an unconfirmed large correction (`CONFIRMATION_REQUIRED`), then posts
+the `COUNT_CORRECTION` transaction with the reason as its reference. A Lot with no
+balance row at the Location cannot be counted there. Inputs are preserved on
+rejection; success clears count and reason and keeps a persistent result. A lost
+response locks the draft until the operator reads current stock and audit records
+and explicitly verifies completion or absence; a failed recovery read keeps the lock.
+
 ## Deferred workflows
 
-The shell directs operators to the original application for Move, Adjust, part
+The shell directs operators to the original application for Move, part
 editing/deactivation, location administration, BOM editing and exploration, CSV
 import/export, manual backup/restore, and operational Settings. Global search is
 part search only.

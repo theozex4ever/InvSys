@@ -39,9 +39,9 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 17 | Move positive-stock Lot, source/destination, operator, reference | Missing | Store exists; new UI/API absent; reference is existing service metadata |
 | 18 | Move source/destination before/after review | Missing | Original source preview; full replacement review required |
 | 19 | Atomic paired MOVE_OUT / MOVE_IN | Missing | Store regression retained; desktop workflow absent |
-| 20 | Expected/count/difference, operator, required reason | Missing | Original Adjust Count and store exist |
-| 21 | Adjust existing zero-stock Lots | Missing | Fixture STANDARD/ZERO; new workflow absent |
-| 22 | Large-correction confirmation threshold | Missing | Preserve exact threshold below |
+| 20 | Expected/count/difference, operator, required reason | Improved | `test_bridge_adjust.py`; native Adjust smoke. Python supplies expected/difference; stale expected count and lost responses need another review/reconciliation |
+| 21 | Adjust existing zero-stock Lots | Equivalent | `test_bridge_adjust.py` found-stock case; native Adjust smoke counts a zero-stock Lot |
+| 22 | Large-correction confirmation threshold | Equivalent | Threshold boundaries in `test_bridge_adjust.py` (increases/decreases); native confirm/cancel smoke |
 | 23 | BOM direct component add/update/remove | Missing | Original editor and store exist |
 | 24 | Reject self-reference, cycles and invalid quantities | Missing | Store tests retained; authoring UI/API absent |
 | 25 | Existing component updates quantity; confirm removal | Missing | Preserve service update behavior; original UI requires row selection |

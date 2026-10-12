@@ -89,7 +89,11 @@ def main() -> int:
     finally:
         store.engine.dispose()
     if smoke is not None:
-        if smoke.bom_result is None or smoke.recovered_bom_result is None:
+        if (
+            smoke.bom_result is None
+            or smoke.recovered_bom_result is None
+            or smoke.adjust_result is None
+        ):
             print("Desktop smoke failed: BOM results were not captured.", file=sys.stderr)
             return 1
         reopened = InventoryStore(database, seed=False)
@@ -99,6 +103,7 @@ def main() -> int:
                 bridge.preferences()["data"] != {"operator": "Desktop smoke", "theme": "dark"}
                 or not bridge.part_detail("DESKTOP-SMOKE")["ok"]
                 or bridge.stock_context("DESKTOP-SMOKE")["data"] != smoke.stock_result
+                or bridge.stock_context(smoke.adjust_part)["data"] != smoke.adjust_result
                 or bridge.shipment_detail(smoke.bom_result["shipment_number"])["data"]
                 != smoke.bom_result
                 or bridge.shipment_detail(smoke.recovered_bom_result["shipment_number"])["data"]
