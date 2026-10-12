@@ -53,8 +53,10 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
     return problem ? null : { part_number: part, quantity, location };
   }
 
-  async function loadLocations() {
+  // A superseded read must not touch the controls or the current result.
+  async function loadLocations(current: number) {
     const locations = await read(getAPI().locations());
+    if (current !== version) return;
     const previous = $<HTMLSelectElement>('#bomx-location').value;
     $('#bomx-location').innerHTML = locations.map(l => `<option ${l === (previous || 'Stock') ? 'selected' : ''}>${esc(l)}</option>`).join('');
   }
@@ -62,7 +64,8 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
   async function load() {
     const current = ++version;
     try {
-      await loadLocations();
+      await loadLocations(current);
+      if (current !== version) return;
       const fields = request();
       if (!fields) { placed = []; result = null; $('#bomx-result').innerHTML = status('Correct the entries above to explore a BOM.'); return; }
       placed = []; result = null;
@@ -129,7 +132,7 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
     const { request: asked } = data;
     const builds = (count: number) => `${count.toLocaleString()} ${count === 1 ? 'build' : 'builds'}`;
     const summary = `<div class="bomx-summary" role="status"><div class="panel panel-body"><span class="eyebrow">Build capacity at ${esc(asked.location)}</span><div class="bomx-figure">${data.has_bom ? `<strong>${data.buildable.toLocaleString()}</strong><span>final ${data.buildable === 1 ? 'build' : 'builds'}</span>${levelBadge(data.level)}` : '<strong>No BOM</strong>'}</div></div>
-<div class="panel panel-body"><span class="eyebrow">Requested ${esc(builds(asked.quantity))}</span><div class="bomx-figure"><strong>${data.has_bom ? (data.shortage_count ? `${data.shortage_count} short` : 'No shortage') : 'Nothing to expand'}</strong>${data.has_bom ? `<span class="badge ${data.shortage_count ? 'bad' : 'good'}">${data.shortage_count ? '✕ Shipment shortage' : '✓ Shipment-ready'}</span>` : ''}</div></div></div>`;
+<div class="panel panel-body"><span class="eyebrow">Requested ${esc(builds(asked.quantity))}</span><div class="bomx-figure"><strong>${data.has_bom ? (data.shortage_count ? `${data.shortage_count} short` : 'No shortage') : 'Nothing to expand'}</strong>${data.has_bom ? `<span class="badge ${data.shortage_count ? 'bad' : 'good'}">${data.shortage_count ? '✕ Material shortage' : '✓ No material shortage'}</span>` : ''}</div></div></div>`;
     if (!data.has_bom) {
       $('#bomx-result').innerHTML = `${summary}${status(`${data.tree.part_number} has no BOM components. ${data.tree.stock_available.toLocaleString()} on hand at ${asked.location}.`)}`;
       placed = []; return;
@@ -281,7 +284,7 @@ ${req ? `${pair('Required across all paths', req.quantity_required)}${pair('Shor
     /** Open the page, optionally pre-filling a part, and re-read authoritative data. */
     open(partNumber?: string) {
       if (partNumber) $<HTMLInputElement>('#bomx-part').value = partNumber;
-      if ($<HTMLInputElement>('#bomx-part').value.trim()) void load(); else void loadLocations().catch(error => { $('#bomx-error').innerHTML = status(message(error), true); });
+      if ($<HTMLInputElement>('#bomx-part').value.trim()) void load(); else { const current = ++version; void loadLocations(current).catch(error => { if (current === version) $('#bomx-error').innerHTML = status(message(error), true); }); }
       $('#bomx-part').focus();
     },
     /** Drop any in-flight read when the operator leaves the page. */

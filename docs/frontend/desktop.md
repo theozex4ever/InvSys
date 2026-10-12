@@ -155,7 +155,8 @@ and capacity level), the Leaf requirements aggregated across all paths with thei
 shortages, overall Build capacity, and the count of short materials. The tree is a
 phantom view: assembly stock is shown but never consumed. Capacity is Critical at
 100 or fewer final builds, Low through 500, otherwise Ready; this planning warning
-is independent of shortages for the requested quantity. A part without a BOM is
+is independent of shortages for the requested quantity. Shortages describe stock only;
+shipping eligibility (for example an inactive assembly) is decided at shipment review. A part without a BOM is
 returned as a single node. Inactive root parts can be explored; inactive
 components, circular definitions and BOMs expanding past 5,000 nodes return a
 `VALIDATION` error instead of a graph. Exploring never writes inventory.

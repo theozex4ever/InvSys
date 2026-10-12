@@ -162,10 +162,23 @@ def test_part_without_bom_is_a_single_node(bom):
     assert data["tree"]["stock_available"] == 20
 
 
-def test_inactive_root_can_still_be_explored(bom):
+def test_inactive_root_is_explorable_but_shortage_status_is_not_shipping_eligibility(bom):
     store, bridge, _ = bom
     store.set_part_active("KIT", False)
-    assert explore(bridge)["ok"]
+    data = explore(bridge)["data"]
+    assert data["shortage_count"] == 0
+    # Shipment review, not exploration, decides eligibility.
+    review = bridge.preview_bom_ship(
+        {
+            "part_number": "KIT",
+            "quantity": 2,
+            "location": "Stock",
+            "operator": "Pat",
+            "recipient": "Customer",
+        }
+    )
+    assert review["ok"] is False
+    assert "inactive" in review["error"]["message"]
 
 
 @pytest.mark.parametrize(

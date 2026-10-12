@@ -750,6 +750,25 @@ class DesktopSmoke:
         wait(
             "document.querySelector('#bomx-result .bomx-figure strong')?.textContent === window.smokeExploreChanged.buildable.toLocaleString() && window.smokeExploreChanged.buildable !== window.smokeExploreTruth.buildable"
         )
+        # A superseded Refresh whose Location read finishes late must not erase the newer graph.
+        run("""
+            window.smokeLocations = window.smokeAPI.locations; window.smokeLocationCalls = 0;
+            window.smokeAPI.locations = () => {
+                if (++window.smokeLocationCalls === 1) {
+                    return new Promise(resolve => { window.smokeReleaseLocations = () => resolve(window.smokeLocations()); });
+                }
+                return window.smokeLocations();
+            };
+            document.querySelector('#bomx-refresh').click();
+            document.querySelector('#bomx-refresh').click();
+        """)
+        wait("document.querySelectorAll('#bomx-canvas .bomx-node').length === 4")
+        run("window.smokeReleaseLocations(); window.smokeAPI.locations = window.smokeLocations;")
+        time.sleep(0.5)
+        require(
+            "document.querySelectorAll('#bomx-canvas .bomx-node').length === 4 && !document.querySelector('#bomx-result').textContent.includes('Loading')",
+            "stale Location read kept the newer graph",
+        )
         run("""
             Promise.all([window.smokeAPI.stock_context(window.smokeBOMLeaf), window.smokeAPI.history({})]).then(([stock, history]) => {
                 window.smokeExploreAfter = JSON.stringify([stock.data, history.data.total]);
