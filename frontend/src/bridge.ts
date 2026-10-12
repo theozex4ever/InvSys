@@ -41,6 +41,14 @@ export interface Shipment {
 }
 export interface StockContext { part: PartDetail; locations: string[]; has_bom: boolean; transactions: Activity[]; shipments: Shipment[] }
 export interface ShipmentPreview { request: ShipmentRequest; lot_stock: number; location_stock: number; remaining: number; context: StockContext }
+// `location` is the source Location, matching the other stock requests.
+export interface MoveRequest extends Omit<Receipt, 'notes'> { destination: string }
+export interface MovePreview {
+  request: MoveRequest;
+  source_lot_before: number; source_lot_after: number; destination_lot_before: number; destination_lot_after: number;
+  source_location_before: number; source_location_after: number; destination_location_before: number; destination_location_after: number;
+  context: StockContext;
+}
 export type Response<T> = { ok: true; data: T } | { ok: false; error: { code: 'VALIDATION' | 'DUPLICATE' | 'CONFIRMATION_REQUIRED' | 'NOT_FOUND' | 'INTERNAL' | 'PLAN_CHANGED'; message: string } };
 interface API {
   history(search: HistorySearch): Promise<Response<HistoryResults>>;
@@ -62,6 +70,8 @@ interface API {
   receive(request: Receipt): Promise<Response<StockContext>>;
   preview_ship(request: ShipmentRequest): Promise<Response<ShipmentPreview>>;
   ship(request: ShipmentRequest): Promise<Response<{ shipment_number: string; context: StockContext }>>;
+  preview_move(request: MoveRequest): Promise<Response<MovePreview>>;
+  move(request: MoveRequest): Promise<Response<StockContext>>;
 }
 declare global { interface Window { pywebview?: { api: API } } }
 export class RequestError extends Error {
@@ -71,7 +81,7 @@ export function ready(): Promise<API> {
   return new Promise((resolve, reject) => {
     const loaded = () => {
       const api = window.pywebview?.api;
-      if (api && ['dashboard', 'preferences', 'save_operator', 'save_theme', 'locations', 'search_parts', 'part_detail', 'create_part', 'update_part', 'set_part_active', 'stock_context', 'receive', 'preview_ship', 'ship', 'history', 'history_detail', 'shipment_detail', 'preview_bom_ship', 'ship_bom'].every(method => typeof api[method as keyof API] === 'function')) { cleanup(); resolve(api); }
+      if (api && ['dashboard', 'preferences', 'save_operator', 'save_theme', 'locations', 'search_parts', 'part_detail', 'create_part', 'update_part', 'set_part_active', 'stock_context', 'receive', 'preview_ship', 'ship', 'history', 'history_detail', 'shipment_detail', 'preview_bom_ship', 'ship_bom', 'preview_move', 'move'].every(method => typeof api[method as keyof API] === 'function')) { cleanup(); resolve(api); }
     };
     const cleanup = () => { clearTimeout(timer); window.removeEventListener('pywebviewready', loaded); };
     const timer = setTimeout(() => {
