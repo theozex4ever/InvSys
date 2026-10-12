@@ -27,6 +27,18 @@ def backup_database(
     keep: int = DEFAULT_RETENTION,
     reason: str = "",
 ) -> Path | None:
+    target = write_backup(db_path, backup_dir, reason)
+    if target is not None:
+        prune_backups(backup_dir, keep)
+    return target
+
+
+def write_backup(db_path: Path, backup_dir: Path, reason: str = "") -> Path | None:
+    """Copy the database into ``backup_dir`` without applying retention.
+
+    Callers that verify the copy must do so before ``prune_backups``, so a bad copy
+    never costs an older valid backup.
+    """
     if not db_path.exists():
         return None
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -46,12 +58,16 @@ def backup_database(
         # A partial file must never be listed as the latest backup.
         target.unlink(missing_ok=True)
         raise
-
-    for old in _backup_files(backup_dir)[keep:]:
-        # Retention is housekeeping: a file that cannot be pruned must not fail a good backup.
-        with suppress(OSError):
-            old.unlink(missing_ok=True)
     return target
+
+
+def prune_backups(backup_dir: Path, keep: int = DEFAULT_RETENTION) -> None:
+    """Delete backups beyond the ``keep`` newest. Housekeeping: never raises OSError."""
+    # A folder that cannot be listed or a file that cannot be pruned must not fail a
+    # backup that was already written.
+    with suppress(OSError):
+        for old in _backup_files(backup_dir)[keep:]:
+            old.unlink(missing_ok=True)
 
 
 def _backup_files(backup_dir: Path) -> list[Path]:

@@ -11,10 +11,11 @@ from typing import Any
 from inventory_control.backup import (
     DEFAULT_RETENTION,
     BackupInfo,
-    backup_database,
     describe_backup,
     list_backups,
+    prune_backups,
     verify_backup,
+    write_backup,
 )
 from inventory_control.models import BOMShipmentPlan
 from inventory_control.store import InventoryStore, ShipmentReviewNotFound
@@ -453,7 +454,7 @@ class InventoryBridge:
         def create() -> dict[str, Any]:
             launch = self._launch()
             try:
-                target = backup_database(launch.database, launch.backups, reason="manual")
+                target = write_backup(launch.database, launch.backups, reason="manual")
             except OSError as error:
                 raise BridgeError(
                     "FILE_ERROR",
@@ -474,6 +475,8 @@ class InventoryBridge:
                     f"Backup {target.name} could not be verified ({error}) and was removed. "
                     "The database file may be damaged; nothing was backed up.",
                 ) from error
+            # Retention only after the new copy is proven, so a bad copy costs no valid one.
+            prune_backups(launch.backups)
             context = self._utility_context()
             return {"created": self._backup(created), "context": context}
 

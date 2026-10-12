@@ -179,7 +179,8 @@ def test_backups_stay_with_their_selected_inventory(tmp_path):
 
 
 def test_backup_without_a_database_file_reports_the_missing_database(tmp_path):
-    _store, bridge, context = launch(tmp_path)
+    store, bridge, context = launch(tmp_path)
+    store.engine.dispose()  # Windows cannot delete a database file that is still open
     context.database.unlink()
     state = bridge.utility_context()["data"]
     assert state["database_exists"] is False
@@ -202,6 +203,25 @@ def test_a_database_that_cannot_be_backed_up_faithfully_is_not_reported_as_a_bac
     assert "could not be verified" in result["error"]["message"]
     assert backup_names(context.backups) == []
     assert bridge.utility_context()["data"]["latest_backup"] is None
+
+
+def test_failed_verification_leaves_every_existing_backup_in_place(tmp_path):
+    store, bridge, context = launch(tmp_path)
+    stocked(store)
+    for index in range(20):
+        assert bridge.create_backup()["ok"]
+        path = max(context.backups.glob("inventory-*.db"), key=lambda p: p.stat().st_mtime)
+        os.utime(path, (1_000_000 + index, 1_000_000 + index))
+    valid = backup_names(context.backups)
+    assert len(valid) == 20
+    store.engine.dispose()
+    for sidecar in context.database.parent.glob("inventory.db-*"):
+        sidecar.unlink()
+    context.database.write_bytes(b"this is not a sqlite database" * 100)
+    result = bridge.create_backup()
+    assert result["ok"] is False
+    assert result["error"]["code"] == "FILE_ERROR"
+    assert backup_names(context.backups) == valid
 
 
 def test_backup_file_failures_are_reported_and_leave_no_backup(tmp_path):
@@ -249,6 +269,26 @@ def test_unreadable_backup_folder_is_not_shown_as_having_no_backups(tmp_path):
         context.backups.chmod(0o700)
     assert state["latest_backup"] is None
     assert state["backup_error"]
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    reason="needs POSIX permissions enforced for the current user",
+)
+def test_written_backup_is_reported_even_when_retention_cannot_list_the_folder(tmp_path):
+    store, bridge, context = launch(tmp_path)
+    stocked(store)
+    context.backups.mkdir()
+    context.backups.chmod(0o300)  # writable and searchable, but not listable
+    try:
+        result = bridge.create_backup()
+    finally:
+        context.backups.chmod(0o700)
+    assert result["ok"] is True
+    created = result["data"]["created"]
+    assert (context.backups / created["name"]).is_file()
+    assert result["data"]["context"]["backup_error"]
+    assert "Nothing was backed up" not in json.dumps(result)
 
 
 def test_open_folder_uses_the_selected_inventory_locations(tmp_path):

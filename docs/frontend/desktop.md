@@ -196,7 +196,9 @@ and the backup, export and log folders chosen at launch: source launch uses `dat
 `--database`.
 
 - **Create backup** writes `inventory-YYYYMMDD-HHMMSS-manual.db` with SQLite's backup
-  API, keeps startup backups and applies the same retention of 20 newest files. The
+  API, reopens and integrity-checks the copy, and only then applies the same retention
+  of 20 newest files (startup backups are kept); a failed check removes the new copy
+  and leaves every earlier backup in place. The
   page then shows the latest backup's name, time and size and the number on disk.
   A missing database file or an unwritable/unreadable backup folder is reported as
   an error; nothing is reported as created unless the file exists.
