@@ -84,6 +84,19 @@ class BOMShipmentReview:
     context: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class MoveReview:
+    source_lot_before: int
+    source_lot_after: int
+    destination_lot_before: int
+    destination_lot_after: int
+    source_location_before: int
+    source_location_after: int
+    destination_location_before: int
+    destination_location_after: int
+    context: dict[str, Any]
+
+
 @dataclass
 class ComponentConsumption:
     part_number: str

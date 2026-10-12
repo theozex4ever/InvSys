@@ -26,9 +26,9 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 4 | Parts search, active/inactive/Low stock filters, numeric sorting | Equivalent | Bridge reads and native catalog smoke |
 | 5 | Create number, description, minimum, default Location | Equivalent | `test_bridge.py`, `test_bridge_reads.py` |
 | 6 | Inspect totals and Lot/Location balances | Improved | Read-only drawer and bridge reads |
-| 7 | Edit fields while Part number stays immutable | Missing | Store supports it; no desktop use case/form |
-| 8 | Deactivate/reactivate; stocked-Part confirmation; no deletion | Missing | Store supports active state; new UI absent |
-| 9 | Confirm discarding unsaved Part edits | Missing | Required replacement safeguard |
+| 7 | Edit fields while Part number stays immutable | Equivalent | `test_bridge_part_edit.py`; native Part edit smoke |
+| 8 | Deactivate/reactivate; stocked-Part confirmation; no deletion | Equivalent | `test_bridge_part_edit.py` (bridge requires `confirm_stock`); native confirmation smoke |
+| 9 | Confirm discarding unsaved Part edits | Improved | Cancel and drawer close confirm; native Part edit smoke |
 | 10 | Receive real Lot, quantity, Location, operator, reference, notes | Improved | Bridge stock tests; receipt Notes added to original form fields |
 | 11 | Adopt default Location; efficient repeat receipt | Equivalent | Native smoke retains Part/Location and clears submitted fields |
 | 12 | Selected-Lot standard shipment review | Improved | Bridge reviews distinguish Lot and Location stock |
@@ -36,9 +36,9 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 14 | Nested/shared leaf requirements and per-Lot allocations | Equivalent | Bridge BOM tests; native BOM smoke |
 | 15 | Shortage/stale plan blocks until another review | Equivalent | Bridge reviews/BOM; native changed-plan smoke |
 | 16 | Phantom assemblies consume leaves only | Equivalent | Workflow restart tests and native reopened-store checks |
-| 17 | Move positive-stock Lot, source/destination, operator, reference | Missing | Store exists; new UI/API absent; reference is existing service metadata |
-| 18 | Move source/destination before/after review | Missing | Original source preview; full replacement review required |
-| 19 | Atomic paired MOVE_OUT / MOVE_IN | Missing | Store regression retained; desktop workflow absent |
+| 17 | Move positive-stock Lot, source/destination, operator, reference | Equivalent | `test_bridge_move.py`, native Move smoke; reference is existing service metadata |
+| 18 | Move source/destination before/after review | Improved | `preview_move` reports Lot and Location before/after for both Locations from one snapshot |
+| 19 | Atomic paired MOVE_OUT / MOVE_IN | Equivalent | Store regression retained; bridge write-failure atomicity and restart tests; native Move smoke |
 | 20 | Expected/count/difference, operator, required reason | Improved | `test_bridge_adjust.py`; native Adjust smoke. Python supplies expected/difference; stale expected count and lost responses need another review/reconciliation |
 | 21 | Adjust existing zero-stock Lots | Equivalent | `test_bridge_adjust.py` found-stock case; native Adjust smoke counts a zero-stock Lot |
 | 22 | Large-correction confirmation threshold | Equivalent | Threshold boundaries in `test_bridge_adjust.py` (increases/decreases); native confirm/cancel smoke |
@@ -55,8 +55,8 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 33 | Select/preview three CSV import kinds; row errors/warnings | Missing | Original Settings / service; no new utilities |
 | 34 | Explicit confirmation, commit validation, pre-write backup | Missing | Preserve existing service transaction boundaries |
 | 35 | Import outcome and refreshed screens | Missing | Original notifications; replacement absent |
-| 36 | Startup/manual backups, latest metadata, retention | Missing | Startup backup delivered; manual/status absent |
-| 37 | Open selected-database export/backup folders | Missing | Original folder buttons; launcher-context utilities needed |
+| 36 | Startup/manual backups, latest metadata, retention | Equivalent | Settings Create backup and latest/count status; startup backup and retention 20 retained; `test_bridge_utilities.py`, native smoke |
+| 37 | Open selected-database export/backup folders | Equivalent | Settings folder buttons through the launch-selected context and native opener; failures reported; real file-manager launch on Windows/macOS Missing (smoke records the Linux request) |
 | 38 | Closed-app restore and rollback | Intentionally changed | Procedure below; no in-app restore; rehearsal Missing |
 | 39 | Remember operator and theme | Improved | Bridge preferences/restart; original remembers operator only |
 | 40 | Keyboard destinations, focus, themes, small windows | Missing | Ctrl+K delivered; Ctrl+1–9 destinations absent; native theme/layout smoke retained |
@@ -243,12 +243,12 @@ and platform bundle commands are in [desktop.md](desktop.md).
 | A03 | Ship STANDARD A: qty 11 rejects despite Location total 16; qty 2 confirms correct Lot remainder 8; cancel no writes; inspect number/recipient/carrier/tracking/reference and History | Delivered, API/native |
 | A04 | Ship KIT qty 4: shortage; qty 2: leaf requirement 14, B allocation 14, parent/intermediate unchanged. Review then receive LEAF Lot 0 to force changed allocation; old confirmation rejects without writes; explicitly review and confirm again | Delivered, API/native |
 | A05 | Inspect baseline BOM shipment A=5/B=9; change SUB→LEAF from 3 to 4; restart; old trace still A=5/B=9. Search manifest shipment number, reference, Lot/operator; page/type/filter; close drawer retains selection/scroll/focus | Delivered History; edit uses original until migrated |
-| A06 | Edit STANDARD description/min/default without number change; dirty navigation cancel/discard; deactivate stocked INACTIVE after reactivation: cancel then confirm; history retained and ineligible stock actions reject | Replacement Missing |
-| A07 | Move STANDARD B 2 Stock→Shipping Bench: source 6→4, destination 2→4; same Location/qty 7 reject unchanged; one paired transaction; chosen Lot, operator/reference retained; restart | Replacement Missing; store regression retained |
-| A08 | Count STANDARD ZERO 0→3 with reason; blank reason rejects; counts just below/exact large thresholds above, both directions; cancel no writes; confirm one COUNT_CORRECTION; zero Lot remains selectable | Replacement Missing; original safety tests retained |
+| A06 | Edit STANDARD description/min/default without number change; dirty navigation cancel/discard; deactivate stocked INACTIVE after reactivation: cancel then confirm; history retained and ineligible stock actions reject | Delivered edit/active replacement: `test_bridge_part_edit.py` and native Part edit smoke; operator/package runs remain future gates |
+| A07 | Move STANDARD B 2 Stock→Shipping Bench: source 6→4, destination 2→4; same Location/qty 7 reject unchanged; one paired transaction; chosen Lot, operator/reference retained; restart | Delivered, bridge/native coverage |
+| A08 | Count STANDARD ZERO 0→3 with reason; blank reason rejects; counts just below/exact large thresholds above, both directions; cancel no writes; confirm one COUNT_CORRECTION; zero Lot remains selectable | Delivered, bridge/native Adjust coverage; original safety tests retained |
 | A09 | Author KIT direct links; add existing link updates; confirm/cancel removal; reject self/cycle/zero/negative; inspect nested/shared tree Location/quantity, pan/zoom/fit; capacity 100/101/500/501 distinct from shortage | Replacement Missing |
 | A10 | Export all five kinds, retain headers/Lot/trace. Select all three import kinds: valid, invalid, warning, cancel, changed input before commit, commit-time stale state; confirm backup exists before write; inspect actual per-kind failure outcome and refresh | Replacement Missing; real-file service regressions retained |
-| A11 | Manual backup/status/retention; open selected DB's export/backup folders; failed file/backup reports error, no fabricated success; source default/INVSYS_HOME and override; standalone requires explicit DB | Utilities Missing; launcher regressions retained |
+| A11 | Manual backup/status/retention; open selected DB's export/backup folders; failed file/backup reports error, no fabricated success; source default/INVSYS_HOME and override; standalone requires explicit DB | Backup/folder replacement delivered (bridge tests, native smoke); CSV utilities and real file-manager evidence on three platforms Missing; launcher regressions retained |
 | A12 | Navigate with Ctrl+1–9/Ctrl+K and contextual links; all dialogs keyboard-only; visible focus, both themes, reduced motion, 640×480 actions reachable by scrolling; screen-reader labels and non-color status/contrast review | Native checks delivered, numbered shortcuts and human review Missing |
 | A13 | Double-click each mutation; simulated committed/lost response and unsent response preserve draft/lock. Failed recovery read remains locked; authoritative reads show exact Lot/operator/metadata; explicit completion/absence decision only; never auto-retry | Native delivered stock checks; future mutation coverage Missing |
 | A14 | Rehearse upgrade on a copy of representative pre-migration DB; compare Parts/Lots/balances/ledger/shipments/BOM snapshots before/after launch and restart; closed-app backup restore on a separate copy; record reconciled rollback | Copied-data/operator evidence Missing |

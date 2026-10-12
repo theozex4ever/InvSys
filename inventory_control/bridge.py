@@ -1,14 +1,25 @@
 """Narrow desktop use cases. InventoryStore remains the inventory authority."""
 
 import logging
+import sqlite3
 from collections.abc import Callable
 from dataclasses import asdict
 from secrets import token_urlsafe
 from threading import RLock
 from typing import Any
 
+from inventory_control.backup import (
+    DEFAULT_RETENTION,
+    BackupInfo,
+    describe_backup,
+    list_backups,
+    prune_backups,
+    verify_backup,
+    write_backup,
+)
 from inventory_control.models import BOMShipmentPlan
 from inventory_control.store import InventoryStore, ShipmentReviewNotFound, StockChanged
+from inventory_control.utilities import DesktopHost, UtilityContext
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +31,17 @@ class BridgeError(ValueError):
 
 
 class InventoryBridge:
-    def __init__(self, store: InventoryStore) -> None:
+    def __init__(
+        self,
+        store: InventoryStore,
+        utilities: UtilityContext | None = None,
+        host: DesktopHost | None = None,
+    ) -> None:
         # pywebview calls may run on separate threads; serialize this app's requests.
+        # Private names matter: pywebview publishes every public attribute recursively.
         self._store = store
+        self._utilities = utilities
+        self._host = host
         self._lock = RLock()
         self._bom_reviews: dict[str, tuple[dict[str, Any], BOMShipmentPlan]] = {}
 
@@ -166,27 +185,63 @@ class InventoryBridge:
 
         return self._respond(read)
 
+    def _part_fields(self, request: Any) -> tuple[str, str, int, str]:
+        fields = self._request(
+            request, {"part_number", "description", "minimum_quantity", "location"}
+        )
+        number = self._text(fields.get("part_number"), "Part number").upper()
+        description = self._text(fields.get("description"), "Description")
+        location = self._text(fields.get("location"), "Location")
+        minimum = fields.get("minimum_quantity")
+        if type(minimum) is not int or minimum < 0 or minimum > 2**31 - 1:
+            raise ValueError("Minimum quantity must be a whole number between 0 and 2147483647.")
+        if location not in self._store.locations:
+            raise ValueError("Invalid location.")
+        return number, description, minimum, location
+
     def create_part(self, request: Any) -> dict[str, Any]:
         def create() -> dict[str, Any]:
-            fields = self._request(
-                request, {"part_number", "description", "minimum_quantity", "location"}
-            )
-            number = self._text(fields.get("part_number"), "Part number").upper()
-            description = self._text(fields.get("description"), "Description")
-            location = self._text(fields.get("location"), "Location")
-            minimum = fields.get("minimum_quantity")
-            if type(minimum) is not int or minimum < 0 or minimum > 2**31 - 1:
-                raise ValueError(
-                    "Minimum quantity must be a whole number between 0 and 2147483647."
-                )
-            if location not in self._store.locations:
-                raise ValueError("Invalid location.")
+            number, description, minimum, location = self._part_fields(request)
             if number in self._store.parts:
                 raise BridgeError("DUPLICATE", "Part already exists.")
             self._store.add_part(number, description, minimum, location)
             return self._detail(number)
 
         return self._respond(create)
+
+    def update_part(self, request: Any) -> dict[str, Any]:
+        """Edit description, minimum quantity and default Location; the number is immutable."""
+
+        def update() -> dict[str, Any]:
+            number, description, minimum, location = self._part_fields(request)
+            self._detail(number)
+            self._store.update_part(number, description, minimum, location)
+            return self._detail(number)
+
+        return self._respond(update)
+
+    def set_part_active(self, request: Any) -> dict[str, Any]:
+        """Deactivate or reactivate a Part. Deactivating stocked Parts needs confirmation."""
+
+        def change() -> dict[str, Any]:
+            fields = self._request(request, {"part_number", "active", "confirm_stock"})
+            number = self._text(fields.get("part_number"), "Part number").upper()
+            active = fields.get("active")
+            confirmed = fields.get("confirm_stock", False)
+            if type(active) is not bool or type(confirmed) is not bool:
+                raise ValueError("Active state and stock confirmation must be true or false.")
+            part = self._detail(number)
+            if part["active"] != active:
+                if not active and part["quantity"] > 0 and not confirmed:
+                    raise BridgeError(
+                        "CONFIRMATION_REQUIRED",
+                        f"{number} still has {part['quantity']} units on hand. "
+                        "Confirm to deactivate it anyway.",
+                    )
+                self._store.set_part_active(number, active)
+            return self._detail(number)
+
+        return self._respond(change)
 
     def _stock_context(self, part_number: Any) -> dict[str, Any]:
         number = self._text(part_number, "Part number").upper()
@@ -472,3 +527,135 @@ class InventoryBridge:
             return {"difference": difference, "context": self._stock_context(fields["part_number"])}
 
         return self._respond(adjust)
+
+    def _launch(self) -> UtilityContext:
+        if self._utilities is None:
+            raise BridgeError("UNAVAILABLE", "Desktop utilities are not available in this launch.")
+        return self._utilities
+
+    def _backup(self, info: BackupInfo) -> dict[str, Any]:
+        return {**asdict(info), "path": str(info.path)}
+
+    def _utility_context(self) -> dict[str, Any]:
+        launch = self._launch()
+        latest = None
+        count = 0
+        backup_error = None
+        try:
+            backups = list_backups(launch.backups)
+        except OSError as error:
+            backup_error = f"Backups could not be read: {error.strerror or error}"
+        else:
+            count = len(backups)
+            if backups:
+                latest = self._backup(backups[0])
+        return {
+            "database": str(launch.database),
+            "database_exists": launch.database.is_file(),
+            "backup_dir": str(launch.backups),
+            "export_dir": str(launch.exports),
+            "log_dir": str(launch.logs),
+            "latest_backup": latest,
+            "backup_count": count,
+            "backup_retention": DEFAULT_RETENTION,
+            "backup_error": backup_error,
+        }
+
+    def utility_context(self) -> dict[str, Any]:
+        return self._respond(self._utility_context)
+
+    def create_backup(self) -> dict[str, Any]:
+        def create() -> dict[str, Any]:
+            launch = self._launch()
+            try:
+                target = write_backup(launch.database, launch.backups, reason="manual")
+            except OSError as error:
+                raise BridgeError(
+                    "FILE_ERROR",
+                    f"Backup failed: {error.strerror or error}. Nothing was backed up; "
+                    f"check the backup folder {launch.backups} and try again.",
+                ) from error
+            if target is None:
+                raise BridgeError(
+                    "NOT_FOUND", f"No database file was found at {launch.database} to back up."
+                )
+            try:
+                verify_backup(target)
+                created = describe_backup(target)
+            except (sqlite3.Error, OSError) as error:
+                target.unlink(missing_ok=True)
+                raise BridgeError(
+                    "FILE_ERROR",
+                    f"Backup {target.name} could not be verified ({error}) and was removed. "
+                    "The database file may be damaged; nothing was backed up.",
+                ) from error
+            # Retention only after the new copy is proven, so a bad copy costs no valid one.
+            prune_backups(launch.backups)
+            context = self._utility_context()
+            return {"created": self._backup(created), "context": context}
+
+        return self._respond(create)
+
+    def open_folder(self, kind: Any) -> dict[str, Any]:
+        def open_selected() -> dict[str, str]:
+            launch = self._launch()
+            folders = {"backups": launch.backups, "exports": launch.exports}
+            if not isinstance(kind, str) or kind not in folders:
+                raise ValueError("Choose the backups or exports folder.")
+            folder = folders[kind]
+            if self._host is None:
+                raise BridgeError("UNAVAILABLE", "Folder access is not available in this launch.")
+            try:
+                folder.mkdir(parents=True, exist_ok=True)
+                self._host.open_folder(folder)
+            except OSError as error:
+                raise BridgeError(
+                    "FILE_ERROR",
+                    f"Could not open the {kind} folder {folder}: {error.strerror or error}",
+                ) from error
+            return {"folder": str(folder)}
+
+        return self._respond(open_selected)
+
+    def _move_request(self, request: Any, *, check_inventory: bool = True) -> dict[str, Any]:
+        # ``location`` is the source Location, matching the other stock requests.
+        values = self._stock_request(
+            request,
+            {"destination", "reference"},
+            check_inventory=check_inventory,
+        )
+        if not values["destination"]:
+            raise ValueError("Destination required.")
+        return values
+
+    def preview_move(self, request: Any) -> dict[str, Any]:
+        """Authoritative before/after stock for both Locations; writes nothing."""
+
+        def preview() -> dict[str, Any]:
+            fields = self._move_request(request, check_inventory=False)
+            review = self._store.review_move(
+                fields["part_number"],
+                fields["quantity"],
+                fields["location"],
+                fields["destination"],
+                fields["lot_number"],
+            )
+            return {"request": fields, **asdict(review)}
+
+        return self._respond(preview)
+
+    def move(self, request: Any) -> dict[str, Any]:
+        def move() -> dict[str, Any]:
+            fields = self._move_request(request)
+            self._store.move(
+                fields["part_number"],
+                fields["quantity"],
+                fields["location"],
+                fields["destination"],
+                fields["lot_number"],
+                fields["operator"],
+                reference=fields["reference"],
+            )
+            return self._stock_context(fields["part_number"])
+
+        return self._respond(move)

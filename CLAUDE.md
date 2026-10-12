@@ -61,8 +61,9 @@ no HTTP server. `frontend/src/bridge.ts` defines the typed client and DTOs;
 **Existing utilities** — `backup.py` handles SQLite backups and retention;
 `import_export.py` provides CSV export and validated import previews/commits.
 These utilities are available through the original application's Settings view.
-The optional frontend covers dashboard, Parts, Receive, standard/BOM Ship, Adjust
-Count, and History; other workflows remain in the original application.
+The optional frontend covers dashboard, Parts, Receive, standard/BOM Ship, Move,
+Adjust Count, History, and Settings backups/folder access (`utilities.py`,
+`settings.ts`); other workflows remain in the original application.
 
 ## Key Design Rules
 
