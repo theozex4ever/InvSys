@@ -132,7 +132,9 @@ lots, review and ship standard stock or existing nested BOM parents, move lots
 between locations, reconcile Adjust Count, and search History with persisted
 shipment/component traceability. Drafts survive session
 navigation; results and audit records survive restart. It uses the existing InventoryStore
-and SQLite schema and remembers operator/theme choices. BOM authoring and a read-only BOM explorer are available in the shell; other workflows remain in the original PySide6 application.
+and SQLite schema and remembers operator/theme choices. BOM authoring, a read-only
+BOM explorer, and Settings with five CSV exports, backups and folder access are
+available in the shell; other workflows remain in the original PySide6 application.
 
 ```bash
 pip install -r requirements-desktop.txt

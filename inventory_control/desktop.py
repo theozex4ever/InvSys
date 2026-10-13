@@ -25,7 +25,7 @@ def main() -> int:
     parser.add_argument(
         "--database",
         type=Path,
-        help="Explicit review database; backups/logs stay beside it",
+        help="Explicit review database; backups/exports/logs stay beside it",
     )
     parser.add_argument(
         "--assets",
@@ -110,6 +110,14 @@ def main() -> int:
         if smoke.backup_path.parent != context.backups:
             print(
                 "Desktop smoke failed: backup left the selected database folder.", file=sys.stderr
+            )
+            return 1
+        if len(smoke.export_paths) != 5 or any(
+            path.parent != context.exports or not path.is_file() for path in smoke.export_paths
+        ):
+            print(
+                "Desktop smoke failed: CSV files are missing or outside the export folder.",
+                file=sys.stderr,
             )
             return 1
         reopened = InventoryStore(database, seed=False)

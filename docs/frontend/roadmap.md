@@ -25,7 +25,7 @@ scenario, approved workload and retirement evidence gate from tickets #39/#40.
 | 7 | Standard and nested BOM review/shipment with recovery | Complete |
 | 8 | Read-only BOM explorer with pan/zoom/fit delivered; subtree focus, breadcrumbs deferred | In Progress |
 | 9 | Part search shortcut delivered; command search deferred | In Progress |
-| 10 | Operator/theme, startup/manual backup and folder access delivered; CSV utilities deferred | In Progress |
+| 10 | Operator/theme, startup/manual backup, five CSV exports and folder access delivered; CSV import deferred | In Progress |
 | 11 | PySide6 retirement | Not Started |
 | 12 | Scripted native/keyboard/layout acceptance delivered; release hardening deferred | In Progress |
 
@@ -66,10 +66,9 @@ selection, Enter, Escape, and focus behavior must be predictable.
 
 ### 10. Settings, import/export, backup
 
-Backup, latest-backup status and folder opening are delivered in Settings (see
-`desktop.md`). Expose the remaining existing Python implementations: export parts, inventory,
-transactions, shipments, and BOM; import with select → preview → row errors →
-backup → commit; create backup, open its location, and show the latest backup.
+Backup, latest-backup status, folder opening and the five CSV exports are delivered
+in Settings (see `desktop.md`). Expose the remaining existing Python import
+implementations with select → preview → row errors → backup → commit.
 Never silently import malformed data. Include only meaningful settings.
 
 ### 11. PySide6 retirement

@@ -19,6 +19,7 @@ class DesktopSmoke:
         self.captures = captures
         self.opened_folders: list[Path] = []
         self.backup_path: Path | None = None
+        self.export_paths: list[Path] = []
 
     def run(self, window: Any) -> None:
         def wait(script: str) -> None:
@@ -78,6 +79,9 @@ class DesktopSmoke:
 
             self.bom_authoring = check_bom_authoring(window, wait)
             self._settings_utilities(window, wait)
+            from inventory_control.desktop_smoke_export import check_exports
+
+            self.export_paths = check_exports(window, wait)
             from inventory_control.desktop_smoke_ui import check_ui
 
             check_ui(window, wait, self.captures, self.bom_part)
