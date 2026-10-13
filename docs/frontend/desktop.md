@@ -1,7 +1,8 @@
 # Live desktop inventory workflows
 
 The pywebview frontend covers the dashboard, Parts catalog, Receive, standard and
-nested BOM Ship, Move, Adjust Count, and History, using [approved layout A](phase0-design.md). The
+nested BOM Ship, Move, Adjust Count, BOM authoring, History, and Settings backups, using
+[approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
 
@@ -47,7 +48,11 @@ confirmation, validation, duplicate clicks, lost-response recovery (including a
 failed recovery read), stocked deactivation and reactivation.
 It also prepares a fresh disposable nested/shared
 BOM, reviews a multi-lot allocation, rejects shortage and stale allocation,
-reconfirms, and inspects History and component snapshots.
+reconfirms, and inspects History and component snapshots. It then authors
+nested/shared definitions on the BOM page and exercises update, rejection,
+removal confirmation, duplicate clicks, a lost response with failed and then
+successful read-back, review invalidation after edits, and unchanged shipment
+snapshots, and verifies the result after reopening the store.
 It creates a manual backup in Settings, checks the latest-backup status and the folder
 requests (recorded, not opened, so the smoke never spawns a file manager), and shows a
 failed folder request as an error. It reopens the backup read-only. It verifies the complete stock/audit result through a reopened store. Use a disposable file: these are real writes. Repeat the command to check
@@ -70,6 +75,8 @@ file URI avoids pywebview automatically starting a server for a bare local path
 ([pywebview usage](https://pywebview.flowrl.com/guide/usage.html)). The build uses
 relative local assets ([Vite build documentation](https://vite.dev/guide/build.html)).
 There is no Vite process, HTTP server, CDN, or network inventory service required.
+The combined BOM authoring and Adjust Count build uses about 26.2 KB gzipped
+JavaScript; its asset budget is 30 KB (CSS 8 KB, HTML 1 KB).
 
 ## Basic package proof
 
@@ -122,7 +129,7 @@ Deferred workflows are identified in the shell and drawer (see
 History record using its existing database transaction ID.
 
 The bridge exposes dashboard, preferences, save operator/theme, locations,
-part search/detail/create/edit/active state, stock context, receive, standard shipment preview,
+part search/detail/create/edit/active state, BOM definition read/save/remove, stock context, receive, standard shipment preview,
 standard ship, BOM preview/confirmation, Move preview/confirmation, Adjust Count
 preview/submission, searchable paged History, transaction/shipment inspection,
 and Settings backup/folder utilities. Stock context contains current part/lot/location balances,
@@ -226,6 +233,24 @@ even when a standard shipment has a custom reference. No identifiers or componen
 quantities are reconstructed in JavaScript. Success includes Inspect shipment;
 mutations and returning to History refresh reads while preserving filters.
 
+## BOM authoring
+
+The BOM page (`frontend/src/bom.ts`) maintains the direct components of nested
+definitions. `bom_definition` returns one Part's direct components and direct
+parents from one snapshot; `save_bom_component` adds a component or, when the
+link exists, updates its quantity; `remove_bom_component` requires
+`confirmed: true`. Self-reference, cycles, unknown Parts and quantities outside
+1–2147483647 are rejected by the store and bridge with no change. Each success
+returns the refreshed definition. Edits never write stock or audit records, and
+persisted shipment component snapshots are unaffected. A reviewed BOM shipment
+whose allocation no longer matches after an edit is rejected as `PLAN_CHANGED`
+and needs a fresh review.
+
+The page blocks duplicate submissions and preserves its draft on rejection. After
+a transport or internal failure it locks editing until the operator reads the
+authoritative definition and explicitly states whether the change applied; a
+failed read keeps the lock and nothing is retried automatically.
+
 ## Adjust Count
 
 The Adjust page reconciles a counted total for an existing Lot at a Location,
@@ -294,7 +319,7 @@ displaced database files back together.
 ## Deferred workflows
 
 The shell directs operators to the original application for
-location administration, BOM editing and exploration, and CSV
+location administration, BOM exploration, and CSV
 import/export. Backup restoration requires closing the app as described above.
 Global search is part search only.
 

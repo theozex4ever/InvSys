@@ -19,6 +19,7 @@ source = ["inventory_control"]
 # The native smoke probes are test code driven by the desktop E2E job.
 omit = [
     "inventory_control/desktop_smoke.py",
+    "inventory_control/desktop_smoke_bom.py",
     "inventory_control/desktop_smoke_ui.py",
     "inventory_control/desktop_smoke_adjust.py",
     "inventory_control/desktop_smoke_parts.py",

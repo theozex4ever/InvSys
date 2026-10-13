@@ -42,9 +42,9 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 20 | Expected/count/difference, operator, required reason | Improved | `test_bridge_adjust.py`; native Adjust smoke. Python supplies expected/difference; stale expected count and lost responses need another review/reconciliation |
 | 21 | Adjust existing zero-stock Lots | Equivalent | `test_bridge_adjust.py` found-stock case; native Adjust smoke counts a zero-stock Lot |
 | 22 | Large-correction confirmation threshold | Equivalent | Threshold boundaries in `test_bridge_adjust.py` (increases/decreases); native confirm/cancel smoke |
-| 23 | BOM direct component add/update/remove | Missing | Original editor and store exist |
-| 24 | Reject self-reference, cycles and invalid quantities | Missing | Store tests retained; authoring UI/API absent |
-| 25 | Existing component updates quantity; confirm removal | Missing | Preserve service update behavior; original UI requires row selection |
+| 23 | BOM direct component add/update/remove | Equivalent | `test_bridge_bom_authoring.py`; native BOM authoring smoke |
+| 24 | Reject self-reference, cycles and invalid quantities | Equivalent | Store tests retained; bridge authoring tests; native rejection smoke preserves the draft |
+| 25 | Existing component updates quantity; confirm removal | Improved | Adding an existing component updates it without row selection; removal needs bridge `confirmed` and a native dialog |
 | 26 | Nested graph pan, zoom, fit | Missing | Original flowchart exists |
 | 27 | Location/quantity availability and shortages | Missing | Original BOM view; shipment preview covers shipping only |
 | 28 | Shared leaves aggregated in Build capacity | Missing | Store/BOM tests; dedicated explorer absent |
@@ -242,7 +242,7 @@ and platform bundle commands are in [desktop.md](desktop.md).
 | A02 | Receive STANDARD: default Receiving; choose Stock/NEW, qty 3, reference ACCEPT-NEW, Notes; blank Lot/invalid qty reject unchanged; success repeat-entry; leave/return preserves unsent fields | Delivered, native/API |
 | A03 | Ship STANDARD A: qty 11 rejects despite Location total 16; qty 2 confirms correct Lot remainder 8; cancel no writes; inspect number/recipient/carrier/tracking/reference and History | Delivered, API/native |
 | A04 | Ship KIT qty 4: shortage; qty 2: leaf requirement 14, B allocation 14, parent/intermediate unchanged. Review then receive LEAF Lot 0 to force changed allocation; old confirmation rejects without writes; explicitly review and confirm again | Delivered, API/native |
-| A05 | Inspect baseline BOM shipment A=5/B=9; change SUB→LEAF from 3 to 4; restart; old trace still A=5/B=9. Search manifest shipment number, reference, Lot/operator; page/type/filter; close drawer retains selection/scroll/focus | Delivered History; edit uses original until migrated |
+| A05 | Inspect baseline BOM shipment A=5/B=9; change SUB→LEAF from 3 to 4; restart; old trace still A=5/B=9. Search manifest shipment number, reference, Lot/operator; page/type/filter; close drawer retains selection/scroll/focus | Delivered, bridge/native coverage; edits through BOM page |
 | A06 | Edit STANDARD description/min/default without number change; dirty navigation cancel/discard; deactivate stocked INACTIVE after reactivation: cancel then confirm; history retained and ineligible stock actions reject | Delivered edit/active replacement: `test_bridge_part_edit.py` and native Part edit smoke; operator/package runs remain future gates |
 | A07 | Move STANDARD B 2 Stock→Shipping Bench: source 6→4, destination 2→4; same Location/qty 7 reject unchanged; one paired transaction; chosen Lot, operator/reference retained; restart | Delivered, bridge/native coverage |
 | A08 | Count STANDARD ZERO 0→3 with reason; blank reason rejects; counts just below/exact large thresholds above, both directions; cancel no writes; confirm one COUNT_CORRECTION; zero Lot remains selectable | Delivered, bridge/native Adjust coverage; original safety tests retained |

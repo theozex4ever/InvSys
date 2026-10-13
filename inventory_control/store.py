@@ -799,13 +799,16 @@ class InventoryStore:
         component_part_number: str,
         quantity_per: int,
         notify: bool = True,
-    ) -> None:
+    ) -> bool:
+        """Add a direct component, or update an existing link; returns True when added."""
         parent = self._normalize_part_number(parent_part_number)
         component = self._normalize_part_number(component_part_number)
         if parent == component:
             raise ValueError("A part cannot contain itself.")
         if quantity_per <= 0:
             raise ValueError("Component quantity must be greater than zero.")
+        if quantity_per > 2**31 - 1:
+            raise ValueError("Component quantity cannot exceed 2147483647.")
         with self._mutation(notify) as (session, _):
             parent_part = self._require_part(session, parent)
             component_part = self._require_part(session, component)
@@ -827,6 +830,7 @@ class InventoryStore:
                 )
             else:
                 row.quantity_per = quantity_per
+        return row is None
 
     def remove_bom_component(
         self, parent_part_number: str, component_part_number: str, notify: bool = True
@@ -877,6 +881,46 @@ class InventoryStore:
                 BOMComponent(parent, row.component_part.part_number, row.quantity_per)
                 for row in rows
             ]
+
+    def bom_definition(self, part_number: str) -> dict[str, Any] | None:
+        """One Part's direct BOM components and direct parents from one snapshot."""
+        number = self._normalize_part_number(part_number)
+        with self._read_snapshot() as session:
+            part = self._part(session, number)
+            if part is None:
+                return None
+
+            def summary(other: PartRecord, quantity_per: int) -> dict[str, Any]:
+                return {
+                    "part_number": other.part_number,
+                    "description": other.description,
+                    "active": other.active,
+                    "quantity_per": quantity_per,
+                    "has_bom": self._has_bom(session, other.part_number),
+                }
+
+            children = session.scalars(
+                select(BOMComponentRecord)
+                .where(BOMComponentRecord.parent_part_id == part.id)
+                .join(BOMComponentRecord.component_part)
+                .order_by(PartRecord.part_number)
+            ).all()
+            parents = session.scalars(
+                select(BOMComponentRecord)
+                .where(BOMComponentRecord.component_part_id == part.id)
+                .join(BOMComponentRecord.parent_part)
+                .order_by(PartRecord.part_number)
+            ).all()
+            return {
+                "part": {
+                    "part_number": part.part_number,
+                    "description": part.description,
+                    "active": part.active,
+                    "has_bom": bool(children),
+                },
+                "components": [summary(row.component_part, row.quantity_per) for row in children],
+                "used_in": [summary(row.parent_part, row.quantity_per) for row in parents],
+            }
 
     def bom_availability(self, part_number: str, qty: int, location: str) -> BOMAvailability:
         part_number = self._normalize_part_number(part_number)

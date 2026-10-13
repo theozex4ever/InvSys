@@ -129,6 +129,15 @@ def main() -> int:
             ):
                 print("Desktop smoke failed: restart persistence.", file=sys.stderr)
                 return 1
+            authored = smoke.bom_authoring
+            if (
+                authored is None
+                or bridge.bom_definition(authored["parent"])["data"] != authored["definition"]
+                or bridge.shipment_detail(authored["shipment"]["shipment_number"])["data"]
+                != authored["shipment"]
+            ):
+                print("Desktop smoke failed: BOM authoring restart persistence.", file=sys.stderr)
+                return 1
             # Immutable read-only: inspecting a backup must not change it or leave WAL sidecars.
             with closing(
                 sqlite3.connect(f"{smoke.backup_path.as_uri()}?mode=ro&immutable=1", uri=True)

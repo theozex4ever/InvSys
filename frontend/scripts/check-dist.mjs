@@ -9,9 +9,10 @@ import { gzipSync } from 'node:zlib';
 
 const DIST = new URL('../dist/', import.meta.url);
 
-// Gzipped byte budgets: roughly 1.6x the current build. Raising one is a
-// reviewed decision in a PR, not a way to make CI pass.
-const BUDGETS = { 'app.js': 25_000, 'style.css': 8_000, 'index.html': 1_000 };
+// Gzipped byte budgets. The combined BOM authoring and Adjust Count workflows
+// use about 26.2 KB; 30 KB keeps bounded headroom for the expanded desktop scope.
+// Further increases require a reviewed scope or asset-size decision.
+const BUDGETS = { 'app.js': 30_000, 'style.css': 8_000, 'index.html': 1_000 };
 
 // XML namespace identifiers are inert strings, not fetches.
 const ALLOWED_URLS = new Set(['http://www.w3.org/2000/svg']);
