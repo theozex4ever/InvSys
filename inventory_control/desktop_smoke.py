@@ -19,6 +19,7 @@ class DesktopSmoke:
         self.captures = captures
         self.opened_folders: list[Path] = []
         self.backup_path: Path | None = None
+        self.imported_part = ""
         self.export_paths: list[Path] = []
 
     def run(self, window: Any) -> None:
@@ -91,6 +92,9 @@ class DesktopSmoke:
 
             self.adjust_part = adjust_part_name()
             self.adjust_result = check_adjust(window, wait, self.adjust_part)
+            from inventory_control.desktop_smoke_imports import check_parts_import
+
+            self.imported_part = check_parts_import(window, wait, self.captures.parent)
             print(
                 "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
                 flush=True,
@@ -105,7 +109,7 @@ class DesktopSmoke:
         """Manual backup, latest-backup status and folder access for the selected database."""
         run = window.evaluate_js
         # Settings locks its buttons while a request runs and re-renders when it settles.
-        idle = "document.querySelectorAll('#settings button:disabled').length === 0"
+        idle = "document.querySelectorAll('#settings-data button:disabled, #settings-refresh:disabled').length === 0"
         run("document.querySelector('[data-page=settings]').click()")
         wait("document.querySelector('#settings-data').textContent.includes('Latest backup')")
         run("document.querySelector('[data-backup-create]').click()")

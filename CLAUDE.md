@@ -64,7 +64,7 @@ These utilities are available through the original application's Settings view.
 The optional frontend covers dashboard, Parts editing and activation, Receive,
 standard/BOM Ship, Move, Adjust Count, BOM authoring (`frontend/src/bom.ts`), the read-only BOM explorer
 (`frontend/src/bom-explore.ts`), History, and Settings
-CSV exports and backups/folder access (`utilities.py`, `settings.ts`); other workflows remain in the
+backups/folder access, CSV exports and Parts CSV import (`utilities.py`, `settings.ts`, `imports.ts`); other workflows remain in the
 original application.
 
 ## Key Design Rules

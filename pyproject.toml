@@ -24,6 +24,7 @@ omit = [
     "inventory_control/desktop_smoke_adjust.py",
     "inventory_control/desktop_smoke_parts.py",
     "inventory_control/desktop_smoke_move.py",
+    "inventory_control/desktop_smoke_imports.py",
     "inventory_control/desktop_smoke_export.py",
 ]
 

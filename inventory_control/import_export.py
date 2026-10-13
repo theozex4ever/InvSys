@@ -1,9 +1,11 @@
 import csv
+import hashlib
 from collections.abc import Callable
 from datetime import datetime
+from io import StringIO
 from pathlib import Path
 
-from inventory_control.backup import backup_database
+from inventory_control.backup import backup_database, prune_backups, verify_backup, write_backup
 from inventory_control.config import BACKUP_DIR, DB_PATH, EXPORT_DIR
 from inventory_control.models import CSVPreview, CSVRowIssue, ExportResult, ImportResult
 from inventory_control.store import InventoryStore
@@ -42,6 +44,14 @@ SHIPMENT_HEADERS = [
 BOM_HEADERS = ["parent_part_number", "component_part_number", "quantity_per"]
 
 IGNORED_PART_COLUMNS = {"barcode", "category", "unit_of_measure", "revision", "notes"}
+
+
+class CSVChanged(ValueError):
+    """The selected bytes no longer match the operator's reviewed file."""
+
+
+class CSVFileError(ValueError):
+    """A readable file error compatible with the original UI's validation handling."""
 
 
 class ImportExportService:
@@ -148,23 +158,56 @@ class ImportExportService:
         ]
 
     def preview_parts_import_csv(self, path: Path) -> CSVPreview:
+        rows, errors, warnings = self._read_csv(path, "parts", {"part_number", "description"})
+        return self._preview_rows("parts", path, rows, errors, warnings, self._validate_part_row)
+
+    def review_parts_import_csv(self, path: Path) -> tuple[CSVPreview, str]:
+        content = path.read_bytes()
         rows, header_errors, warnings = self._read_csv(
-            path, "parts", {"part_number", "description"}
+            path, "parts", {"part_number", "description"}, content
         )
-        return self._preview_rows(
+        preview = self._preview_rows(
             "parts", path, rows, header_errors, warnings, self._validate_part_row
         )
+        return preview, hashlib.sha256(content).hexdigest()
 
     # Parts and BOM links carry no operator column; the argument keeps every
     # import entry point's signature uniform for the Settings view.
-    def import_parts_csv(self, path: Path, operator: str) -> ImportResult:  # noqa: ARG002
-        preview = self.preview_parts_import_csv(path)
+    def import_parts_csv(
+        self,
+        path: Path | str,
+        operator: str,  # noqa: ARG002
+        *,
+        expected_digest: str | None = None,
+        require_backup: bool = False,
+    ) -> ImportResult:
+        # Read once: validation and posting must use the same bytes, even if the
+        # selected file is replaced while the required backup is being written.
+        path = Path(path)
+        try:
+            content = path.read_bytes()
+        except OSError as error:
+            raise CSVFileError(f"Could not read CSV: {error}.") from error
+        if expected_digest is not None and hashlib.sha256(content).hexdigest() != expected_digest:
+            raise CSVChanged("The selected CSV changed. Preview it again before importing.")
+        raw, errors, warnings = self._read_csv(
+            path, "parts", {"part_number", "description"}, content
+        )
+        preview = self._preview_rows("parts", path, raw, errors, warnings, self._validate_part_row)
         self._require_importable(preview)
-        rows = [
-            self._part_import_row(row)
-            for _, row in self._read_csv(path, "parts", {"part_number", "description"})[0]
-        ]
-        backup = self._pre_import_backup()
+        rows = [self._part_import_row(row) for _, row in raw]
+        if require_backup:
+            backup = write_backup(self.db_path, self.backup_dir, reason="pre-import")
+            if backup is None:
+                raise OSError("The selected database could not be backed up. Import blocked.")
+            try:
+                verify_backup(backup)
+            except Exception:
+                backup.unlink(missing_ok=True)
+                raise
+            prune_backups(self.backup_dir)
+        else:
+            backup = self._pre_import_backup()
         self.store.import_parts(rows, notify=True)
         return ImportResult("parts", len(rows), str(backup or ""))
 
@@ -238,13 +281,18 @@ class ImportExportService:
         path: Path,
         kind: str,
         required: set[str],
+        content: bytes | None = None,
     ) -> tuple[list[tuple[int, dict[str, str]]], list[CSVRowIssue], list[CSVRowIssue]]:
         target = Path(path)
         errors: list[CSVRowIssue] = []
         warnings: list[CSVRowIssue] = []
         rows: list[tuple[int, dict[str, str]]] = []
         try:
-            with target.open("r", encoding="utf-8-sig", newline="") as handle:
+            with (
+                target.open("r", encoding="utf-8-sig", newline="")
+                if content is None
+                else StringIO(content.decode("utf-8-sig"), newline="")
+            ) as handle:
                 reader = csv.DictReader(handle)
                 if reader.fieldnames is None:
                     return [], [CSVRowIssue(1, "", "CSV file is empty.")], []
@@ -267,7 +315,7 @@ class ImportExportService:
                     for original, header in zip(reader.fieldnames, headers, strict=True):
                         normalized[header] = (raw.get(original) or "").strip()
                     rows.append((row_number, normalized))
-        except OSError as exc:
+        except (OSError, UnicodeError, csv.Error) as exc:
             return [], [CSVRowIssue(1, "", f"Could not read CSV: {exc}.")], []
         if not rows and not errors:
             errors.append(CSVRowIssue(1, "", "CSV file has no data rows."))

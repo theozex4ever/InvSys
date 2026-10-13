@@ -25,7 +25,7 @@ export function settingsWorkflow(getAPI: () => API) {
     if (pending) lockControls();
   }
   function lockControls() {
-    document.querySelectorAll<HTMLButtonElement>('#settings button').forEach(button => { button.disabled = true; });
+    document.querySelectorAll<HTMLButtonElement>('#settings-data button, #settings-refresh').forEach(button => { button.disabled = true; });
   }
   async function load() {
     const current = ++version;
