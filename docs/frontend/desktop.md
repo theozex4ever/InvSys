@@ -1,7 +1,7 @@
 # Live desktop inventory workflows
 
 The pywebview frontend covers the dashboard, Parts catalog, Receive, standard and
-nested BOM Ship, Move, Adjust Count, BOM authoring, a read-only BOM explorer, History, and Settings backups, using
+nested BOM Ship, Move, Adjust Count, BOM authoring, a read-only BOM explorer, History, and Settings CSV exports/backups, using
 [approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
@@ -58,6 +58,13 @@ requests (recorded, not opened, so the smoke never spawns a file manager), and s
 failed folder request as an error. It reopens the backup read-only. It verifies the complete stock/audit result through a reopened store. Use a disposable file: these are real writes. Repeat the command to check
 startup backups and restart reads. No seed inventory is inserted by the launcher.
 
+The export smoke uses Settings to write all five CSV kinds, checks actual headers,
+row counts, Lot and audit metadata and persisted BOM shipment summaries, and confirms
+that every file stays in the selected inventory's export folder. It checks duplicate
+clicks, navigation during an export, a real blocked export directory, uncertain-response
+feedback and unchanged inventory. Native Enter, Tab and Shift+Tab exercise exports in
+both themes at the minimum window size; folder opening is recorded by the smoke host.
+
 The retained smoke also exercises Move on its own disposable `DESKTOP-MOVE` Part:
 drafts across navigation, same-Location rejection, duplicate clicks, Python
 before/after quantities, a lost response with a failed recovery read, stale-stock
@@ -65,7 +72,7 @@ rejection and contextual entry, checking persisted balances and paired records.
 It also exercises contextual part-to-History navigation, failed
 History detail retry, explicit refresh after another operator's receipt, and
 uncertain BOM reconciliation, including a failed recovery read. It uses real Qt
-keyboard events for all four dialogs and captures seven pages and dialogs in both
+keyboard events for all four dialogs and captures eight pages and dialogs in both
 themes at four sizes to `smoke-captures/` beside the database. On Linux, use
 `QT_API=pyside6 QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion`
 to select PySide6 and exercise reduced-motion behavior. The smoke also explores the
@@ -134,7 +141,7 @@ The bridge exposes dashboard, preferences, save operator/theme, locations,
 part search/detail/create/edit/active state, BOM definition read/save/remove, stock context, receive, standard shipment preview,
 standard ship, BOM preview/confirmation, Move preview/confirmation, Adjust Count
 preview/submission, read-only BOM exploration, searchable paged History, transaction/shipment inspection,
-and Settings backup/folder utilities. Stock context contains current part/lot/location balances,
+and Settings CSV export/backup/folder utilities. Stock context contains current part/lot/location balances,
 BOM presence, and that part's immutable transactions and shipments for recovery. It validates input shapes/types before using the store
 and returns `{ok: true, data}` or `{ok: false, error: {code, message}}`. Stable
 codes: `VALIDATION`, `DUPLICATE`, `NOT_FOUND`, `INTERNAL`, `PLAN_CHANGED` for a rejected BOM allocation,
@@ -289,7 +296,7 @@ rejection; success clears count and reason and keeps a persistent result. A lost
 response locks the draft until the operator reads current stock and audit records
 and explicitly verifies completion or absence; a failed recovery read keeps the lock.
 
-## Settings: backups and folders
+## Settings: CSV exports, backups and folders
 
 Settings is the shared destination for operational utilities. It shows the database
 and the backup, export and log folders chosen at launch: source launch uses `data/`,
@@ -308,13 +315,23 @@ and the backup, export and log folders chosen at launch: source launch uses `dat
   or `os.startfile`) to show the folder for the selected inventory, creating it when
   absent. Only those two named folders can be requested. If the opener is missing or
   fails, the error is shown instead of a success message.
+- **Export Parts / Inventory / Transactions / Shipments / BOM definitions** writes
+  one UTF-8 CSV using the existing export service. Files use the existing
+  `<kind>_YYYYMMDD_HHMMSS.csv` naming (the same kind within one second replaces that
+  filename) and fields, including per-Lot balances, transaction metadata and
+  persisted shipment component summaries. Exporting does not change inventory.
+  Settings shows the row count, full file path and destination; **Open exports
+  folder** opens that destination. All utility buttons are disabled during the
+  request, including when navigating away and back. File failures display an error;
+  after an uncertain response, inspect the exports folder before retrying. An
+  interrupted write can leave an incomplete file; it is never reported as a success.
 
 Python wiring: `UtilityContext` (`inventory_control/utilities.py`) is the launch-aware
 set of paths; `DesktopHost` is the narrow native interface (`open_folder`,
 `choose_file`) with `NativeHost` as the pywebview implementation. `InventoryBridge`
-accepts both and exposes `utility_context`, `create_backup` and `open_folder`.
+accepts both and exposes `utility_context`, `create_backup`, `export_csv` and `open_folder`.
 `choose_file` returns the chosen path or `None` on cancel and is the seam for the
-CSV import/export slices; it is not exposed to the page on its own. The bridge keeps
+CSV import slice; it is not exposed to the page on its own. The bridge keeps
 `_utilities` and `_host` private because pywebview publishes every public attribute.
 The frontend side is `frontend/src/settings.ts`; later utilities add sections there.
 
@@ -343,8 +360,7 @@ displaced database files back together.
 ## Deferred workflows
 
 The shell directs operators to the original application for
-location administration and CSV
-import/export. Backup restoration requires closing the app as described above.
+location administration and CSV import. Backup restoration requires closing the app as described above.
 Global search is part search only.
 
 Not yet validated: Windows/macOS packages and installers, screen-reader review,
