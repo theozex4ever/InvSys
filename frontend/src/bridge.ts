@@ -20,6 +20,16 @@ export interface BOMLine { part_number: string; lot_number: string; location: st
 export interface BOMPlan { part_number: string; quantity: number; location: string; requirements: BOMRequirement[]; lines: BOMLine[]; ready: boolean }
 export type BOMRequest = Omit<ShipmentRequest, 'lot_number'>;
 export interface BOMPreview { request: BOMRequest; plan: BOMPlan; review_id: string; buildable: number; context: StockContext }
+export type CapacityLevel = 'critical' | 'low' | 'ready';
+export interface BOMExploreNode {
+  part_number: string; description: string; quantity_required: number; quantity_per_parent: number;
+  stock_available: number; capacity: number; level: CapacityLevel; children: BOMExploreNode[];
+}
+export interface BOMExploreRequest { part_number: string; quantity: number; location: string }
+export interface BOMExploration {
+  request: BOMExploreRequest; has_bom: boolean; tree: BOMExploreNode; requirements: BOMRequirement[];
+  buildable: number; level: CapacityLevel; shortage_count: number;
+}
 export interface BOMLink { part_number: string; description: string; active: boolean; quantity_per: number; has_bom: boolean }
 export interface BOMDefinition { part: { part_number: string; description: string; active: boolean; has_bom: boolean }; components: BOMLink[]; used_in: BOMLink[] }
 export interface BOMComponentSave { parent: string; component: string; quantity_per: number }
@@ -69,6 +79,7 @@ interface API {
   shipment_detail(number: string): Promise<Response<ShipmentDetail>>;
   preview_bom_ship(request: BOMRequest): Promise<Response<BOMPreview>>;
   ship_bom(request: BOMRequest & { review_id: string }): Promise<Response<{ shipment_number: string; context: StockContext }>>;
+  explore_bom(request: BOMExploreRequest): Promise<Response<BOMExploration>>;
   bom_definition(number: string): Promise<Response<BOMDefinition>>;
   save_bom_component(request: BOMComponentSave): Promise<Response<{ action: 'added' | 'updated'; definition: BOMDefinition }>>;
   remove_bom_component(request: BOMComponentRemoval): Promise<Response<{ definition: BOMDefinition }>>;
@@ -102,7 +113,7 @@ export function ready(): Promise<API> {
   return new Promise((resolve, reject) => {
     const loaded = () => {
       const api = window.pywebview?.api;
-      if (api && ['dashboard', 'preferences', 'save_operator', 'save_theme', 'locations', 'search_parts', 'part_detail', 'create_part', 'update_part', 'set_part_active', 'stock_context', 'receive', 'preview_ship', 'ship', 'history', 'history_detail', 'shipment_detail', 'preview_bom_ship', 'ship_bom', 'bom_definition', 'save_bom_component', 'remove_bom_component', 'preview_count', 'adjust_count', 'preview_move', 'move', 'utility_context', 'create_backup', 'open_folder'].every(method => typeof api[method as keyof API] === 'function')) { cleanup(); resolve(api); }
+      if (api && ['dashboard', 'preferences', 'save_operator', 'save_theme', 'locations', 'search_parts', 'part_detail', 'create_part', 'update_part', 'set_part_active', 'stock_context', 'receive', 'preview_ship', 'ship', 'history', 'history_detail', 'shipment_detail', 'preview_bom_ship', 'ship_bom', 'bom_definition', 'save_bom_component', 'remove_bom_component', 'preview_count', 'adjust_count', 'preview_move', 'move', 'explore_bom', 'utility_context', 'create_backup', 'open_folder'].every(method => typeof api[method as keyof API] === 'function')) { cleanup(); resolve(api); }
     };
     const cleanup = () => { clearTimeout(timer); window.removeEventListener('pywebviewready', loaded); };
     const timer = setTimeout(() => {

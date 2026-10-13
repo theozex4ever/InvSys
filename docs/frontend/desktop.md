@@ -1,7 +1,7 @@
 # Live desktop inventory workflows
 
 The pywebview frontend covers the dashboard, Parts catalog, Receive, standard and
-nested BOM Ship, Move, Adjust Count, BOM authoring, History, and Settings backups, using
+nested BOM Ship, Move, Adjust Count, BOM authoring, a read-only BOM explorer, History, and Settings backups, using
 [approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
@@ -65,18 +65,20 @@ rejection and contextual entry, checking persisted balances and paired records.
 It also exercises contextual part-to-History navigation, failed
 History detail retry, explicit refresh after another operator's receipt, and
 uncertain BOM reconciliation, including a failed recovery read. It uses real Qt
-keyboard events for all four dialogs and captures six pages and dialogs in both
+keyboard events for all four dialogs and captures seven pages and dialogs in both
 themes at four sizes to `smoke-captures/` beside the database. On Linux, use
 `QT_API=pyside6 QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion`
-to select PySide6 and exercise reduced-motion behavior.
+to select PySide6 and exercise reduced-motion behavior. The smoke also explores the
+disposable nested BOM, compares the graph with `explore_bom`, fits/zooms/selects,
+fails and refreshes a read, and checks that exploring adds no transactions.
 
 Built assets load directly over `file://` with `http_server=False`. An explicit
 file URI avoids pywebview automatically starting a server for a bare local path
 ([pywebview usage](https://pywebview.flowrl.com/guide/usage.html)). The build uses
 relative local assets ([Vite build documentation](https://vite.dev/guide/build.html)).
 There is no Vite process, HTTP server, CDN, or network inventory service required.
-The combined BOM authoring and Adjust Count build uses about 26.2 KB gzipped
-JavaScript; its asset budget is 30 KB (CSS 8 KB, HTML 1 KB).
+The combined BOM authoring, Adjust Count and BOM explorer build uses about 30.6 KB
+gzipped JavaScript; its asset budget is 32 KB (CSS 8 KB, HTML 1 KB).
 
 ## Basic package proof
 
@@ -131,7 +133,7 @@ History record using its existing database transaction ID.
 The bridge exposes dashboard, preferences, save operator/theme, locations,
 part search/detail/create/edit/active state, BOM definition read/save/remove, stock context, receive, standard shipment preview,
 standard ship, BOM preview/confirmation, Move preview/confirmation, Adjust Count
-preview/submission, searchable paged History, transaction/shipment inspection,
+preview/submission, read-only BOM exploration, searchable paged History, transaction/shipment inspection,
 and Settings backup/folder utilities. Stock context contains current part/lot/location balances,
 BOM presence, and that part's immutable transactions and shipments for recovery. It validates input shapes/types before using the store
 and returns `{ok: true, data}` or `{ok: false, error: {code, message}}`. Stable
@@ -169,6 +171,28 @@ case folding and the existing sort order.
 The read snapshot does not reserve stock or authorize a later shipment; mutations
 still validate at submission. The original PySide6 screens retain their existing
 read paths. No schema or inventory rules changed.
+
+## BOM explorer
+
+The BOM explorer page shows a nested BOM for a chosen assembly, Location and build
+quantity. `explore_bom` returns, from one read snapshot, the nested tree (each node
+with required quantity, quantity per parent, stock at the Location, Build capacity
+and capacity level), the Leaf requirements aggregated across all paths with their
+shortages, overall Build capacity, and the count of short materials. The tree is a
+phantom view: assembly stock is shown but never consumed. Capacity is Critical at
+100 or fewer final builds, Low through 500, otherwise Ready; this planning warning
+is independent of shortages for the requested quantity. Shortages describe stock only;
+shipping eligibility (for example an inactive assembly) is decided at shipment review. A part without a BOM is
+returned as a single node. Inactive root parts can be explored; inactive
+components, circular definitions and BOMs expanding past 5,000 nodes return a
+`VALIDATION` error instead of a graph. Exploring never writes inventory.
+
+The graph is hand-built SVG (no graph library). Drag or the arrow keys pan the
+focused graph, Ctrl + wheel or +/− zoom, 0 or Fit fits, and arrow keys on a node move
+between parent, child and siblings. Status is shown as text and a glyph with a
+distinct border style, not by colour alone. A failed or stale read replaces the
+graph with the error; Refresh rereads authoritative data. Advanced focus/collapse,
+breadcrumbs and command search remain deferred.
 
 ## Move
 
@@ -319,7 +343,7 @@ displaced database files back together.
 ## Deferred workflows
 
 The shell directs operators to the original application for
-location administration, BOM exploration, and CSV
+location administration and CSV
 import/export. Backup restoration requires closing the app as described above.
 Global search is part search only.
 

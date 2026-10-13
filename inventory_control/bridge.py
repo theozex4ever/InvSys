@@ -406,6 +406,24 @@ class InventoryBridge:
 
         return self._respond(ship)
 
+    def explore_bom(self, request: Any) -> dict[str, Any]:
+        """Read-only nested BOM, Leaf requirements and Build capacity for a Location."""
+
+        def explore() -> dict[str, Any]:
+            fields = self._request(request, {"part_number", "quantity", "location"})
+            number = self._text(fields.get("part_number"), "Part number").upper()
+            location = self._text(fields.get("location"), "Location")
+            quantity = fields.get("quantity")
+            if type(quantity) is not int or not 0 < quantity <= 2**31 - 1:
+                raise ValueError("Quantity must be a whole number between 1 and 2147483647.")
+            exploration = self._store.explore_bom(number, quantity, location)
+            return {
+                "request": {"part_number": number, "quantity": quantity, "location": location},
+                **asdict(exploration),
+            }
+
+        return self._respond(explore)
+
     def _bom_request(self, request: Any, *, check_inventory: bool = True) -> dict[str, Any]:
         fields = self._request(
             request,

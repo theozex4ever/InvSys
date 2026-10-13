@@ -143,6 +143,44 @@ class BOMTreeNode:
     children: list["BOMTreeNode"] = field(default_factory=list)
 
 
+CRITICAL_BUILD_LIMIT = 100
+LOW_BUILD_LIMIT = 500
+
+
+def capacity_level(buildable: int) -> str:
+    """Build-capacity warning, separate from any requested-quantity shortage."""
+    if buildable <= CRITICAL_BUILD_LIMIT:
+        return "critical"
+    if buildable <= LOW_BUILD_LIMIT:
+        return "low"
+    return "ready"
+
+
+@dataclass
+class BOMExploreNode:
+    part_number: str
+    description: str
+    quantity_required: int
+    quantity_per_parent: int
+    stock_available: int
+    capacity: int
+    level: str
+    children: list["BOMExploreNode"] = field(default_factory=list)
+
+
+@dataclass
+class BOMExploration:
+    part_number: str
+    quantity: int
+    location: str
+    has_bom: bool
+    tree: BOMExploreNode
+    requirements: list["BOMRequirement"]
+    buildable: int
+    level: str
+    shortage_count: int
+
+
 @dataclass
 class BOMAvailability:
     tree: BOMTreeNode

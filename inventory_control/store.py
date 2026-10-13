@@ -16,6 +16,8 @@ from inventory_control.migrations import bootstrap_database
 from inventory_control.models import (
     BOMAvailability,
     BOMComponent,
+    BOMExploration,
+    BOMExploreNode,
     BOMLotPlanLine,
     BOMRequirement,
     BOMShipmentPlan,
@@ -30,6 +32,7 @@ from inventory_control.models import (
     Shipment,
     StandardShipmentReview,
     Transaction,
+    capacity_level,
 )
 from inventory_control.orm import (
     BOMComponentRecord,
@@ -44,6 +47,9 @@ from inventory_control.orm import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+MAX_EXPLORE_NODES = 5000
 
 
 class ShipmentReviewNotFound(ValueError):
@@ -412,6 +418,50 @@ class InventoryStore:
             if context is None:
                 raise ShipmentReviewNotFound("Part not found.")
             return BOMShipmentReview(plan, availability.buildable, context)
+
+    def explore_bom(self, part_number: str, qty: int, location: str) -> BOMExploration:
+        """Nested structure, Leaf requirements and Build capacity from one snapshot."""
+        number = self._normalize_part_number(part_number)
+        with self._read_snapshot() as session:
+            part = self._part(session, number)
+            if part is None:
+                raise ShipmentReviewNotFound("Part not found.")
+            loc = self._require_location(session, location)
+            if qty <= 0:
+                raise ValueError("Quantity must be greater than zero.")
+            availability = self._bom_availability_in_session(
+                session, part, qty, loc, node_limit=MAX_EXPLORE_NODES
+            )
+
+            def convert(node: BOMTreeNode) -> BOMExploreNode:
+                children = [convert(child) for child in node.children]
+                capacity = (
+                    min(child.capacity for child in children)
+                    if children
+                    else availability.capacities[node.part_number]
+                )
+                return BOMExploreNode(
+                    node.part_number,
+                    node.description,
+                    node.quantity_required,
+                    node.quantity_per_parent,
+                    node.stock_available,
+                    capacity,
+                    capacity_level(capacity),
+                    children,
+                )
+
+            return BOMExploration(
+                part.part_number,
+                qty,
+                loc.name,
+                bool(availability.tree.children),
+                convert(availability.tree),
+                availability.requirements,
+                availability.buildable,
+                capacity_level(availability.buildable),
+                sum(1 for req in availability.requirements if req.shortage > 0),
+            )
 
     def review_move(
         self, part_number: str, qty: int, source: str, target: str, lot_number: str
@@ -1455,11 +1505,24 @@ class InventoryStore:
         return False
 
     def _bom_availability_in_session(
-        self, session: Session, part: PartRecord, qty: int, location: LocationRecord
+        self,
+        session: Session,
+        part: PartRecord,
+        qty: int,
+        location: LocationRecord,
+        node_limit: int | None = None,
     ) -> BOMAvailability:
         required: dict[str, int] = {}
         parts: dict[str, PartRecord] = {}
-        tree = self._bom_structure(session, part, qty, 1, required, parts)
+        tree = self._bom_structure(
+            session,
+            part,
+            qty,
+            1,
+            required,
+            parts,
+            node_budget=None if node_limit is None else [node_limit],
+        )
         stock_by_id = dict(
             session.execute(
                 select(InventoryBalanceRecord.part_id, func.sum(InventoryBalanceRecord.quantity))
@@ -1560,7 +1623,19 @@ class InventoryStore:
         quantity_per_parent: int,
         requirements: dict[str, int],
         parts: dict[str, PartRecord],
+        ancestors: tuple[str, ...] = (),
+        node_budget: list[int] | None = None,
     ) -> BOMTreeNode:
+        if part.part_number in ancestors:
+            raise ValueError(
+                f"BOM contains a circular reference at {part.part_number}. Fix the BOM definition."
+            )
+        if node_budget is not None:
+            node_budget[0] -= 1
+            if node_budget[0] < 0:
+                raise ValueError(
+                    "This BOM is too large to display once fully expanded. Explore a smaller assembly."
+                )
         parts[part.part_number] = part
         children = session.scalars(
             select(BOMComponentRecord)
@@ -1576,6 +1651,8 @@ class InventoryStore:
                 child.quantity_per,
                 requirements,
                 parts,
+                (*ancestors, part.part_number),
+                node_budget,
             )
             for child in children
         ]

@@ -1,24 +1,22 @@
+import { $, esc, status, message } from './presentation';
 import './styles.css';
 import { bomWorkflow } from './bom';
 import { historyWorkflow } from './history';
 import { settingsWorkflow } from './settings';
 import { stockWorkflows } from './stock';
+import { bomExploreWorkflow } from './bom-explore';
 import { adjustWorkflow } from './adjust';
 import { partEditor } from './partEdit';
 import { moveWorkflow } from './move';
-import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History, ListTree, Settings } from 'lucide';
+import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History, ListTree, Network, Settings } from 'lucide';
 import { ready, read, RequestError, type Search, type Part, type PartDetail, type Dashboard } from './bridge';
 
-const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search: SearchIcon, Check, History, ListTree, Settings } });
+const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search: SearchIcon, Check, History, ListTree, Network, Settings } });
 const icon = (name: string) => `<i data-lucide="${name}" aria-hidden="true"></i>`;
-const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
-const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete the request.';
-const status = (text: string, error = false) => `<div class="status ${error ? 'error' : ''}" role="${error ? 'alert' : 'status'}">${esc(text)}</div>`;
 const badges = (part: Part) => `<span class="badge ${part.active ? 'good' : 'neutral'}">${part.active ? 'Active' : 'Inactive'}</span> ${part.low_stock ? `<span class="badge warn">${part.quantity === 0 ? 'Low stock · No stock' : 'Low stock'}</span>` : ''}`;
 const search: Search = { query: '', status: 'all', low_stock: false, sort: 'part_number', descending: false };
 let api: Awaited<ReturnType<typeof ready>>;
-let page: 'dashboard' | 'parts' | 'bom' | 'receive' | 'ship' | 'move' | 'adjust' | 'history' | 'settings' = 'dashboard';
+let page: 'dashboard' | 'parts' | 'bom' | 'bom-explore' | 'receive' | 'ship' | 'move' | 'adjust' | 'history' | 'settings' = 'dashboard';
 let searchVersion = 0;
 let dashboardVersion = 0;
 let detailVersion = 0;
@@ -34,7 +32,7 @@ let theme: 'light' | 'dark' = 'light';
 
 $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar" aria-label="Main navigation">
 <div class="brand"><div class="brand-mark">${icon('boxes')}</div><div><strong>INVSYS</strong><small>INVENTORY CONTROL</small></div></div>
-<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><button class="nav-button" data-page="bom" aria-label="BOM">${icon('list-tree')}<span>BOM</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button><button class="nav-button" data-page="move" aria-label="Move stock">${icon('arrow-left-right')}<span>Move</span></button><button class="nav-button" data-page="adjust" aria-label="Adjust count">${icon('arrow-left-right')}<span>Adjust</span></button><button class="nav-button" data-page="history" aria-label="History">${icon('history')}<span>History</span></button><div class="nav-group eyebrow">System</div><button class="nav-button" data-page="settings" aria-label="Settings">${icon('settings')}<span>Settings</span></button></nav>
+<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><button class="nav-button" data-page="bom" aria-label="BOM">${icon('list-tree')}<span>BOM</span></button><button class="nav-button" data-page="bom-explore" aria-label="BOM explorer">${icon('network')}<span>BOM explorer</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button><button class="nav-button" data-page="move" aria-label="Move stock">${icon('arrow-left-right')}<span>Move</span></button><button class="nav-button" data-page="adjust" aria-label="Adjust count">${icon('arrow-left-right')}<span>Adjust</span></button><button class="nav-button" data-page="history" aria-label="History">${icon('history')}<span>History</span></button><div class="nav-group eyebrow">System</div><button class="nav-button" data-page="settings" aria-label="Settings">${icon('settings')}<span>Settings</span></button></nav>
 
 <div class="sidebar-bottom"><button id="theme" class="nav-button" disabled aria-label="Switch to dark mode">${icon('moon')}<span>Dark mode</span></button><div class="local-status">STORED ON THIS DEVICE</div></div></aside>
 <div class="workspace"><header class="topbar"><div class="breadcrumb">Workspace / <strong id="page-name">Dashboard</strong></div>
@@ -55,6 +53,7 @@ $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar" aria-label=
 <div id="create-error" role="alert"></div><button id="create-submit" class="btn primary">Create part</button></form></dialog>`;
 icons();
 const history = historyWorkflow(() => api);
+const bomExplore = bomExploreWorkflow(() => api, part => { navigate('history', false); void history.open(part); $('#history-query').focus(); });
 const bom = bomWorkflow(() => api);
 const settings = settingsWorkflow(() => api);
 const stockChanged = async () => { await Promise.all([loadParts(), loadDashboard(), history.load()]); };
@@ -85,18 +84,19 @@ function notice(text: string, error = false) {
 }
 function navigate(next: typeof page, refresh = true) {
   if (page === 'history' && page !== next) history.leave();
+  if (page === 'bom-explore' && page !== next) bomExplore.leave();
   if (page === 'bom' && page !== next) bom.leave();
   if ((page === 'receive' || page === 'ship') && page !== next) stock.leave();
   if (page === 'adjust' && page !== next) adjust.leave();
   if (page === 'move' && page !== next) move.leave();
   page = next;
-  for (const name of ['dashboard', 'parts', 'bom', 'receive', 'ship', 'move', 'adjust', 'history', 'settings']) $(`#${name}`).hidden = name !== next;
-  $('#page-name').textContent = next === 'bom' ? 'BOM' : next.charAt(0).toUpperCase() + next.slice(1);
+  for (const name of ['dashboard', 'parts', 'bom', 'bom-explore', 'receive', 'ship', 'move', 'adjust', 'history', 'settings']) $(`#${name}`).hidden = name !== next;
+  $('#page-name').textContent = next === 'bom' ? 'BOM' : next === 'bom-explore' ? 'BOM explorer' : next.charAt(0).toUpperCase() + next.slice(1);
   document.querySelectorAll<HTMLElement>('[data-page]').forEach(button => {
     button.classList.toggle('active', button.dataset.page === next);
     if (button.dataset.page === next) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
-  if (api && refresh) { if (next === 'receive' || next === 'ship') void stock.open(next); else if (next === 'adjust') void adjust.open(); else if (next === 'bom') void bom.open(); else if (next === 'settings') void settings.open(); else if (next === 'move') void move.open(); else void (next === 'history' ? history.open() : next === 'dashboard' ? loadDashboard() : loadParts()); }
+  if (api && refresh) { if (next === 'receive' || next === 'ship') void stock.open(next); else if (next === 'adjust') void adjust.open(); else if (next === 'bom') void bom.open(); else if (next === 'settings') void settings.open(); else if (next === 'move') void move.open(); else void (next === 'history' ? history.open() : next === 'bom-explore' ? bomExplore.open() : next === 'dashboard' ? loadDashboard() : loadParts()); }
 }
 async function loadDashboard() {
   const version = ++dashboardVersion;

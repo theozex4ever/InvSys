@@ -45,10 +45,10 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 23 | BOM direct component add/update/remove | Equivalent | `test_bridge_bom_authoring.py`; native BOM authoring smoke |
 | 24 | Reject self-reference, cycles and invalid quantities | Equivalent | Store tests retained; bridge authoring tests; native rejection smoke preserves the draft |
 | 25 | Existing component updates quantity; confirm removal | Improved | Adding an existing component updates it without row selection; removal needs bridge `confirmed` and a native dialog |
-| 26 | Nested graph pan, zoom, fit | Missing | Original flowchart exists |
-| 27 | Location/quantity availability and shortages | Missing | Original BOM view; shipment preview covers shipping only |
-| 28 | Shared leaves aggregated in Build capacity | Missing | Store/BOM tests; dedicated explorer absent |
-| 29 | Critical <=100, low 101–500, separate from shortage | Missing | Original flowchart; shipment preview is not explorer parity |
+| 26 | Nested graph pan, zoom, fit | Equivalent | BOM explorer; `test_bridge_bom_explore.py`; native explorer smoke |
+| 27 | Location/quantity availability and shortages | Equivalent | `explore_bom` bridge tests; native explorer smoke |
+| 28 | Shared leaves aggregated in Build capacity | Equivalent | `explore_bom` shared-leaf bridge test |
+| 29 | Critical <=100, low 101–500, separate from shortage | Equivalent | Boundary and separation bridge tests; native explorer smoke |
 | 30 | Search/page immutable History; exact record inspection | Missing | Paging and record/shipment drawers Improved; original Notes, Location, timestamp and transaction-type text search plus column sorting Missing; A16/A17 block retirement |
 | 31 | Historical per-Lot consumption survives definition edits | Improved | Bridge History and acceptance fixture restart tests |
 | 32 | Export Parts, Inventory, Transactions, Shipments, BOM | Missing | Original Export All / import-export service |

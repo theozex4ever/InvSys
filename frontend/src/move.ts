@@ -1,9 +1,7 @@
+import { pair, esc, message } from './presentation';
 import { read, RequestError, type ready, type MoveRequest, type MovePreview, type StockContext } from './bridge';
 
 type API = Awaited<ReturnType<typeof ready>>;
-const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete the request.';
-const pair = (label: string, value: unknown) => `<div class="detail-pair"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
 
 // Move a Lot between Locations. Self-contained so sibling stock workflows can copy the lifecycle:
 // drafts live in the hidden section, availability is re-read on return, one request at a time,

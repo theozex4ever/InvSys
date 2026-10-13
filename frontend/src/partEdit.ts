@@ -1,10 +1,7 @@
+import { optionalPair as pair, $, esc, status, message } from './presentation';
 import { read, RequestError, type ready, type PartDetail, type UpdatePart } from './bridge';
 
 type API = Awaited<ReturnType<typeof ready>>;
-const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const status = (text: string, error = false) => `<div class="status ${error ? 'error' : ''}" role="${error ? 'alert' : 'status'}">${esc(text)}</div>`;
-const pair = (label: string, value: unknown) => `<div class="detail-pair"><span>${esc(label)}</span><strong>${esc(value || '—')}</strong></div>`;
-const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete the request.';
 const ambiguous = (error: unknown) => error instanceof RequestError && ['TRANSPORT', 'INTERNAL'].includes(error.code);
 
 interface Hooks {
@@ -17,7 +14,6 @@ interface Pending { title: string; submitted: string; resumeLabel: string; appli
 
 /** Edit, deactivate and reactivate Parts inside the Part drawer. Python stays the authority. */
 export function partEditor(getAPI: () => API, hooks: Hooks) {
-  const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
   $('#app').insertAdjacentHTML('afterend', `<dialog id="confirm-dialog" aria-labelledby="confirm-title"><div class="dialog-heading"><h2 id="confirm-title"></h2></div><div class="dialog-body"><p id="confirm-body" class="description"></p><div class="dialog-actions"><button id="confirm-cancel" class="btn" type="button"></button><button id="confirm-accept" class="btn primary" type="button"></button></div></div></dialog>`);
   let editing: PartDetail | null = null;
   let busy = false;

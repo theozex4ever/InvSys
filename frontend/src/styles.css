@@ -214,6 +214,42 @@ dialog.drawer[open] { animation-name: drawer-in; }
 @keyframes surface-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes drawer-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
 @media (max-width: 720px) { .attention-row { grid-template-columns: minmax(0,1fr) 100px 34px; padding: 16px; gap: 8px; } .global-search kbd { display: none; } }
+/* BOM explorer: read-only graph. Status is conveyed by text, glyph and border style, not colour alone. */
+.bomx-form { padding: 14px 18px; display: grid; grid-template-columns: minmax(180px, 2fr) minmax(140px, 1fr) minmax(120px, 1fr) auto; gap: 16px; align-items: end; margin-bottom: 20px; }
+.bomx-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.bomx-summary .panel-body { padding: 14px 18px; }
+.bomx-figure { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+.bomx-figure strong { font-size: 26px; letter-spacing: -.5px; }
+.bomx-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; margin-bottom: 20px; }
+.bomx-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bomx-tools output { min-width: 48px; text-align: center; font-size: 12px; font-weight: 600; }
+.bomx-viewport { height: clamp(320px, 56vh, 640px); overflow: hidden; background: var(--surface-soft); border-block: 1px solid var(--border); cursor: grab; touch-action: none; user-select: none; }
+.bomx-viewport.dragging { cursor: grabbing; }
+.bomx-viewport svg { display: block; }
+.bomx-hint { padding: 12px 20px; }
+.bomx-edge { fill: none; stroke: var(--border-control); stroke-width: 2; }
+.bomx-edge.level-critical { stroke: var(--danger); }
+.bomx-edge.level-low { stroke: var(--warning); stroke-dasharray: 6 4; }
+.bomx-edge.level-ready { stroke: var(--success); }
+.bomx-qty { font-size: 12px; font-weight: 700; fill: var(--secondary); }
+.bomx-node { cursor: pointer; outline: none; }
+.bomx-node text { fill: var(--text); font-size: 12px; pointer-events: none; }
+.bomx-card { fill: var(--surface); stroke: var(--border-control); stroke-width: 1.5; }
+.bomx-node.level-critical .bomx-card { fill: var(--danger-soft); stroke: var(--danger); stroke-width: 3; }
+.bomx-node.level-low .bomx-card { fill: var(--warning-soft); stroke: var(--warning); stroke-dasharray: 7 4; }
+.bomx-node.level-ready .bomx-card { fill: var(--success-soft); stroke: var(--success); }
+.bomx-node.level-critical .bomx-accent, .bomx-node.level-critical .bomx-level { fill: var(--danger); }
+.bomx-node.level-low .bomx-accent, .bomx-node.level-low .bomx-level { fill: var(--warning); }
+.bomx-node.level-ready .bomx-accent, .bomx-node.level-ready .bomx-level { fill: var(--success); }
+.bomx-node .bomx-kind { fill: var(--secondary); font-size: 9px; font-weight: 700; letter-spacing: 1.2px; }
+.bomx-node .bomx-part { font-size: 14px; font-weight: 700; }
+.bomx-node .bomx-desc { fill: var(--secondary); }
+.bomx-node .bomx-level { font-weight: 700; }
+.bomx-node .bomx-stock.short { font-weight: 700; }
+.bomx-node:hover .bomx-card, .bomx-node.selected .bomx-card { stroke: var(--accent); stroke-width: 4; stroke-dasharray: none; }
+.bomx-node:focus-visible .bomx-card { stroke: var(--cyan); stroke-width: 5; stroke-dasharray: none; }
+@media (max-width: 1100px) { .bomx-layout { grid-template-columns: 1fr; } .bomx-form { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .bomx-form { grid-template-columns: 1fr; } .bomx-viewport { height: clamp(260px, 50vh, 480px); } }
 #settings .panel-head { flex-wrap: wrap; }
 #settings .settings-panel { margin-top: 20px; }
 #settings-result:not(:empty) { margin-bottom: 20px; }

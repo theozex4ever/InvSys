@@ -1,10 +1,8 @@
+import { pair, esc, message } from './presentation';
 import { read, RequestError, type ready, type Receipt, type ShipmentRequest, type ShipmentPreview, type BOMPreview, type StockContext } from './bridge';
 
 type Mode = 'receive' | 'ship';
 type API = Awaited<ReturnType<typeof ready>>;
-const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete the request.';
-const pair = (label: string, value: unknown) => `<div class="detail-pair"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
 
 export function stockWorkflows(getAPI: () => API, operator: () => string, changed: () => Promise<void>, toast: (text: string, summary?: string) => void) {
   const states = {
