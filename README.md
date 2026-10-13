@@ -28,6 +28,24 @@ The sidebar groups related work into **Catalog** (Parts and BOM) and **Stock** (
 
 ---
 
+## Screenshots
+
+The newer [pywebview desktop frontend](#optional-live-desktop-frontend) shown below uses sample inventory in a temporary database.
+
+**Dashboard** — low-stock alerts, inventory summaries, and quick actions.
+
+![Desktop frontend dashboard showing two low-stock alerts, inventory summaries, and quick actions](docs/screenshots/dashboard.png)
+
+**Parts catalog** — searchable parts, stock balances, minimum quantities, and status filters.
+
+![Desktop frontend parts catalog showing sample assemblies and components with stock levels and minimum quantities](docs/screenshots/parts-catalog.png)
+
+**BOM explorer** — nested assembly structure, build capacity, and component shortages.
+
+![Desktop frontend BOM explorer showing a sensor kit with 20 builds available and a cable shortage for 25 requested builds](docs/screenshots/bom-flowchart.png)
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
