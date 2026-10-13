@@ -25,7 +25,7 @@ scenario, approved workload and retirement evidence gate from tickets #39/#40.
 | 7 | Standard and nested BOM review/shipment with recovery | Complete |
 | 8 | Read-only BOM explorer with pan/zoom/fit delivered; subtree focus, breadcrumbs deferred | In Progress |
 | 9 | Part search shortcut delivered; command search deferred | In Progress |
-| 10 | Operator/theme, startup/manual backup and folder access delivered; CSV utilities deferred | In Progress |
+| 10 | Operator/theme, startup/manual backup, folder access and Parts CSV import delivered; other CSV utilities deferred | In Progress |
 | 11 | PySide6 retirement | Not Started |
 | 12 | Scripted native/keyboard/layout acceptance delivered; release hardening deferred | In Progress |
 

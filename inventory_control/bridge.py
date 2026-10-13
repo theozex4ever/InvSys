@@ -4,6 +4,7 @@ import logging
 import sqlite3
 from collections.abc import Callable
 from dataclasses import asdict
+from pathlib import Path
 from secrets import token_urlsafe
 from threading import RLock
 from typing import Any
@@ -17,6 +18,7 @@ from inventory_control.backup import (
     verify_backup,
     write_backup,
 )
+from inventory_control.import_export import CSVChanged, CSVFileError, ImportExportService
 from inventory_control.models import BOMShipmentPlan
 from inventory_control.store import InventoryStore, ShipmentReviewNotFound, StockChanged
 from inventory_control.utilities import DesktopHost, UtilityContext
@@ -44,6 +46,7 @@ class InventoryBridge:
         self._host = host
         self._lock = RLock()
         self._bom_reviews: dict[str, tuple[dict[str, Any], BOMShipmentPlan]] = {}
+        self._import_reviews: dict[str, dict[str, Any]] = {}
 
     def _respond(self, operation: Callable[[], Any]) -> dict[str, Any]:
         try:
@@ -628,6 +631,87 @@ class InventoryBridge:
 
     def utility_context(self) -> dict[str, Any]:
         return self._respond(self._utility_context)
+
+    def _import_service(self) -> ImportExportService:
+        launch = self._launch()
+        return ImportExportService(self._store, launch.exports, launch.backups, launch.database)
+
+    def select_import(self, kind: Any) -> dict[str, Any]:
+        def select() -> dict[str, Any]:
+            if kind != "parts":
+                raise ValueError("Choose Parts import.")
+            launch = self._launch()
+            if self._host is None:
+                raise BridgeError("UNAVAILABLE", "File selection is not available in this launch.")
+            try:
+                path = self._host.choose_file(launch.database.parent, ("CSV files (*.csv)",))
+                if path is None:
+                    return {"cancelled": True}
+                preview, digest = self._import_service().review_parts_import_csv(path)
+            except OSError as error:
+                raise BridgeError("FILE_ERROR", f"Could not select or read CSV: {error}") from error
+            review_id = token_urlsafe(24)
+            review = {
+                "review_id": review_id,
+                "preview": {**asdict(preview), "can_import": preview.can_import},
+                "state": "reviewed",
+                "result": None,
+            }
+            # Only the most recent selected file is eligible for submission.
+            # Completed/failed attempts stay available for lost-response recovery.
+            for previous in self._import_reviews.values():
+                if previous["review"]["state"] == "reviewed":
+                    previous["review"]["state"] = "superseded"
+            self._import_reviews[review_id] = {"path": path, "digest": digest, "review": review}
+            return {"cancelled": False, **review}
+
+        return self._respond(select)
+
+    def _import_review(self, review_id: Any) -> dict[str, Any]:
+        token = self._text(review_id, "Import review")
+        reviewed = self._import_reviews.get(token)
+        if reviewed is None:
+            raise BridgeError("NOT_FOUND", "Import review not found. Select the CSV again.")
+        return reviewed
+
+    def import_status(self, review_id: Any) -> dict[str, Any]:
+        return self._respond(lambda: self._import_review(review_id)["review"])
+
+    def commit_import(self, request: Any) -> dict[str, Any]:
+        def commit() -> dict[str, Any]:
+            fields = self._request(request, {"review_id", "confirmed", "operator"})
+            reviewed = self._import_review(fields.get("review_id"))
+            review = reviewed["review"]
+            if fields.get("confirmed") is not True:
+                raise BridgeError("CONFIRMATION_REQUIRED", "Confirm the reviewed import first.")
+            operator = self._text(fields.get("operator"), "Operator")
+            if review["state"] != "reviewed":
+                raise BridgeError("STALE", "This review has already been used or replaced.")
+            if not review["preview"]["can_import"]:
+                raise ValueError(
+                    "CSV import has validation errors. Correct it and select it again."
+                )
+            # Consume before attempting writes; an error never makes a mutation retryable.
+            review["state"] = "failed"
+            try:
+                result = self._import_service().import_parts_csv(
+                    Path(reviewed["path"]),
+                    operator,
+                    expected_digest=reviewed["digest"],
+                    require_backup=True,
+                )
+            except CSVChanged as error:
+                raise BridgeError("STALE", str(error)) from error
+            except (CSVFileError, OSError, sqlite3.Error) as error:
+                raise BridgeError(
+                    "FILE_ERROR", f"Import failed; no catalog changes were committed: {error}"
+                ) from error
+            review["state"] = "completed"
+            response = asdict(result)
+            review["result"] = response
+            return response
+
+        return self._respond(commit)
 
     def create_backup(self) -> dict[str, Any]:
         def create() -> dict[str, Any]:

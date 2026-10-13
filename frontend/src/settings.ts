@@ -33,7 +33,7 @@ export function settingsWorkflow(getAPI: () => API) {
   async function perform<T>(trigger: string, label: string, action: () => Promise<T>, done: (value: T) => string) {
     if (pending) return;
     pending = true;
-    document.querySelectorAll<HTMLButtonElement>('#settings button').forEach(button => { button.disabled = true; });
+    document.querySelectorAll<HTMLButtonElement>('#settings-data button, #settings-refresh').forEach(button => { button.disabled = true; });
     $('#settings-result').innerHTML = status(`${label}…`);
     try { $('#settings-result').innerHTML = success(done(await action())); }
     catch (error) {

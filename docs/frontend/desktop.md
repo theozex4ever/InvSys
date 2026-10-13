@@ -77,7 +77,7 @@ file URI avoids pywebview automatically starting a server for a bare local path
 ([pywebview usage](https://pywebview.flowrl.com/guide/usage.html)). The build uses
 relative local assets ([Vite build documentation](https://vite.dev/guide/build.html)).
 There is no Vite process, HTTP server, CDN, or network inventory service required.
-The combined BOM authoring, Adjust Count and BOM explorer build uses about 30.6 KB
+The build including Parts CSV import uses about 32 KB
 gzipped JavaScript; its asset budget is 32 KB (CSS 8 KB, HTML 1 KB).
 
 ## Basic package proof
@@ -134,7 +134,7 @@ The bridge exposes dashboard, preferences, save operator/theme, locations,
 part search/detail/create/edit/active state, BOM definition read/save/remove, stock context, receive, standard shipment preview,
 standard ship, BOM preview/confirmation, Move preview/confirmation, Adjust Count
 preview/submission, read-only BOM exploration, searchable paged History, transaction/shipment inspection,
-and Settings backup/folder utilities. Stock context contains current part/lot/location balances,
+and Settings backup/folder utilities and reviewed Parts CSV import. Stock context contains current part/lot/location balances,
 BOM presence, and that part's immutable transactions and shipments for recovery. It validates input shapes/types before using the store
 and returns `{ok: true, data}` or `{ok: false, error: {code, message}}`. Stable
 codes: `VALIDATION`, `DUPLICATE`, `NOT_FOUND`, `INTERNAL`, `PLAN_CHANGED` for a rejected BOM allocation,
@@ -318,6 +318,40 @@ CSV import/export slices; it is not exposed to the page on its own. The bridge k
 `_utilities` and `_host` private because pywebview publishes every public attribute.
 The frontend side is `frontend/src/settings.ts`; later utilities add sections there.
 
+## Parts CSV import
+
+In Settings, select **Select Parts CSV**. The native dialog starts beside the
+launch-selected database; cancellation keeps the previous review. The preview
+shows the selected path, total/valid data rows, commit eligibility and every
+row/field error or warning. Required fields are `part_number` and `description`;
+optional fields remain `default_location`, `minimum_quantity` and `active`.
+Existing numbers update their catalog fields; new numbers create Parts. Ignored
+legacy fields such as `barcode` produce warnings. Stock and History stay intact.
+
+Confirm the reviewed catalog changes using the checkbox, then **Commit Parts
+import**. Python rereads the selected file, rejects changed bytes, validates again,
+and verifies a pre-import backup in this inventory's backup folder before writes.
+Backup failure blocks the import. Parts rows retain the existing single-transaction
+behavior: a database failure rolls back all rows. This does not change the failure
+semantics of other import kinds. Success displays the imported row count and backup
+path and refreshes catalog, dashboard and cached Part details.
+
+Selection, issues and results survive navigation. A lost response locks selection
+and submission: **Check import outcome** reads the session-local attempt status;
+a failed read keeps the lock. Accept a reported completion explicitly, or inspect
+the catalog and backups and explicitly allow a new review. No mutation is retried
+automatically. Reviews and recovery status last for this application session;
+after restart, inspect the catalog and backup before selecting input again.
+
+The typed API adds `select_import("parts")`, `commit_import` (review ID,
+confirmation, operator) and `import_status`. Paths remain owned by the native
+selection and Python service. The review lifecycle in `frontend/src/imports.ts`
+has a typed kind parameter for subsequent Inventory/BOM slices; only Parts is
+currently enabled. Public bridge tests use real temporary SQLite. The native
+smoke drives real Qt file selection/cancellation, invalid rows and warnings,
+changed-file rejection, confirmation, duplicate clicks and lost-response recovery,
+then verifies imported catalog fields after reopening the database.
+
 ## Restore and rollback (closed app only)
 
 There is no in-app restore. To restore a backup:
@@ -343,8 +377,7 @@ displaced database files back together.
 ## Deferred workflows
 
 The shell directs operators to the original application for
-location administration and CSV
-import/export. Backup restoration requires closing the app as described above.
+location administration, Inventory/BOM CSV import, and CSV export. Backup restoration requires closing the app as described above.
 Global search is part search only.
 
 Not yet validated: Windows/macOS packages and installers, screen-reader review,

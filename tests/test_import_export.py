@@ -162,6 +162,26 @@ def test_parts_preview_warns_for_ignored_columns(tmp_path):
     assert preview.warnings[0].field == "barcode"
 
 
+def test_parts_preview_reports_an_unreadable_file(tmp_path):
+    _, service = make_service(tmp_path)
+    preview = service.preview_parts_import_csv(tmp_path / "missing.csv")
+    assert not preview.can_import
+    assert "Could not read CSV" in preview.errors[0].message
+
+
+def test_parts_import_accepts_the_existing_ui_string_path(tmp_path):
+    store, service = make_service(tmp_path)
+    path = write_csv(tmp_path / "parts.csv", "part_number,description\nABC,Widget")
+    assert service.import_parts_csv(str(path), "Pat").rows_imported == 1
+    assert store.parts["ABC"].description == "Widget"
+
+
+def test_parts_import_keeps_missing_file_validation_behavior(tmp_path):
+    _, service = make_service(tmp_path)
+    with pytest.raises(ValueError, match="Could not read CSV"):
+        service.import_parts_csv(tmp_path / "missing.csv", "Pat")
+
+
 def test_parts_import_creates_and_updates_parts_and_creates_backup(tmp_path):
     store, service = make_service(tmp_path)
     store.add_part("ABC-1", "Old", minimum_quantity=1)
