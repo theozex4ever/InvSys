@@ -39,9 +39,9 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 17 | Move positive-stock Lot, source/destination, operator, reference | Equivalent | `test_bridge_move.py`, native Move smoke; reference is existing service metadata |
 | 18 | Move source/destination before/after review | Improved | `preview_move` reports Lot and Location before/after for both Locations from one snapshot |
 | 19 | Atomic paired MOVE_OUT / MOVE_IN | Equivalent | Store regression retained; bridge write-failure atomicity and restart tests; native Move smoke |
-| 20 | Expected/count/difference, operator, required reason | Missing | Original Adjust Count and store exist |
-| 21 | Adjust existing zero-stock Lots | Missing | Fixture STANDARD/ZERO; new workflow absent |
-| 22 | Large-correction confirmation threshold | Missing | Preserve exact threshold below |
+| 20 | Expected/count/difference, operator, required reason | Improved | `test_bridge_adjust.py`; native Adjust smoke. Python supplies expected/difference; stale expected count and lost responses need another review/reconciliation |
+| 21 | Adjust existing zero-stock Lots | Equivalent | `test_bridge_adjust.py` found-stock case; native Adjust smoke counts a zero-stock Lot |
+| 22 | Large-correction confirmation threshold | Equivalent | Threshold boundaries in `test_bridge_adjust.py` (increases/decreases); native confirm/cancel smoke |
 | 23 | BOM direct component add/update/remove | Equivalent | `test_bridge_bom_authoring.py`; native BOM authoring smoke |
 | 24 | Reject self-reference, cycles and invalid quantities | Equivalent | Store tests retained; bridge authoring tests; native rejection smoke preserves the draft |
 | 25 | Existing component updates quantity; confirm removal | Improved | Adding an existing component updates it without row selection; removal needs bridge `confirmed` and a native dialog |
@@ -245,7 +245,7 @@ and platform bundle commands are in [desktop.md](desktop.md).
 | A05 | Inspect baseline BOM shipment A=5/B=9; change SUB→LEAF from 3 to 4; restart; old trace still A=5/B=9. Search manifest shipment number, reference, Lot/operator; page/type/filter; close drawer retains selection/scroll/focus | Delivered, bridge/native coverage; edits through BOM page |
 | A06 | Edit STANDARD description/min/default without number change; dirty navigation cancel/discard; deactivate stocked INACTIVE after reactivation: cancel then confirm; history retained and ineligible stock actions reject | Delivered edit/active replacement: `test_bridge_part_edit.py` and native Part edit smoke; operator/package runs remain future gates |
 | A07 | Move STANDARD B 2 Stock→Shipping Bench: source 6→4, destination 2→4; same Location/qty 7 reject unchanged; one paired transaction; chosen Lot, operator/reference retained; restart | Delivered, bridge/native coverage |
-| A08 | Count STANDARD ZERO 0→3 with reason; blank reason rejects; counts just below/exact large thresholds above, both directions; cancel no writes; confirm one COUNT_CORRECTION; zero Lot remains selectable | Replacement Missing; original safety tests retained |
+| A08 | Count STANDARD ZERO 0→3 with reason; blank reason rejects; counts just below/exact large thresholds above, both directions; cancel no writes; confirm one COUNT_CORRECTION; zero Lot remains selectable | Delivered, bridge/native Adjust coverage; original safety tests retained |
 | A09 | Author KIT direct links; add existing link updates; confirm/cancel removal; reject self/cycle/zero/negative; inspect nested/shared tree Location/quantity, pan/zoom/fit; capacity 100/101/500/501 distinct from shortage | Replacement Missing |
 | A10 | Export all five kinds, retain headers/Lot/trace. Select all three import kinds: valid, invalid, warning, cancel, changed input before commit, commit-time stale state; confirm backup exists before write; inspect actual per-kind failure outcome and refresh | Replacement Missing; real-file service regressions retained |
 | A11 | Manual backup/status/retention; open selected DB's export/backup folders; failed file/backup reports error, no fabricated success; source default/INVSYS_HOME and override; standalone requires explicit DB | Backup/folder replacement delivered (bridge tests, native smoke); CSV utilities and real file-manager evidence on three platforms Missing; launcher regressions retained |

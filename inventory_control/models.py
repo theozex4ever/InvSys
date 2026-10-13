@@ -69,6 +69,15 @@ class StandardShipmentReview:
 
 
 @dataclass(frozen=True)
+class CountCorrectionReview:
+    expected: int
+    counted: int
+    difference: int
+    requires_confirmation: bool
+    context: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class BOMShipmentReview:
     plan: BOMShipmentPlan
     buildable: int

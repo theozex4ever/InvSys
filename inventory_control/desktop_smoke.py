@@ -11,6 +11,8 @@ class DesktopSmoke:
         self.error: str | None = None
         self.stock_result: dict[str, Any] | None = None
         self.bom_authoring: dict[str, Any] | None = None
+        self.adjust_part = ""
+        self.adjust_result: dict[str, Any] | None = None
         self.captures = captures
         self.opened_folders: list[Path] = []
         self.backup_path: Path | None = None
@@ -75,6 +77,12 @@ class DesktopSmoke:
             from inventory_control.desktop_smoke_ui import check_ui
 
             check_ui(window, wait, self.captures, self.bom_part)
+
+            # Last: it adds newer activity that earlier History checks must not see.
+            from inventory_control.desktop_smoke_adjust import adjust_part_name, check_adjust
+
+            self.adjust_part = adjust_part_name()
+            self.adjust_result = check_adjust(window, wait, self.adjust_part)
             print(
                 "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
                 flush=True,

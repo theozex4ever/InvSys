@@ -1,7 +1,7 @@
 # Live desktop inventory workflows
 
 The pywebview frontend covers the dashboard, Parts catalog, Receive, standard and
-nested BOM Ship, Move, BOM authoring, History, and Settings backups, using
+nested BOM Ship, Move, Adjust Count, BOM authoring, History, and Settings backups, using
 [approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
@@ -65,7 +65,7 @@ rejection and contextual entry, checking persisted balances and paired records.
 It also exercises contextual part-to-History navigation, failed
 History detail retry, explicit refresh after another operator's receipt, and
 uncertain BOM reconciliation, including a failed recovery read. It uses real Qt
-keyboard events for all four dialogs and captures five pages and dialogs in both
+keyboard events for all four dialogs and captures six pages and dialogs in both
 themes at four sizes to `smoke-captures/` beside the database. On Linux, use
 `QT_API=pyside6 QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion`
 to select PySide6 and exercise reduced-motion behavior.
@@ -75,6 +75,8 @@ file URI avoids pywebview automatically starting a server for a bare local path
 ([pywebview usage](https://pywebview.flowrl.com/guide/usage.html)). The build uses
 relative local assets ([Vite build documentation](https://vite.dev/guide/build.html)).
 There is no Vite process, HTTP server, CDN, or network inventory service required.
+The combined BOM authoring and Adjust Count build uses about 26.2 KB gzipped
+JavaScript; its asset budget is 30 KB (CSS 8 KB, HTML 1 KB).
 
 ## Basic package proof
 
@@ -127,12 +129,16 @@ Deferred workflows are identified in the shell and drawer (see
 History record using its existing database transaction ID.
 
 The bridge exposes dashboard, preferences, save operator/theme, locations,
-part search/detail/create/edit/activation, BOM definition read/save/remove, stock context, receive, standard shipment preview,
-standard ship, BOM preview/confirmation, Move preview/confirmation, searchable paged History, and
-transaction/shipment inspection. Stock context contains current part/lot/location balances,
+part search/detail/create/edit/active state, BOM definition read/save/remove, stock context, receive, standard shipment preview,
+standard ship, BOM preview/confirmation, Move preview/confirmation, Adjust Count
+preview/submission, searchable paged History, transaction/shipment inspection,
+and Settings backup/folder utilities. Stock context contains current part/lot/location balances,
 BOM presence, and that part's immutable transactions and shipments for recovery. It validates input shapes/types before using the store
 and returns `{ok: true, data}` or `{ok: false, error: {code, message}}`. Stable
-codes: `VALIDATION`, `DUPLICATE`, `NOT_FOUND`, `INTERNAL`, and `PLAN_CHANGED` for a rejected BOM allocation. Unexpected exceptions
+codes: `VALIDATION`, `DUPLICATE`, `NOT_FOUND`, `INTERNAL`, `PLAN_CHANGED` for a rejected BOM allocation,
+`STALE` for changed expected stock, `CONFIRMATION_REQUIRED` for unconfirmed
+stocked deactivation or large count corrections, and `FILE_ERROR`/`UNAVAILABLE`
+for utility failures. Unexpected exceptions
 are logged and return a safe message. Private helpers, store/session access,
 SQL, arbitrary settings, and generic balance writes are not exposed. Requests from this
 window are serialized.
@@ -245,6 +251,20 @@ a transport or internal failure it locks editing until the operator reads the
 authoritative definition and explicitly states whether the change applied; a
 failed read keeps the lock and nothing is retried automatically.
 
+## Adjust Count
+
+The Adjust page reconciles a counted total for an existing Lot at a Location,
+including zero-stock Lots. `preview_count` returns Python's expected quantity,
+difference and whether the large-correction threshold (absolute difference of at
+least the larger of ten units or half the expected quantity, rounded down) requires
+confirmation. `adjust_count` re-reads the Lot, rejects a changed expected quantity
+(`STALE`) or an unconfirmed large correction (`CONFIRMATION_REQUIRED`), then posts
+the `COUNT_CORRECTION` transaction with the reason as its reference. A Lot with no
+balance row at the Location cannot be counted there. Inputs are preserved on
+rejection; success clears count and reason and keeps a persistent result. A lost
+response locks the draft until the operator reads current stock and audit records
+and explicitly verifies completion or absence; a failed recovery read keeps the lock.
+
 ## Settings: backups and folders
 
 Settings is the shared destination for operational utilities. It shows the database
@@ -298,7 +318,7 @@ displaced database files back together.
 
 ## Deferred workflows
 
-The shell directs operators to the original application for Adjust,
+The shell directs operators to the original application for
 location administration, BOM exploration, and CSV
 import/export. Backup restoration requires closing the app as described above.
 Global search is part search only.

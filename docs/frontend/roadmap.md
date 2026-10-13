@@ -21,7 +21,7 @@ scenario, approved workload and retirement evidence gate from tickets #39/#40.
 | 3 | Parts search/create/details, editing and deactivation/reactivation | Complete |
 | 4 | Searchable immutable History and persisted shipment/component trace | Complete |
 | 5 | Real lot receiving, drafts, refresh, and recovery | Complete |
-| 6 | Move + Adjust | In Progress: Move delivered; Adjust pending |
+| 6 | Move + Adjust | Complete |
 | 7 | Standard and nested BOM review/shipment with recovery | Complete |
 | 8 | Interactive BOM Explorer | Not Started |
 | 9 | Part search shortcut delivered; command search deferred | In Progress |
@@ -46,20 +46,6 @@ Update this table when a phase meaningfully changes.
   and `prefers-reduced-motion` support.
 
 ## Remaining phases
-
-### 6. Move and Adjust
-
-Separate experiences that may share components.
-
-- **Move**: part, lot, source, destination, quantity, with a before/after
-  preview for both locations. Python keeps the atomic `MOVE_OUT` + `MOVE_IN`.
-- **Adjust**: part, lot, location, expected and counted quantity, difference,
-  and a required reason. Python creates the authoritative transaction.
-
-Move is delivered in the desktop frontend (see [desktop.md](desktop.md#move)).
-
-Exit: moves stay atomic, no negative stock, lot and reason behavior and
-transaction records match the PySide6 workflow, and balances refresh.
 
 ### 8. Interactive BOM Explorer
 
