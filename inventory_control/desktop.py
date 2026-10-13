@@ -3,6 +3,7 @@
 import argparse
 import importlib.util
 import logging
+import os
 import sqlite3
 import sys
 from contextlib import closing
@@ -150,4 +151,9 @@ def main() -> int:
             print("Desktop smoke: restart persistence and backup content passed; no HTTP server.")
         finally:
             reopened.engine.dispose()
+        # Qt WebEngine can hang during interpreter teardown on the headless CI runner after
+        # every check has passed; the verdict is already printed, so skip finalization.
+        sys.stdout.flush()  # pragma: no cover - only reachable in the native smoke
+        sys.stderr.flush()  # pragma: no cover
+        os._exit(0)  # pragma: no cover
     return 0
