@@ -1162,7 +1162,7 @@ class MoveAdjustView(BaseView):
             current = STORE.stock_at(part, location, lot)
             diff = new_count - current
             operator = self.operator_getter()
-            if abs(diff) >= max(10, current // 2, 1):
+            if STORE.count_correction_needs_confirmation(current, new_count):
                 answer = QMessageBox.question(
                     self,
                     "Confirm large count correction",

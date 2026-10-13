@@ -24,6 +24,7 @@ from inventory_control.models import (
     BOMShipmentReview,
     BOMTreeNode,
     ComponentConsumption,
+    CountCorrectionReview,
     Lot,
     LotBalance,
     MoveReview,
@@ -53,6 +54,10 @@ MAX_EXPLORE_NODES = 5000
 
 class ShipmentReviewNotFound(ValueError):
     """A requested Part or Lot is absent from the shipment review snapshot."""
+
+
+class StockChanged(ValueError):
+    """Stock moved since the operator reviewed it; another review is required."""
 
 
 class InventoryStore:
@@ -358,6 +363,44 @@ class InventoryStore:
                 stock - qty,
                 context,
             )
+
+    def review_count_correction(
+        self, part_number: str, location: str, lot_number: str, counted: int
+    ) -> CountCorrectionReview:
+        """Expected stock, difference and confirmation need from one committed snapshot."""
+        number = self._normalize_part_number(part_number)
+        lot_number = self._normalize_lot_number(lot_number)
+        if counted < 0:
+            raise ValueError("New count cannot be negative.")
+        with self._read_snapshot() as session:
+            context = self._read_stock_context(session, number)
+            if context is None:
+                raise ShipmentReviewNotFound("Part not found.")
+            if location not in context["locations"]:
+                raise ValueError("Invalid location.")
+            # Only Lots already held at the Location (including zero stock) can be counted.
+            expected = next(
+                (
+                    balance["quantity"]
+                    for balance in context["part"]["balances"]
+                    if balance["location"] == location and balance["lot_number"] == lot_number
+                ),
+                None,
+            )
+            if expected is None:
+                raise ShipmentReviewNotFound("Lot not found at this location.")
+            return CountCorrectionReview(
+                expected,
+                counted,
+                counted - expected,
+                self.count_correction_needs_confirmation(expected, counted),
+                context,
+            )
+
+    @staticmethod
+    def count_correction_needs_confirmation(expected: int, counted: int) -> bool:
+        """Large corrections reach the larger of ten units or half the expected quantity."""
+        return abs(counted - expected) >= max(10, expected // 2, 1)
 
     def review_bom_shipment(self, part_number: str, qty: int, location: str) -> BOMShipmentReview:
         """Leaf allocation, capacity, and context from the same review snapshot."""
@@ -806,13 +849,16 @@ class InventoryStore:
         component_part_number: str,
         quantity_per: int,
         notify: bool = True,
-    ) -> None:
+    ) -> bool:
+        """Add a direct component, or update an existing link; returns True when added."""
         parent = self._normalize_part_number(parent_part_number)
         component = self._normalize_part_number(component_part_number)
         if parent == component:
             raise ValueError("A part cannot contain itself.")
         if quantity_per <= 0:
             raise ValueError("Component quantity must be greater than zero.")
+        if quantity_per > 2**31 - 1:
+            raise ValueError("Component quantity cannot exceed 2147483647.")
         with self._mutation(notify) as (session, _):
             parent_part = self._require_part(session, parent)
             component_part = self._require_part(session, component)
@@ -834,6 +880,7 @@ class InventoryStore:
                 )
             else:
                 row.quantity_per = quantity_per
+        return row is None
 
     def remove_bom_component(
         self, parent_part_number: str, component_part_number: str, notify: bool = True
@@ -884,6 +931,46 @@ class InventoryStore:
                 BOMComponent(parent, row.component_part.part_number, row.quantity_per)
                 for row in rows
             ]
+
+    def bom_definition(self, part_number: str) -> dict[str, Any] | None:
+        """One Part's direct BOM components and direct parents from one snapshot."""
+        number = self._normalize_part_number(part_number)
+        with self._read_snapshot() as session:
+            part = self._part(session, number)
+            if part is None:
+                return None
+
+            def summary(other: PartRecord, quantity_per: int) -> dict[str, Any]:
+                return {
+                    "part_number": other.part_number,
+                    "description": other.description,
+                    "active": other.active,
+                    "quantity_per": quantity_per,
+                    "has_bom": self._has_bom(session, other.part_number),
+                }
+
+            children = session.scalars(
+                select(BOMComponentRecord)
+                .where(BOMComponentRecord.parent_part_id == part.id)
+                .join(BOMComponentRecord.component_part)
+                .order_by(PartRecord.part_number)
+            ).all()
+            parents = session.scalars(
+                select(BOMComponentRecord)
+                .where(BOMComponentRecord.component_part_id == part.id)
+                .join(BOMComponentRecord.parent_part)
+                .order_by(PartRecord.part_number)
+            ).all()
+            return {
+                "part": {
+                    "part_number": part.part_number,
+                    "description": part.description,
+                    "active": part.active,
+                    "has_bom": bool(children),
+                },
+                "components": [summary(row.component_part, row.quantity_per) for row in children],
+                "used_in": [summary(row.parent_part, row.quantity_per) for row in parents],
+            }
 
     def bom_availability(self, part_number: str, qty: int, location: str) -> BOMAvailability:
         part_number = self._normalize_part_number(part_number)
@@ -1116,6 +1203,8 @@ class InventoryStore:
         new_count: int,
         operator: str,
         reason: str,
+        *,
+        expected_count: int | None = None,
     ) -> int:
         part_number = self._normalize_part_number(part_number)
         if new_count < 0:
@@ -1126,7 +1215,13 @@ class InventoryStore:
             part = self._require_part(session, part_number)
             loc = self._require_location(session, location)
             lot = self._require_lot(session, part.id, lot_number)
-            diff = new_count - self._stock_at(session, part.id, loc.id, lot.id)
+            current = self._stock_at(session, part.id, loc.id, lot.id)
+            if expected_count is not None and current != expected_count:
+                raise StockChanged(
+                    f"Stock changed from {expected_count} to {current} since review. "
+                    "Review the count again."
+                )
+            diff = new_count - current
             ledger.post(
                 session,
                 timestamp,

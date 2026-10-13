@@ -96,8 +96,12 @@ def main() -> int:
     finally:
         store.engine.dispose()
     if smoke is not None:
-        if smoke.bom_result is None or smoke.recovered_bom_result is None:
-            print("Desktop smoke failed: BOM results were not captured.", file=sys.stderr)
+        if (
+            smoke.bom_result is None
+            or smoke.recovered_bom_result is None
+            or smoke.adjust_result is None
+        ):
+            print("Desktop smoke failed: BOM or adjust results were not captured.", file=sys.stderr)
             return 1
         if smoke.backup_path is None or not smoke.backup_path.is_file():
             print("Desktop smoke failed: manual backup file is missing.", file=sys.stderr)
@@ -114,6 +118,7 @@ def main() -> int:
                 bridge.preferences()["data"] != {"operator": "Desktop smoke", "theme": "dark"}
                 or not bridge.part_detail("DESKTOP-SMOKE")["ok"]
                 or bridge.stock_context("DESKTOP-SMOKE")["data"] != smoke.stock_result
+                or bridge.stock_context(smoke.adjust_part)["data"] != smoke.adjust_result
                 or bridge.shipment_detail(smoke.bom_result["shipment_number"])["data"]
                 != smoke.bom_result
                 or bridge.shipment_detail(smoke.recovered_bom_result["shipment_number"])["data"]
@@ -124,6 +129,15 @@ def main() -> int:
                 != 8 + smoke.explore_receipt
             ):
                 print("Desktop smoke failed: restart persistence.", file=sys.stderr)
+                return 1
+            authored = smoke.bom_authoring
+            if (
+                authored is None
+                or bridge.bom_definition(authored["parent"])["data"] != authored["definition"]
+                or bridge.shipment_detail(authored["shipment"]["shipment_number"])["data"]
+                != authored["shipment"]
+            ):
+                print("Desktop smoke failed: BOM authoring restart persistence.", file=sys.stderr)
                 return 1
             # Immutable read-only: inspecting a backup must not change it or leave WAL sidecars.
             with closing(

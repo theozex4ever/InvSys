@@ -18,7 +18,7 @@ from inventory_control.backup import (
     write_backup,
 )
 from inventory_control.models import BOMShipmentPlan
-from inventory_control.store import InventoryStore, ShipmentReviewNotFound
+from inventory_control.store import InventoryStore, ShipmentReviewNotFound, StockChanged
 from inventory_control.utilities import DesktopHost, UtilityContext
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,8 @@ class InventoryBridge:
             return {"ok": False, "error": {"code": error.code, "message": str(error)}}
         except ShipmentReviewNotFound as error:
             return {"ok": False, "error": {"code": "NOT_FOUND", "message": str(error)}}
+        except StockChanged as error:
+            return {"ok": False, "error": {"code": "STALE", "message": str(error)}}
         except ValueError as error:
             return {"ok": False, "error": {"code": "VALIDATION", "message": str(error)}}
         except Exception:
@@ -206,6 +208,53 @@ class InventoryBridge:
             return self._detail(number)
 
         return self._respond(create)
+
+    def _bom_definition(self, part_number: Any) -> dict[str, Any]:
+        number = self._text(part_number, "Part number").upper()
+        definition = self._store.bom_definition(number)
+        if definition is None:
+            raise BridgeError("NOT_FOUND", "Part not found.")
+        return definition
+
+    def bom_definition(self, part_number: Any) -> dict[str, Any]:
+        """Direct components and direct parents of one Part's BOM definition."""
+        return self._respond(lambda: self._bom_definition(part_number))
+
+    def _bom_link(self, request: Any, optional: set[str]) -> dict[str, Any]:
+        fields = self._request(request, {"parent", "component"} | optional)
+        return {
+            **fields,
+            "parent": self._text(fields.get("parent"), "Parent part").upper(),
+            "component": self._text(fields.get("component"), "Component part").upper(),
+        }
+
+    def save_bom_component(self, request: Any) -> dict[str, Any]:
+        """Add a direct component, or update its quantity when already on the BOM."""
+
+        def save() -> dict[str, Any]:
+            fields = self._bom_link(request, {"quantity_per"})
+            quantity = fields.get("quantity_per")
+            if type(quantity) is not int:
+                raise ValueError("Component quantity must be a whole number.")
+            added = self._store.add_bom_component(fields["parent"], fields["component"], quantity)
+            return {
+                "action": "added" if added else "updated",
+                "definition": self._bom_definition(fields["parent"]),
+            }
+
+        return self._respond(save)
+
+    def remove_bom_component(self, request: Any) -> dict[str, Any]:
+        """Remove one direct component after the operator confirmed the removal."""
+
+        def remove() -> dict[str, Any]:
+            fields = self._bom_link(request, {"confirmed"})
+            if fields.get("confirmed") is not True:
+                raise ValueError("Confirm the removal before removing a component.")
+            self._store.remove_bom_component(fields["parent"], fields["component"])
+            return {"definition": self._bom_definition(fields["parent"])}
+
+        return self._respond(remove)
 
     def update_part(self, request: Any) -> dict[str, Any]:
         """Edit description, minimum quantity and default Location; the number is immutable."""
@@ -467,6 +516,82 @@ class InventoryBridge:
             }
 
         return self._respond(ship)
+
+    def _count_request(self, request: Any, *, submit: bool) -> dict[str, Any]:
+        fields = self._request(
+            request,
+            {"part_number", "location", "lot_number", "counted"}
+            | ({"operator", "reason", "expected", "confirmed"} if submit else set()),
+        )
+        values: dict[str, Any] = {
+            "part_number": self._text(fields.get("part_number"), "Part number").upper(),
+            "location": self._text(fields.get("location"), "Location"),
+            "lot_number": self._text(fields.get("lot_number"), "Lot").upper(),
+        }
+        numbers = [("counted", "Counted quantity")]
+        if submit:
+            numbers.append(("expected", "Expected quantity"))
+        for key, label in numbers:
+            value = fields.get(key)
+            if type(value) is not int or not 0 <= value <= 2**31 - 1:
+                raise ValueError(f"{label} must be a whole number between 0 and 2147483647.")
+            values[key] = value
+        if submit:
+            values["operator"] = self._text(fields.get("operator"), "Operator")
+            values["reason"] = self._text(fields.get("reason"), "Reason")
+            confirmed = fields.get("confirmed", False)
+            if type(confirmed) is not bool:
+                raise ValueError("Confirmation must be true or false.")
+            values["confirmed"] = confirmed
+        return values
+
+    def preview_count(self, request: Any) -> dict[str, Any]:
+        """Expected, counted and difference for a Lot; reads only, reserves nothing."""
+
+        def preview() -> dict[str, Any]:
+            fields = self._count_request(request, submit=False)
+            review = self._store.review_count_correction(
+                fields["part_number"], fields["location"], fields["lot_number"], fields["counted"]
+            )
+            return {
+                "request": fields,
+                "expected": review.expected,
+                "counted": review.counted,
+                "difference": review.difference,
+                "requires_confirmation": review.requires_confirmation,
+                "context": review.context,
+            }
+
+        return self._respond(preview)
+
+    def adjust_count(self, request: Any) -> dict[str, Any]:
+        def adjust() -> dict[str, Any]:
+            fields = self._count_request(request, submit=True)
+            review = self._store.review_count_correction(
+                fields["part_number"], fields["location"], fields["lot_number"], fields["counted"]
+            )
+            if review.expected != fields["expected"]:
+                raise StockChanged(
+                    f"Stock changed from {fields['expected']} to {review.expected} since review. "
+                    "Review the count again."
+                )
+            if review.requires_confirmation and not fields["confirmed"]:
+                raise BridgeError(
+                    "CONFIRMATION_REQUIRED",
+                    f"Large count correction ({review.difference:+d}). Confirm it before submitting.",
+                )
+            difference = self._store.adjust(
+                fields["part_number"],
+                fields["location"],
+                fields["lot_number"],
+                fields["counted"],
+                fields["operator"],
+                fields["reason"],
+                expected_count=fields["expected"],
+            )
+            return {"difference": difference, "context": self._stock_context(fields["part_number"])}
+
+        return self._respond(adjust)
 
     def _launch(self) -> UtilityContext:
         if self._utilities is None:
