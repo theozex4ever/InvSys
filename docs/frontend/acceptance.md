@@ -51,7 +51,7 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 29 | Critical <=100, low 101–500, separate from shortage | Equivalent | Boundary and separation bridge tests; native explorer smoke |
 | 30 | Search/page immutable History; exact record inspection | Missing | Paging and record/shipment drawers Improved; original Notes, Location, timestamp and transaction-type text search plus column sorting Missing; A16/A17 block retirement |
 | 31 | Historical per-Lot consumption survives definition edits | Improved | Bridge History and acceptance fixture restart tests |
-| 32 | Export Parts, Inventory, Transactions, Shipments, BOM | Missing | Original Export All / import-export service |
+| 32 | Export Parts, Inventory, Transactions, Shipments, BOM | Equivalent | Settings per-kind exports reuse the service fields, Lot trace and persisted shipment summaries; `test_bridge_export.py`, native CSV/file/failure and keyboard smoke |
 | 33 | Select/preview three CSV import kinds; row errors/warnings | Missing | Parts delivered: real-file bridge tests and native dialog smoke; Inventory/BOM Missing |
 | 34 | Explicit confirmation, commit validation, pre-write backup | Missing | Parts delivered with unchanged atomic posting, digest revalidation and verified backup; Inventory/BOM Missing |
 | 35 | Import outcome and refreshed screens | Missing | Parts delivered: counts/backup path, refreshed catalog/dashboard/details and locked recovery; Inventory/BOM Missing |
@@ -247,8 +247,8 @@ and platform bundle commands are in [desktop.md](desktop.md).
 | A07 | Move STANDARD B 2 Stock→Shipping Bench: source 6→4, destination 2→4; same Location/qty 7 reject unchanged; one paired transaction; chosen Lot, operator/reference retained; restart | Delivered, bridge/native coverage |
 | A08 | Count STANDARD ZERO 0→3 with reason; blank reason rejects; counts just below/exact large thresholds above, both directions; cancel no writes; confirm one COUNT_CORRECTION; zero Lot remains selectable | Delivered, bridge/native Adjust coverage; original safety tests retained |
 | A09 | Author KIT direct links; add existing link updates; confirm/cancel removal; reject self/cycle/zero/negative; inspect nested/shared tree Location/quantity, pan/zoom/fit; capacity 100/101/500/501 distinct from shortage | Replacement Missing |
-| A10 | Export all five kinds, retain headers/Lot/trace. Select all three import kinds: valid, invalid, warning, cancel, changed input before commit, commit-time stale state; confirm backup exists before write; inspect actual per-kind failure outcome and refresh | Parts replacement delivered (bridge tests and native smoke); Inventory/BOM and exports Missing; real-file service regressions retained |
-| A11 | Manual backup/status/retention; open selected DB's export/backup folders; failed file/backup reports error, no fabricated success; source default/INVSYS_HOME and override; standalone requires explicit DB | Backup/folder replacement delivered (bridge tests, native smoke); CSV utilities and real file-manager evidence on three platforms Missing; launcher regressions retained |
+| A10 | Export all five kinds, retain headers/Lot/trace. Select all three import kinds: valid, invalid, warning, cancel, changed input before commit, commit-time stale state; confirm backup exists before write; inspect actual per-kind failure outcome and refresh | Export replacement delivered: public bridge real-file tests and native CSV acceptance; Parts import replacement delivered (bridge tests and native smoke); Inventory/BOM import Missing; real-file service regressions retained |
+| A11 | Manual backup/status/retention; open selected DB's export/backup folders; failed file/backup reports error, no fabricated success; source default/INVSYS_HOME and override; standalone requires explicit DB | Backup/folder replacement delivered (bridge tests, native smoke); Inventory/BOM CSV import and real file-manager evidence on three platforms Missing; launcher regressions retained |
 | A12 | Navigate with Ctrl+1–9/Ctrl+K and contextual links; all dialogs keyboard-only; visible focus, both themes, reduced motion, 640×480 actions reachable by scrolling; screen-reader labels and non-color status/contrast review | Native checks delivered, numbered shortcuts and human review Missing |
 | A13 | Double-click each mutation; simulated committed/lost response and unsent response preserve draft/lock. Failed recovery read remains locked; authoritative reads show exact Lot/operator/metadata; explicit completion/absence decision only; never auto-retry | Native delivered stock checks; future mutation coverage Missing |
 | A14 | Rehearse upgrade on a copy of representative pre-migration DB; compare Parts/Lots/balances/ledger/shipments/BOM snapshots before/after launch and restart; closed-app backup restore on a separate copy; record reconciled rollback | Copied-data/operator evidence Missing |
@@ -368,3 +368,20 @@ package reference machine):
 These source checks do not establish standalone Windows/macOS/Linux package
 acceptance, designated-machine timings, copied operational-data rehearsal, or
 human accessibility/operator sign-off. Those remain explicit retirement gates.
+
+### Ticket #47 source validation — 2026-10-13
+
+- Public bridge/CSV/backup/launcher tests: 80 passed using temporary SQLite and files.
+- Full randomized coverage suite: 578 passed in 263.90 seconds; coverage 86.42%
+  against the unchanged 85% floor. Log: `/tmp/invsys-issue47-full-tests.log`.
+- Ruff lint/format, strict mypy, TypeScript checking, production build and offline
+  bundle/size checks passed with the locked toolchain; dependencies are unchanged.
+- Two successful source native runs on Linux/Python 3.14/Qt 6.11.2 against
+  `/tmp/invsys-issue47-native-Ip7fMb/selected inventory/inventory.db`: all five CSVs,
+  real file failures, destination and trace checks, duplicate clicks, navigation,
+  both themes, minimum-size keyboard exports, restart and no HTTP server passed.
+  CSVs, captures and successful `run2.log`/`run3.log` remain beside the disposable
+  inventory. The first run exposed a smoke-probe function-serialization error,
+  corrected before those two successful runs. Folder opening used the recording host.
+- Independent Standards and Spec reviews against starting commit `4e8b4ae` found
+  no actionable findings. Platform packages and operator acceptance remain pending.

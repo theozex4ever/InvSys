@@ -141,6 +141,7 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
                 "adjust",
                 "history",
                 "bom-explore",
+                "settings",
             ):
                 run(f"document.querySelector('[data-page={page}]').click()")
                 wait(
@@ -251,6 +252,37 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
         "document.activeElement.getAttribute('aria-pressed') === 'true' && document.querySelectorAll('#bomx-canvas [aria-pressed=true]').length === 1"
     )
 
+    # Exports remain reachable by native keyboard at the minimum size in both themes.
+    window.resize(640, 480)
+    for theme in ("light", "dark"):
+        if run("document.documentElement.dataset.theme") != theme:
+            run("document.querySelector('#theme').click()")
+            wait(f"document.documentElement.dataset.theme === '{theme}'")
+        run("document.querySelector('[data-page=settings]').click()")
+        wait("document.querySelectorAll('[data-export-kind]:not(:disabled)').length === 5")
+        actions.run(activate)
+        run("document.querySelector('[data-export-kind=parts]').focus()")
+        key(Qt.Key.Key_Tab)
+        wait("document.activeElement.dataset.exportKind === 'inventory'")
+        require(
+            "getComputedStyle(document.activeElement).outlineStyle !== 'none'",
+            f"{theme}: visible export keyboard focus",
+        )
+        run("document.activeElement.scrollIntoView({block:'center'})")
+        require(
+            "document.activeElement.getBoundingClientRect().top >= 0 && document.activeElement.getBoundingClientRect().bottom <= innerHeight",
+            f"{theme}: export action reachable at minimum size",
+        )
+        key(Qt.Key.Key_Return)
+        wait(
+            "document.querySelector('#settings-result').textContent.startsWith('Exported Inventory') && document.querySelectorAll('#settings button:disabled').length === 0"
+        )
+        wait("document.activeElement.dataset.exportKind === 'inventory'")
+        key(Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
+        wait("document.activeElement.dataset.exportKind === 'parts'")
+        capture(captures / f"export-keyboard-{theme}.png")
+    window.resize(1366, 768)
+
     if run("matchMedia('(prefers-reduced-motion: reduce)').matches"):
         require(
             "getComputedStyle(document.querySelector('.nav-button')).transitionDuration === '0s'",
@@ -263,7 +295,7 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             flush=True,
         )
     print(
-        "Desktop smoke: both themes, seven pages at four sizes, labels/reachable actions, native Tab/Shift+Tab/Escape and focus restoration passed.",
+        "Desktop smoke: both themes, eight pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
         flush=True,
     )
 

@@ -766,6 +766,34 @@ class InventoryBridge:
 
         return self._respond(open_selected)
 
+    def export_csv(self, kind: Any) -> dict[str, Any]:
+        """Export one existing CSV kind from the launch-selected inventory."""
+
+        def export() -> dict[str, Any]:
+            launch = self._launch()
+            service = self._import_service()
+            exporters = {
+                "parts": service.export_parts_csv,
+                "inventory": service.export_inventory_csv,
+                "transactions": service.export_transactions_csv,
+                "shipments": service.export_shipments_csv,
+                "bom": service.export_bom_csv,
+            }
+            if not isinstance(kind, str) or kind not in exporters:
+                raise ValueError(
+                    "Choose Parts, Inventory, Transactions, Shipments or BOM to export."
+                )
+            try:
+                return asdict(exporters[kind]())
+            except OSError as error:
+                raise BridgeError(
+                    "FILE_ERROR",
+                    f"Could not export {kind} to {launch.exports}: {error.strerror or error}. "
+                    "Check the folder for incomplete files before trying again.",
+                ) from error
+
+        return self._respond(export)
+
     def _move_request(self, request: Any, *, check_inventory: bool = True) -> dict[str, Any]:
         # ``location`` is the source Location, matching the other stock requests.
         values = self._stock_request(
