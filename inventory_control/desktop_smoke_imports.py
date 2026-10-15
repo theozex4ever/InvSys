@@ -39,6 +39,8 @@ class _ImportSmoke:
             raise RuntimeError(f"Desktop {self.kind} import smoke failed: {label}")
 
     def select(self, cancel: bool = False) -> None:
+        # Results render before the panel's refresh settles; a click while pending is ignored.
+        self.wait(f"!{self.el('select')}.disabled")
         self.run(f"{self.el('select')}.click()")
         deadline = time.monotonic() + 10
         selected = False
@@ -65,7 +67,16 @@ class _ImportSmoke:
             self.actions.run(finish)
             time.sleep(0.1)
         if not selected:
-            raise RuntimeError("Native import file dialog did not appear.")
+            widgets: list[str] = []
+            self.actions.run(
+                lambda: widgets.extend(
+                    f"{type(w).__name__}:{w.isVisible()}" for w in QApplication.topLevelWidgets()
+                )
+            )
+            panel = self.run(
+                f"{self.el('actions')}?.innerText + ' | ' + {self.el('result')}?.innerText"
+            )
+            raise RuntimeError(f"Native import file dialog did not appear. {widgets} {panel}")
         self.wait(f"!{self.el('select')}.disabled")
 
     def confirm_and_commit(self) -> None:

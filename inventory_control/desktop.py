@@ -145,6 +145,7 @@ def main() -> int:
             if (
                 bridge.preferences()["data"] != {"operator": "Desktop smoke", "theme": "dark"}
                 or not bridge.part_detail("DESKTOP-SMOKE")["ok"]
+                or not bridge.part_detail(smoke.created_part)["ok"]
                 or bridge.part_detail(smoke.imported_part)["data"]["description"]
                 != "Reviewed bearing"
                 or smoke.receipt_import is None

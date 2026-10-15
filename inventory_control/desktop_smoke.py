@@ -23,6 +23,8 @@ class DesktopSmoke:
         self.receipt_import: dict[str, Any] | None = None
         self.bom_import: dict[str, Any] | None = None
         self.export_paths: list[Path] = []
+        self.navigation: dict[str, Any] | None = None
+        self.created_part = ""
 
     def run(self, window: Any) -> None:
         def wait(script: str) -> None:
@@ -75,6 +77,9 @@ class DesktopSmoke:
             from inventory_control.desktop_smoke_parts import check_part_editing
 
             check_part_editing(window, wait)
+            from inventory_control.desktop_smoke_parts import check_part_creation_recovery
+
+            self.created_part = check_part_creation_recovery(window, wait)
             self._refresh_reads(window, wait)
             self._bom_transport_recovery(window, wait)
             self._bom_explore(window, wait)
@@ -105,6 +110,10 @@ class DesktopSmoke:
                 window, wait, self.captures.parent, self.imported_part
             )
             self.bom_import = check_bom_import(window, wait, self.captures.parent)
+            # After every workflow, so each page renders real data for the audit.
+            from inventory_control.desktop_smoke_navigation import check_navigation
+
+            self.navigation = check_navigation(window, wait)
             print(
                 "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
                 flush=True,
@@ -122,10 +131,16 @@ class DesktopSmoke:
         idle = "document.querySelectorAll('#settings-data button:disabled, #settings-refresh:disabled').length === 0"
         run("document.querySelector('[data-page=settings]').click()")
         wait("document.querySelector('#settings-data').textContent.includes('Latest backup')")
-        run("document.querySelector('[data-backup-create]').click()")
+        run("""
+            window.smokeBackup = window.smokeAPI.create_backup; window.smokeBackupCalls = 0;
+            window.smokeAPI.create_backup = async () => { window.smokeBackupCalls++; return await window.smokeBackup(); };
+            document.querySelector('[data-backup-create]').click(); document.querySelector('[data-backup-create]').click();
+        """)
         wait(
             f"document.querySelector('#settings-result').textContent.includes('Backup created') && {idle}"
         )
+        if run("window.smokeBackupCalls") != 1:
+            raise RuntimeError("A double click created more than one backup.")
         run("window.smokeAPI.utility_context().then(r => { window.smokeSettings = r.data; })")
         wait("window.smokeSettings")
         latest = run("window.smokeSettings.latest_backup")
@@ -163,8 +178,26 @@ class DesktopSmoke:
         ):
             raise RuntimeError("A failed folder request was not reported as an error.")
         run("window.smokeAPI.open_folder = window.smokeOpenFolder")
+        # A lost backup response is reported as uncertain and Settings re-reads the backups.
+        run("""
+            window.smokeAPI.create_backup = async () => { window.smokeBackupCalls++; await window.smokeBackup(); throw new Error('Lost response'); };
+            document.querySelector('[data-backup-create]').click();
+        """)
+        wait(
+            f"document.querySelector('#settings-result').textContent.includes('Completion is uncertain') && {idle}"
+        )
+        run(
+            "window.smokeAPI.create_backup = window.smokeBackup; window.smokeSettings = null; window.smokeAPI.utility_context().then(r => { window.smokeSettings = r.data; })"
+        )
+        wait("window.smokeSettings")
+        if not run(
+            "window.smokeBackupCalls === 2 && !document.querySelector('#settings-result').textContent.includes('Backup created') && document.querySelector('#settings-data').textContent.includes(window.smokeSettings.latest_backup.name)"
+        ):
+            raise RuntimeError(
+                "An uncertain backup was retried or not reconciled with the backups."
+            )
         print(
-            "Desktop smoke: manual backup, latest-backup status and folder access passed.",
+            "Desktop smoke: manual backup with duplicate click and lost response, latest-backup status and folder access passed.",
             flush=True,
         )
 

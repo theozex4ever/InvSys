@@ -9,6 +9,20 @@ from PySide6.QtCore import QObject, Qt, Signal, Slot
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
+# Every navigation destination, captured with real data.
+PAGES = (
+    "dashboard",
+    "parts",
+    "bom",
+    "bom-explore",
+    "receive",
+    "ship",
+    "move",
+    "adjust",
+    "history",
+    "settings",
+)
+
 
 class _GuiActions(QObject):
     requested = Signal()
@@ -133,19 +147,10 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
         for width, height in ((1366, 768), (1920, 1080), (800, 650), (640, 480)):
             window.resize(width, height)
             time.sleep(0.15)
-            for page in (
-                "dashboard",
-                "parts",
-                "receive",
-                "ship",
-                "adjust",
-                "history",
-                "bom-explore",
-                "settings",
-            ):
+            for page in PAGES:
                 run(f"document.querySelector('[data-page={page}]').click()")
                 wait(
-                    f"!document.querySelector('#{page}').textContent.includes('Loading') && !document.querySelector('#{page}').textContent.includes('Reading current stock')"
+                    f"!/Loading|Reading current/.test(document.querySelector('#{page}').textContent)"
                 )
                 require(
                     "document.documentElement.scrollWidth <= innerWidth",
@@ -295,7 +300,7 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             flush=True,
         )
     print(
-        "Desktop smoke: both themes, eight pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
+        "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
         flush=True,
     )
 
