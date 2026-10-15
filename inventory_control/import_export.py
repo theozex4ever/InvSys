@@ -8,7 +8,7 @@ from pathlib import Path
 from inventory_control.backup import backup_database, prune_backups, verify_backup, write_backup
 from inventory_control.config import BACKUP_DIR, DB_PATH, EXPORT_DIR
 from inventory_control.models import CSVPreview, CSVRowIssue, ExportResult, ImportResult
-from inventory_control.store import InventoryStore
+from inventory_control.store import MAX_QUANTITY, InventoryStore
 
 PARTS_HEADERS = ["part_number", "description", "default_location", "minimum_quantity", "active"]
 INVENTORY_HEADERS = [
@@ -45,9 +45,6 @@ BOM_HEADERS = ["parent_part_number", "component_part_number", "quantity_per"]
 
 RowValidator = Callable[[int, dict[str, str], set[tuple[str, ...]]], list[CSVRowIssue]]
 
-# Matches the desktop Receive limit so imported quantities fit SQLite integers.
-MAX_QUANTITY = 2**31 - 1
-
 INVENTORY_IMPORT_COLUMNS = {
     "part_number",
     "location",
@@ -56,6 +53,7 @@ INVENTORY_IMPORT_COLUMNS = {
     "reference",
     "notes",
 }
+BOM_IMPORT_COLUMNS = set(BOM_HEADERS)
 IGNORED_PART_COLUMNS = {"barcode", "category", "unit_of_measure", "revision", "notes"}
 
 
@@ -222,26 +220,27 @@ class ImportExportService:
         return ImportResult("inventory", len(rows), str(backup or ""))
 
     def preview_bom_import_csv(self, path: Path) -> CSVPreview:
-        rows, header_errors, warnings = self._read_csv(path, "bom", set(BOM_HEADERS))
-        preview = self._preview_rows(
-            "bom", path, rows, header_errors, warnings, self._validate_bom_row
-        )
-        if not preview.errors:
-            cycle_errors = self._validate_bom_cycles(rows)
-            preview.errors.extend(cycle_errors)
-            bad_rows = {error.row_number for error in preview.errors if error.row_number > 1}
-            preview.valid_count = (
-                max(preview.row_count - len(bad_rows), 0) if not cycle_errors else 0
-            )
-        return preview
+        return self._preview_content("bom", Path(path))[0]
 
-    def import_bom_csv(self, path: Path, operator: str) -> ImportResult:  # noqa: ARG002
-        preview = self.preview_bom_import_csv(path)
-        self._require_importable(preview)
+    def review_bom_import_csv(self, path: Path) -> tuple[CSVPreview, str]:
+        return self._review("bom", Path(path))
+
+    # BOM links carry no operator column; the argument keeps every import entry
+    # point's signature uniform for the Settings view.
+    def import_bom_csv(
+        self,
+        path: Path | str,
+        operator: str,  # noqa: ARG002
+        *,
+        expected_digest: str | None = None,
+        require_backup: bool = False,
+    ) -> ImportResult:
         rows = [
-            self._bom_import_row(row) for _, row in self._read_csv(path, "bom", set(BOM_HEADERS))[0]
+            self._bom_import_row(row)
+            for row in self._reviewed_rows("bom", Path(path), expected_digest)
         ]
-        backup = self._pre_import_backup()
+        backup = self._backup_before_import(require_backup)
+        # One store transaction: a failed link rolls back every row.
         self.store.import_bom_components(rows, notify=True)
         return ImportResult("bom", len(rows), str(backup or ""))
 
@@ -255,11 +254,16 @@ class ImportExportService:
         validator: RowValidator
         if kind == "parts":
             required, validator = {"part_number", "description"}, self._validate_part_row
+        elif kind == "bom":
+            required, validator = BOM_IMPORT_COLUMNS, self._bom_validator()
         else:
             required = INVENTORY_IMPORT_COLUMNS - {"reference", "notes"}
             validator = self._inventory_validator()
         rows, errors, warnings = self._read_csv(path, kind, required, content)
-        return self._preview_rows(kind, path, rows, errors, warnings, validator), rows
+        preview = self._preview_rows(kind, path, rows, errors, warnings, validator)
+        if kind == "bom" and not any(error.row_number <= 1 for error in preview.errors):
+            self._review_bom_structure(rows, preview)
+        return preview, rows
 
     def _reviewed_rows(
         self, kind: str, path: Path, expected_digest: str | None
@@ -358,10 +362,12 @@ class ImportExportService:
                                 "warning",
                             )
                         )
-                if kind == "inventory":
+                if kind in {"inventory", "bom"}:
                     # Receipts take the operator from the session and Part fields
-                    # from the catalog; say so rather than drop columns silently.
-                    for column in sorted(set(headers) - INVENTORY_IMPORT_COLUMNS - {""}):
+                    # from the catalog, and links carry only their three fields; say
+                    # so rather than drop columns silently.
+                    known = INVENTORY_IMPORT_COLUMNS if kind == "inventory" else BOM_IMPORT_COLUMNS
+                    for column in sorted(set(headers) - known - {""}):
                         warnings.append(
                             CSVRowIssue(1, column, f"Column {column} is not imported.", "warning")
                         )
@@ -406,12 +412,15 @@ class ImportExportService:
         all_errors = list(errors)
         for row_number, row in rows:
             all_errors.extend(validator(row_number, row, seen))
-        if any(error.row_number <= 1 for error in errors):
-            valid_count = 0
-        else:
-            bad_rows = {error.row_number for error in all_errors if error.row_number > 1}
-            valid_count = max(len(rows) - len(bad_rows), 0)
+        valid_count = self._valid_count(len(rows), all_errors)
         return CSVPreview(kind, str(path), len(rows), valid_count, all_errors, warnings)
+
+    @staticmethod
+    def _valid_count(row_count: int, errors: list[CSVRowIssue]) -> int:
+        if any(error.row_number <= 1 for error in errors):
+            return 0
+        bad_rows = {error.row_number for error in errors if error.row_number > 1}
+        return max(row_count - len(bad_rows), 0)
 
     def _validate_part_row(
         self,
@@ -499,82 +508,117 @@ class ImportExportService:
 
         return validate
 
-    def _validate_bom_row(
-        self,
-        row_number: int,
-        row: dict[str, str],
-        seen: set[tuple[str, ...]],
-    ) -> list[CSVRowIssue]:
-        errors = []
-        parent = row.get("parent_part_number", "").strip().upper()
-        component = row.get("component_part_number", "").strip().upper()
-        key = (parent, component)
-        if not parent:
-            errors.append(CSVRowIssue(row_number, "parent_part_number", "Parent part required."))
-        elif parent not in self.store.parts:
-            errors.append(
-                CSVRowIssue(row_number, "parent_part_number", "Parent part does not exist.")
-            )
-        if not component:
-            errors.append(
-                CSVRowIssue(row_number, "component_part_number", "Component part required.")
-            )
-        elif component not in self.store.parts:
-            errors.append(
-                CSVRowIssue(row_number, "component_part_number", "Component part does not exist.")
-            )
-        if parent and component and parent == component:
-            errors.append(
-                CSVRowIssue(row_number, "component_part_number", "A part cannot contain itself.")
-            )
-        if self._parse_positive_int(row.get("quantity_per", "")) is None:
-            errors.append(
-                CSVRowIssue(row_number, "quantity_per", "Quantity per must be a positive integer.")
-            )
-        if key in seen:
-            errors.append(
-                CSVRowIssue(
-                    row_number, "component_part_number", "Duplicate parent/component row in CSV."
-                )
-            )
-        seen.add(key)
-        return errors
+    def _bom_validator(self) -> RowValidator:
+        # One catalog read per preview rather than per row.
+        parts = self.store.parts
 
-    def _validate_bom_cycles(self, rows: list[tuple[int, dict[str, str]]]) -> list[CSVRowIssue]:
-        graph = {
-            parent: set(components) for parent, components in self.store.bom_components.items()
-        }
-        for _, row in rows:
+        def validate(
+            row_number: int, row: dict[str, str], seen: set[tuple[str, ...]]
+        ) -> list[CSVRowIssue]:
+            errors = []
             parent = row.get("parent_part_number", "").strip().upper()
             component = row.get("component_part_number", "").strip().upper()
-            if parent and component:
-                graph.setdefault(parent, set()).add(component)
-        errors = []
-        for row_number, row in rows:
-            parent = row.get("parent_part_number", "").strip().upper()
-            component = row.get("component_part_number", "").strip().upper()
-            if parent and component and self._path_exists(graph, component, parent):
+            key = (parent, component)
+            for field, number, label, missing in (
+                ("parent_part_number", parent, "Parent", "Parent part required."),
+                ("component_part_number", component, "Component", "Component part required."),
+            ):
+                if not number:
+                    errors.append(CSVRowIssue(row_number, field, missing))
+                elif number not in parts:
+                    errors.append(CSVRowIssue(row_number, field, f"{label} part does not exist."))
+                elif not parts[number].active:
+                    # The store refuses inactive Parts, so say so before the backup.
+                    errors.append(
+                        CSVRowIssue(
+                            row_number,
+                            field,
+                            f"Part {number} is inactive. Reactivate it before changing its BOM.",
+                        )
+                    )
+            if parent and component and parent == component:
                 errors.append(
+                    CSVRowIssue(
+                        row_number, "component_part_number", "A part cannot contain itself."
+                    )
+                )
+            quantity = self._parse_positive_int(row.get("quantity_per", ""))
+            if quantity is None or quantity > MAX_QUANTITY:
+                errors.append(
+                    CSVRowIssue(
+                        row_number,
+                        "quantity_per",
+                        f"Quantity per must be a whole number between 1 and {MAX_QUANTITY}.",
+                    )
+                )
+            if key in seen:
+                errors.append(
+                    CSVRowIssue(
+                        row_number,
+                        "component_part_number",
+                        "Duplicate parent/component row in CSV.",
+                    )
+                )
+            seen.add(key)
+            return errors
+
+        return validate
+
+    def _review_bom_structure(
+        self, rows: list[tuple[int, dict[str, str]]], preview: CSVPreview
+    ) -> None:
+        """Add cycle errors and quantity-change warnings that need the whole definition set."""
+        existing = self.store.bom_components
+        invalid = {error.row_number for error in preview.errors}
+        valid = [
+            (
+                row_number,
+                row["parent_part_number"].strip().upper(),
+                row["component_part_number"].strip().upper(),
+                self._parse_positive_int(row["quantity_per"]),
+            )
+            for row_number, row in rows
+            if row_number not in invalid
+        ]
+        graph = {parent: set(components) for parent, components in existing.items()}
+        for _, parent, component, _ in valid:
+            graph.setdefault(parent, set()).add(component)
+        for row_number, parent, component, _ in valid:
+            if self._path_exists(graph, component, parent):
+                preview.errors.append(
                     CSVRowIssue(
                         row_number,
                         "component_part_number",
                         "This component would create a circular BOM.",
                     )
                 )
-        return errors
+        preview.valid_count = self._valid_count(len(rows), preview.errors)
+        # Imports update matching links in place and never remove other links.
+        for row_number, parent, component, requested in valid:
+            current = existing.get(parent, {}).get(component)
+            if current is not None and current != requested:
+                preview.warnings.append(
+                    CSVRowIssue(
+                        row_number,
+                        "quantity_per",
+                        f"Updates the existing {parent} → {component} link from {current} to {requested} per parent.",
+                        "warning",
+                    )
+                )
 
-    def _path_exists(
-        self, graph: dict[str, set[str]], start: str, target: str, seen: set[str] | None = None
-    ) -> bool:
-        seen = seen or set()
-        if start in seen:
-            return False
-        if start == target:
-            return True
-        seen.add(start)
-        return any(
-            self._path_exists(graph, child, target, seen) for child in graph.get(start, set())
-        )
+    @staticmethod
+    def _path_exists(graph: dict[str, set[str]], start: str, target: str) -> bool:
+        """Whether ``target`` is reachable from ``start``; iterative so deep BOMs cannot overflow."""
+        seen: set[str] = set()
+        pending = [start]
+        while pending:
+            node = pending.pop()
+            if node == target:
+                return True
+            if node not in seen:
+                seen.add(node)
+                pending.extend(graph.get(node, ()))
+        return False
 
     def _part_import_row(self, row: dict[str, str]) -> dict[str, object]:
         return {

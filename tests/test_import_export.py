@@ -393,6 +393,23 @@ def test_bom_failed_import_leaves_links_unchanged(tmp_path):
     assert store.bom_components["KIT"] == {"SCREW": 1}
 
 
+def test_original_ui_import_path_rejects_inactive_parts_before_any_backup(tmp_path):
+    store, service = make_service(tmp_path)
+    store.add_part("KIT", "Kit")
+    store.add_part("SCREW", "Screw")
+    store.set_part_active("SCREW", False)
+    path = write_csv(
+        tmp_path / "bom.csv",
+        "parent_part_number,component_part_number,quantity_per\nKIT,SCREW,2",
+    )
+
+    with pytest.raises(ValueError, match="CSV import has validation errors"):
+        service.import_bom_csv(path, "alice")
+
+    assert store.bom_components == {}
+    assert not (tmp_path / "backups").exists()
+
+
 def test_backup_filename_reason_suffixes_and_collision_safety(tmp_path, monkeypatch):
     db_path = tmp_path / "inventory.db"
     store = InventoryStore(db_path=db_path, seed=False)

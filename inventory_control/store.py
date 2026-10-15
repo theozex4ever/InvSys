@@ -50,6 +50,8 @@ logger = logging.getLogger(__name__)
 
 
 MAX_EXPLORE_NODES = 5000
+# Matches the desktop Receive limit so quantities fit SQLite integers.
+MAX_QUANTITY = 2**31 - 1
 
 
 class ShipmentReviewNotFound(ValueError):
@@ -820,6 +822,8 @@ class InventoryStore:
                     raise ValueError("A part cannot contain itself.")
                 if quantity_per <= 0:
                     raise ValueError("Component quantity must be greater than zero.")
+                if quantity_per > MAX_QUANTITY:
+                    raise ValueError(f"Component quantity cannot exceed {MAX_QUANTITY}.")
                 parent_part = self._require_part(session, parent)
                 component_part = self._require_part(session, component)
                 existing = session.scalar(
@@ -857,8 +861,8 @@ class InventoryStore:
             raise ValueError("A part cannot contain itself.")
         if quantity_per <= 0:
             raise ValueError("Component quantity must be greater than zero.")
-        if quantity_per > 2**31 - 1:
-            raise ValueError("Component quantity cannot exceed 2147483647.")
+        if quantity_per > MAX_QUANTITY:
+            raise ValueError(f"Component quantity cannot exceed {MAX_QUANTITY}.")
         with self._mutation(notify) as (session, _):
             parent_part = self._require_part(session, parent)
             component_part = self._require_part(session, component)

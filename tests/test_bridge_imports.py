@@ -218,4 +218,4 @@ def test_unavailable_host_or_launch_context_and_unsupported_kinds(tmp_path):
     store, bridge, context, _host = launch(tmp_path)
     assert InventoryBridge(store).select_import("parts")["error"]["code"] == "UNAVAILABLE"
     assert InventoryBridge(store, context).select_import("parts")["error"]["code"] == "UNAVAILABLE"
-    assert bridge.select_import("bom")["error"]["code"] == "VALIDATION"
+    assert bridge.select_import("shipments")["error"]["code"] == "VALIDATION"

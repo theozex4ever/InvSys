@@ -293,8 +293,3 @@ def test_receipt_import_requires_an_operator(tmp_path):
     assert commit(bridge, review, operator="  ")["error"]["code"] == "VALIDATION"
     assert bridge.import_status(review["review_id"])["data"]["state"] == "reviewed"
     assert records(bridge) == []
-
-
-def test_bom_import_is_not_yet_exposed(tmp_path):
-    _store, bridge, _context, _host = launch(tmp_path)
-    assert bridge.select_import("bom")["error"]["code"] == "VALIDATION"

@@ -1,7 +1,7 @@
 # Live desktop inventory workflows
 
 The pywebview frontend covers the dashboard, Parts catalog, Receive, standard and
-nested BOM Ship, Move, Adjust Count, BOM authoring, a read-only BOM explorer, History, and Settings CSV exports/backups/Parts and Inventory receipt imports, using
+nested BOM Ship, Move, Adjust Count, BOM authoring, a read-only BOM explorer, History, and Settings CSV exports/backups/Parts, Inventory receipt and BOM imports, using
 [approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
@@ -84,8 +84,10 @@ file URI avoids pywebview automatically starting a server for a bare local path
 ([pywebview usage](https://pywebview.flowrl.com/guide/usage.html)). The build uses
 relative local assets ([Vite build documentation](https://vite.dev/guide/build.html)).
 There is no Vite process, HTTP server, CDN, or network inventory service required.
-The build including CSV exports and Parts/Inventory receipt CSV imports uses about 33 KB
-gzipped JavaScript; its asset budget is 33 KB (CSS 8 KB, HTML 1 KB).
+The build including CSV exports and Parts/Inventory receipt/BOM CSV imports uses about 33 KB
+gzipped JavaScript; its asset budget is 33 KB (CSS 8 KB, HTML 1 KB). Headroom is
+nearly exhausted (32,988 of 33,000 bytes), so the next frontend slice needs an
+explicit budget decision.
 
 ## Basic package proof
 
@@ -141,7 +143,7 @@ The bridge exposes dashboard, preferences, save operator/theme, locations,
 part search/detail/create/edit/active state, BOM definition read/save/remove, stock context, receive, standard shipment preview,
 standard ship, BOM preview/confirmation, Move preview/confirmation, Adjust Count
 preview/submission, read-only BOM exploration, searchable paged History, transaction/shipment inspection,
-and Settings CSV export/backup/folder utilities and reviewed Parts/Inventory receipt CSV imports. Stock context contains current part/lot/location balances,
+and Settings CSV export/backup/folder utilities and reviewed Parts/Inventory receipt/BOM CSV imports. Stock context contains current part/lot/location balances,
 BOM presence, and that part's immutable transactions and shipments for recovery. It validates input shapes/types before using the store
 and returns `{ok: true, data}` or `{ok: false, error: {code, message}}`. Stable
 codes: `VALIDATION`, `DUPLICATE`, `NOT_FOUND`, `INTERNAL`, `PLAN_CHANGED` for a rejected BOM allocation,
@@ -368,7 +370,7 @@ after restart, inspect the catalog and backup before selecting input again.
 The typed API adds `select_import(kind)`, `commit_import` (review ID,
 confirmation, operator) and `import_status`. Paths remain owned by the native
 selection and Python service. The review lifecycle in `frontend/src/imports.ts`
-renders one Settings panel per enabled kind (`parts`, `inventory`); each kind
+renders one Settings panel per enabled kind (`parts`, `inventory`, `bom`); each kind
 keeps its own current review, so selecting one kind never supersedes another.
 Public bridge tests use real temporary SQLite. The native
 smoke drives real Qt file selection/cancellation, invalid rows and warnings,
@@ -405,6 +407,61 @@ blocked commit without an operator, changed-file rejection, duplicate clicks and
 lost-response recovery with failed reads, checks refreshed History and dashboard,
 and verifies the Stock balances after reopening the database.
 
+## BOM CSV import
+
+In Settings, select **Select BOM CSV**. Selection, cancellation, the preview and
+lost-response recovery follow the Parts lifecycle above. Required fields are
+`parent_part_number`, `component_part_number` and `quantity_per`; the BOM export
+has exactly these columns. Rows are blocking errors when the parent or component
+Part is missing or inactive, a Part contains itself, the quantity is not a whole
+number from 1 to 2147483647, or a parent/component pair repeats in the file. Rows
+that would complete a cycle (through other rows in the file or existing
+definitions) are blocking errors too, and every row on a cycle is reported in the
+same review. Other columns produce warnings and are not imported.
+
+An import merges definitions: matching links are updated in place, new links are
+added, and links not in the file are kept. Nothing is removed. A row that changes
+an existing link's quantity shows a warning naming the old and new quantity, so the
+review shows exactly what an update changes. Stock, History and persisted shipment
+snapshots are never changed: the service writes only BOM links and no ledger rows.
+
+Confirm the changes using the checkbox, then **Commit BOM import** (an operator name
+is required, as for every import kind). Python rereads the file, rejects changed
+bytes, validates again against current definitions and Parts (a cycle or
+deactivation made after review makes the commit stale and needs a new selection),
+and then verifies a pre-import backup before writes. Backup failure blocks the
+import. The existing service writes all links in one database transaction, so a
+database failure leaves every definition unchanged; the failure message says no
+BOM definition changes were committed. A review is consumed when commit starts and
+is never retried automatically; an ambiguous response locks the panel until the
+operator checks the outcome.
+
+Definitions are re-read whenever BOM, BOM explorer, Ship and Parts are opened, so
+availability and Build capacity follow the imported definitions. Leaving Ship (the
+only way to reach Settings) discards the on-screen shipment review, and a review
+held by the bridge cannot confirm if the imported definitions change its leaf lot
+allocation: the existing reviewed-plan check rejects it with `PLAN_CHANGED` and Ship
+shows the updated allocation for a fresh review. A review whose allocation is
+unaffected still ships exactly what the operator reviewed.
+
+Known limitation: quantity-change warnings describe the definitions at review time.
+If another operator edits a reviewed link before commit, the commit still writes
+the quantities in the reviewed file (the bytes and validity are rechecked), but the
+warning text from the review no longer describes the change; inspect the BOM page
+afterwards. Only new blocking errors, such as a cycle or an inactive Part, are
+surfaced as a stale review.
+Historical shipment snapshots are stored per Lot and are not recomputed from the
+current definitions.
+
+The native smoke builds a disposable nested/shared assembly, drives real dialog
+selection/cancellation, self-reference, quantity and cycle errors, warnings,
+confirmation, changed-file rejection, duplicate clicks and lost-response recovery
+with failed reads, checks the refreshed BOM page and Python-derived requirements,
+rejects a shipment review made before the import, ships a fresh review, and verifies
+that a later import leaves that shipment's snapshot unchanged. It reopens the store
+and compares the definition and snapshot. Backup failure and database-failure
+rollback are covered by public bridge tests rather than the native smoke.
+
 ## Restore and rollback (closed app only)
 
 There is no in-app restore. To restore a backup:
@@ -430,7 +487,7 @@ displaced database files back together.
 ## Deferred workflows
 
 The shell directs operators to the original application for
-location administration and BOM CSV import. Backup restoration requires closing the app as described above.
+location administration. Backup restoration requires closing the app as described above.
 Global search is part search only.
 
 Not yet validated: Windows/macOS packages and installers, screen-reader review,
