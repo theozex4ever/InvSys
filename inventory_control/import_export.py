@@ -8,7 +8,7 @@ from pathlib import Path
 from inventory_control.backup import backup_database, prune_backups, verify_backup, write_backup
 from inventory_control.config import BACKUP_DIR, DB_PATH, EXPORT_DIR
 from inventory_control.models import CSVPreview, CSVRowIssue, ExportResult, ImportResult
-from inventory_control.store import InventoryStore
+from inventory_control.store import MAX_QUANTITY, InventoryStore
 
 PARTS_HEADERS = ["part_number", "description", "default_location", "minimum_quantity", "active"]
 INVENTORY_HEADERS = [
@@ -44,9 +44,6 @@ SHIPMENT_HEADERS = [
 BOM_HEADERS = ["parent_part_number", "component_part_number", "quantity_per"]
 
 RowValidator = Callable[[int, dict[str, str], set[tuple[str, ...]]], list[CSVRowIssue]]
-
-# Matches the desktop Receive limit so imported quantities fit SQLite integers.
-MAX_QUANTITY = 2**31 - 1
 
 INVENTORY_IMPORT_COLUMNS = {
     "part_number",

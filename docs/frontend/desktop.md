@@ -437,11 +437,19 @@ is never retried automatically; an ambiguous response locks the panel until the
 operator checks the outcome.
 
 Definitions are re-read whenever BOM, BOM explorer, Ship and Parts are opened, so
-availability and Build capacity follow the imported definitions. A BOM shipment
-review made before the import cannot confirm if the imported definitions change its
-leaf lot allocation: the existing reviewed-plan check rejects it with
-`PLAN_CHANGED` and Ship shows the updated allocation for a fresh review. A review
-whose allocation is unaffected still ships exactly what the operator reviewed.
+availability and Build capacity follow the imported definitions. Leaving Ship (the
+only way to reach Settings) discards the on-screen shipment review, and a review
+held by the bridge cannot confirm if the imported definitions change its leaf lot
+allocation: the existing reviewed-plan check rejects it with `PLAN_CHANGED` and Ship
+shows the updated allocation for a fresh review. A review whose allocation is
+unaffected still ships exactly what the operator reviewed.
+
+Known limitation: quantity-change warnings describe the definitions at review time.
+If another operator edits a reviewed link before commit, the commit still writes
+the quantities in the reviewed file (the bytes and validity are rechecked), but the
+warning text from the review no longer describes the change; inspect the BOM page
+afterwards. Only new blocking errors, such as a cycle or an inactive Part, are
+surfaced as a stale review.
 Historical shipment snapshots are stored per Lot and are not recomputed from the
 current definitions.
 
