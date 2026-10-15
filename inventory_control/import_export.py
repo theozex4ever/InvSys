@@ -43,6 +43,9 @@ SHIPMENT_HEADERS = [
 ]
 BOM_HEADERS = ["parent_part_number", "component_part_number", "quantity_per"]
 
+# DictReader key collecting cells beyond the header; not a valid column name.
+EXTRA_CELLS = "\x00extra"
+
 RowValidator = Callable[[int, dict[str, str], set[tuple[str, ...]]], list[CSVRowIssue]]
 
 # Matches the desktop Receive limit so imported quantities fit SQLite integers.
@@ -334,10 +337,14 @@ class ImportExportService:
                 if content is None
                 else StringIO(content.decode("utf-8-sig"), newline="")
             ) as handle:
-                reader = csv.DictReader(handle)
+                # Ambiguous structure must block the import rather than be guessed
+                # at: strict quoting, unique headers and no cells beyond the header.
+                reader = csv.DictReader(handle, restkey=EXTRA_CELLS, strict=True)
                 if reader.fieldnames is None:
                     return [], [CSVRowIssue(1, "", "CSV file is empty.")], []
                 headers = [header.strip().lower() for header in reader.fieldnames]
+                for column in sorted({h for h in headers if h and headers.count(h) > 1}):
+                    errors.append(CSVRowIssue(1, column, f"Duplicate column: {column}."))
                 missing = sorted(required - set(headers))
                 for column in missing:
                     errors.append(CSVRowIssue(1, column, f"Missing required column: {column}."))
@@ -359,6 +366,20 @@ class ImportExportService:
                             CSVRowIssue(1, column, f"Column {column} is not imported.", "warning")
                         )
                 for row_number, raw in enumerate(reader, start=2):
+                    unnamed = any(
+                        (raw.get(original) or "").strip()
+                        for original, header in zip(reader.fieldnames, headers, strict=True)
+                        if not header
+                    )
+                    extra = any(cell.strip() for cell in raw.get(EXTRA_CELLS) or [])
+                    if unnamed or extra:
+                        errors.append(
+                            CSVRowIssue(
+                                row_number,
+                                "",
+                                "Row has values outside the named columns. Check for unquoted commas.",
+                            )
+                        )
                     normalized = {}
                     for original, header in zip(reader.fieldnames, headers, strict=True):
                         normalized[header] = (raw.get(original) or "").strip()
@@ -382,7 +403,7 @@ class ImportExportService:
         all_errors = list(errors)
         for row_number, row in rows:
             all_errors.extend(validator(row_number, row, seen))
-        if errors:
+        if any(error.row_number <= 1 for error in errors):
             valid_count = 0
         else:
             bad_rows = {error.row_number for error in all_errors if error.row_number > 1}

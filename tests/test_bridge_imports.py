@@ -58,6 +58,8 @@ def test_review_confirmation_backup_and_persistence(tmp_path):
         "part_number,description\nA,One\nA,Two\n",
         "description\nBearing\n",
         "part_number,description\n",
+        "part_number,description,description\nA,Bearing,Unreviewed\n",
+        "part_number,description\nA,Bearing,extra\n",
     ],
 )
 def test_invalid_rows_cannot_be_committed(tmp_path, text):

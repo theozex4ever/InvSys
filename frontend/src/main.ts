@@ -58,7 +58,9 @@ const bomExplore = bomExploreWorkflow(() => api, part => { navigate('history', f
 const bom = bomWorkflow(() => api);
 const settings = settingsWorkflow(() => api);
 // Imports change catalog fields or Stock ledger rows; refresh every page showing them.
+// The direct reads reject on failure so import recovery can keep its lock.
 const importChanged = async () => {
+  await Promise.all([read(api.search_parts({ ...search })), read(api.dashboard()), read(api.history({ query: '', tx_type: '', page: 0 }))]);
   await Promise.all([loadParts(), loadDashboard(), history.load(), settings.open()]);
   if (currentPart) {
     currentPart = await read(api.part_detail(currentPart.part_number));

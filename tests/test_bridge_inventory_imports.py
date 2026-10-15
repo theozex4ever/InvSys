@@ -127,6 +127,36 @@ def test_malformed_files_are_blocked_before_commit(tmp_path, text):
     assert records(bridge) == []
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "part_number,location,lot_number,quantity,quantity\nA,Stock,L1,5,900\n",
+        "part_number,location,lot_number,quantity,Quantity \nA,Stock,L1,5,900\n",
+        f"{HEADER}\nA,Stock,L1,1,000\n",
+        f"{HEADER},\nA,Stock,L1,5,7\n",
+        f'{HEADER},notes\nA,Stock,L1,5,"unterminated\n',
+        f'{HEADER},notes\nA,Stock,L1,5,"x"y\n',
+    ],
+)
+def test_ambiguous_csv_structure_cannot_change_stock(tmp_path, text):
+    _store, bridge, context, _host = launch(tmp_path, text)
+    review = bridge.select_import("inventory")["data"]
+    assert review["preview"]["errors"]
+    assert not review["preview"]["can_import"]
+    assert not commit(bridge, review)["ok"]
+    assert records(bridge) == []
+    assert balances(bridge) == {}
+    assert not context.backups.exists()
+
+
+def test_a_malformed_row_counts_only_itself_as_invalid(tmp_path):
+    _store, bridge, _context, _host = launch(
+        tmp_path, f"{HEADER}\nA,Stock,L1,5\nB,Stock,L2,1,000\n"
+    )
+    preview = bridge.select_import("inventory")["data"]["preview"]
+    assert (preview["valid_count"], preview["errors"][0]["row_number"]) == (1, 3)
+
+
 def test_columns_that_are_not_imported_warn_without_blocking(tmp_path):
     _store, bridge, _context, _host = launch(
         tmp_path, f"{HEADER},description,operator\nA,Stock,L1,5,Bearing,Sam\n"

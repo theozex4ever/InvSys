@@ -345,6 +345,11 @@ optional fields remain `default_location`, `minimum_quantity` and `active`.
 Existing numbers update their catalog fields; new numbers create Parts. Ignored
 legacy fields such as `barcode` produce warnings. Stock and History stay intact.
 
+Every CSV import kind rejects ambiguous structure instead of guessing:
+duplicate column names (after trimming and case folding), values beyond the named
+columns (for example an unquoted comma inside `1,000`) and malformed quoting are
+errors, in both applications.
+
 Confirm the reviewed catalog changes using the checkbox, then **Commit Parts
 import**. Python rereads the selected file, rejects changed bytes, validates again,
 and verifies a pre-import backup in this inventory's backup folder before writes.
@@ -354,8 +359,8 @@ semantics of other import kinds. Success displays the imported row count and bac
 path and refreshes catalog, dashboard and cached Part details.
 
 Selection, issues and results survive navigation. A lost response locks selection
-and submission: **Check import outcome** reads the session-local attempt status;
-a failed read keeps the lock. Accept a reported completion explicitly, or inspect
+and submission: **Check import outcome** reads the session-local attempt status
+and then current Parts, dashboard and History; any failed read keeps the lock. Accept a reported completion explicitly, or inspect
 the catalog and backups and explicitly allow a new review. No mutation is retried
 automatically. Reviews and recovery status last for this application session;
 after restart, inspect the catalog and backup before selecting input again.
@@ -380,6 +385,9 @@ errors when the Part is missing or inactive, the Location is missing, the Lot is
 blank, the quantity is not a whole number from 1 to 2147483647, or a
 Part/Location/Lot repeats in the file. Other columns, such as `description` or
 `operator` from an Inventory export, produce warnings and are not imported.
+The quantity limit matches desktop Receive. It also applies to the original
+application's Settings import, which previously accepted larger values: an
+intentional compatibility restriction.
 
 Confirm the receipts using the checkbox, then **Commit Inventory import**; an
 operator name is required and attributes every receipt. Python rereads the file,

@@ -64,13 +64,16 @@ export function importWorkflow(getAPI: () => API, operator: () => string, change
         completed(result);
         await refresh();
       } else if (action === 'recover' && review) {
-        recovered = await read(getAPI().import_status(review.review_id));
-        resultText = recovered.state === 'completed' && recovered.result ? `Python reports ${recovered.result.rows_imported} rows imported. Backup: ${recovered.result.backup_path}. Accept this outcome to unlock selection.` : `No completed import reported. Inspect ${text.inspect} and backups, then allow a new review.`;
-        await refresh();
+        const outcome = await read(getAPI().import_status(review.review_id));
+        // Offer a decision only after the authoritative reads succeed; any failure keeps the lock.
+        await changed();
+        recovered = outcome;
+        resultText = outcome.state === 'completed' && outcome.result ? `Python reports ${outcome.result.rows_imported} rows imported. Backup: ${outcome.result.backup_path}. Accept this outcome to unlock selection.` : `No completed import reported. Inspect ${text.inspect} and backups, then allow a new review.`;
       }
     } catch (failure) {
       error = true;
       resultText = message(failure);
+      if (action === 'recover') resultText += ' Submission stays locked until the outcome and current data are read.';
       if (action === 'commit') {
         confirmed = false;
         uncertain = failure instanceof RequestError && ['TRANSPORT', 'INTERNAL'].includes(failure.code);

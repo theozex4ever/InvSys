@@ -88,10 +88,16 @@ class _ImportSmoke:
             f"window.smokeImportCalls === 1 && {self.el('select')}.disabled",
             "duplicate and uncertain submission lock",
         )
-        for label in ("Recovery unavailable", "Second recovery unavailable"):
+        # A failed status read, a failed History reconciliation read after a successful
+        # status read, and a failed repeat read each keep the lock.
+        for method, label in (
+            ("import_status", "Recovery unavailable"),
+            ("history", "History reconciliation unavailable"),
+            ("import_status", "Second recovery unavailable"),
+        ):
             self.run(f"""
-                window.smokeImportStatus = window.smokeAPI.import_status;
-                window.smokeAPI.import_status = async () => ({{ok:false, error:{{code:'INTERNAL', message:'{label}'}}}});
+                window.smokeOriginal = window.smokeAPI.{method};
+                window.smokeAPI.{method} = async () => ({{ok:false, error:{{code:'INTERNAL', message:'{label}'}}}});
                 {self.el("recover")}.click();
             """)
             self.wait(f"{self.el('result')}.textContent.includes('{label}')")
@@ -100,7 +106,7 @@ class _ImportSmoke:
                 "failed recovery keeps the lock and clears any prior decision",
             )
             self.run(
-                f"window.smokeAPI.import_status = window.smokeImportStatus; {self.el('recover')}.click()"
+                f"window.smokeAPI.{method} = window.smokeOriginal; {self.el('recover')}.click()"
             )
             self.wait(f"!!{self.el('resolve')}")
             self.require(
