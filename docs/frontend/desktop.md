@@ -91,15 +91,16 @@ explicit budget decision.
 
 ## Standalone bundle
 
-A repeatable offline Linux bundle (PyInstaller one-directory, exact built assets,
-Qt WebEngine) is built and smoke-tested with `scripts/package_bundle.py`; see
+Repeatable offline Linux and macOS bundles (PyInstaller one-directory, a `.app`
+on macOS, exact built assets, Qt WebEngine) are built and smoke-tested with
+`scripts/package_bundle.py`; see
 [standalone offline bundle](packaging.md) for build, install, prerequisites, data
 selection, readable failures, the twice-run package smoke, CI and recorded
 evidence. Packaged launch requires `--database` explicitly, so it cannot silently
 open an inventory file inside a bundle or temporary extraction directory. `--assets`
 overrides the built asset directory for local review; it is not needed for bundled
-assets. Windows/macOS bundles, installers, signing and release publication remain
-outstanding.
+assets. A Windows bundle, installers, Developer ID signing, notarization and
+release publication remain outstanding.
 
 ## Scope and contract
 
@@ -479,7 +480,7 @@ The shell directs operators to the original application for
 location administration. Backup restoration requires closing the app as described above.
 Global search is part search only.
 
-Not yet validated: Windows/macOS packages and installers (Linux: [packaging](packaging.md)), screen-reader review,
+Not yet validated: Windows packages and installers on any platform (Linux and macOS bundles: [packaging](packaging.md)), screen-reader review,
 human operator acceptance, and performance/release hardening. The native smoke is
 scripted desktop acceptance, not exhaustive accessibility review. Mutation
 reconciliation is operator-assisted, without durable request deduplication.

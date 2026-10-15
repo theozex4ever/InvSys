@@ -2,9 +2,10 @@
 
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFileDialog
 
-from inventory_control.desktop_smoke_imports import _ImportSmoke
+from inventory_control.desktop_smoke_imports import _ImportSmoke, use_scriptable_file_dialogs
 
 
 def test_import_selection_retries_when_accept_leaves_the_dialog_open(qapp, tmp_path):
@@ -40,3 +41,16 @@ def test_import_selection_retries_when_accept_leaves_the_dialog_open(qapp, tmp_p
         dialog.close()
         dialog.deleteLater()
         qapp.processEvents()
+
+
+def test_macos_import_probe_drives_qt_dialogs_instead_of_the_cocoa_panel(qapp):
+    attribute = Qt.ApplicationAttribute.AA_DontUseNativeDialogs
+    before = qapp.testAttribute(attribute)
+    try:
+        qapp.setAttribute(attribute, False)
+        use_scriptable_file_dialogs(qapp, "linux")
+        assert not qapp.testAttribute(attribute)
+        use_scriptable_file_dialogs(qapp, "darwin")
+        assert qapp.testAttribute(attribute)
+    finally:
+        qapp.setAttribute(attribute, before)

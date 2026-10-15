@@ -15,7 +15,7 @@ pull_request / push main / merge_group / weekly
 ├─ Python static analysis ── ruff lint, ruff format, mypy --strict, lock freshness
 ├─ Tests ×5 ──────────────── Ubuntu 3.12 · 3.13 · 3.14, Windows 3.12, macOS 3.12
 ├─ Frontend build ─────────► dist artifact ─┬─► Desktop E2E (native smoke, Xvfb)
-│                                          └─► Package smoke (frozen bundle, twice, offline)
+│                                          └─► Package smoke ×2 (Ubuntu, macOS: frozen bundle, twice)
 ├─ Dependency audit ──────── pip-audit (hash-locked set), npm audit
 ├─ Dependency review ─────── PR-only: blocks newly introduced vulnerable deps
 │
@@ -47,7 +47,7 @@ whole run reports in under three minutes.
 | **check-dist** | missing/empty assets, any network URL, gzipped size over budget, module scripts | The desktop shell loads `file://` with no server: a CDN link or `type="module"` would break offline use. |
 | **Reproducible build** | two builds of one commit differ | Cheap proof the artifact depends only on the source and lockfile. |
 | **Desktop E2E** | any step of the native smoke | Real pywebview + Qt WebEngine against the *exact* bytes the frontend job built: receipts, shipments, BOM review, reconciliation after lost responses, both themes, four viewports, keyboard focus, restart persistence, a startup backup on the second launch. Screenshots are uploaded. |
-| **Package smoke** | the frozen bundle differs from the built assets, a startup failure is unreadable, either native run fails, the second run takes no startup backup, a run touches the network or a default data path | The bundle is what operators install, so it is built from the hash-locked `requirements-package.lock.txt` and the exact `frontend-dist` bytes, then run twice under Xvfb in an empty network namespace. Evidence is uploaded. See [packaging](frontend/packaging.md). |
+| **Package smoke** (Ubuntu 24.04, macOS 15) | the frozen bundle differs from the built assets, a startup failure is unreadable, either native run fails, the second run takes no startup backup, a run touches a default data path or (Linux) the network, the macOS application's seal is broken | The bundle is what operators install, so it is built from the hash-locked `requirements-package.lock.txt` and the exact `frontend-dist` bytes, then run twice: under Xvfb in an empty network namespace on Linux, in the runner's desktop session as an ad-hoc-signed `.app` on macOS. Evidence is uploaded. See [packaging](frontend/packaging.md). |
 | **pip-audit / npm audit** | a known vulnerability anywhere in the locked trees | Full-tree view, also on the weekly schedule. |
 | **Dependency review** | a PR *adds* a vulnerable dependency | Diff view with OpenSSF Scorecard data for new packages. |
 | **actionlint** | invalid workflow syntax, expressions, shell bugs | Workflows are code. |

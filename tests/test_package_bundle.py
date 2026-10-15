@@ -11,6 +11,7 @@ import itertools
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tarfile
 from pathlib import Path
@@ -108,6 +109,137 @@ def test_freeze_arguments_bundle_the_exact_assets_and_the_qt_webengine_runtime(t
     assert ("--specpath", str(work)) in pairs
     assert ("--workpath", str(work)) in pairs
     assert ("--distpath", str(dist)) in pairs
+
+
+def test_macos_freeze_makes_an_identified_application_and_other_platforms_do_not(tmp_path):
+    for system, expected in (("darwin", True), ("linux", False), ("win32", False)):
+        args = package_bundle.pyinstaller_args(Path("/repo"), tmp_path, tmp_path, tmp_path, system)
+        pairs = list(itertools.pairwise(args))
+        assert ("--windowed" in args) is expected
+        assert (("--osx-bundle-identifier", package_bundle.BUNDLE_IDENTIFIER) in pairs) is expected
+        assert args[-1] == str(Path("/repo") / "inventory_desktop.py")
+
+
+def test_macos_bundle_is_an_application_with_executable_and_manifest_inside(tmp_path):
+    app = package_bundle.bundle_path(tmp_path, "darwin")
+    assert app == tmp_path / "invsys-desktop.app"
+    assert package_bundle.executable_path(app, "darwin") == (
+        app / "Contents" / "MacOS" / "invsys-desktop"
+    )
+    assert package_bundle.manifest_path(app, "darwin") == (
+        app / "Contents" / "Resources" / "bundle-manifest.json"
+    )
+    folder = package_bundle.bundle_path(tmp_path, "linux")
+    assert folder == tmp_path / "invsys-desktop"
+    assert package_bundle.executable_path(folder, "linux") == folder / "invsys-desktop"
+    assert package_bundle.executable_path(folder, "win32") == folder / "invsys-desktop.exe"
+    assert package_bundle.manifest_path(folder, "linux") == folder / "bundle-manifest.json"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_application_assets_are_verified_once_through_the_frameworks_link(tmp_path):
+    assets = write_assets(tmp_path / "dist")
+    app = tmp_path / "invsys-desktop.app"
+    write_assets(app / "Contents" / "Resources" / "frontend" / "dist")
+    # PyInstaller links data from Contents/Frameworks (sys._MEIPASS) to Contents/Resources.
+    (app / "Contents" / "Frameworks").mkdir()
+    (app / "Contents" / "Frameworks" / "frontend").symlink_to(Path("..") / "Resources" / "frontend")
+    found = package_bundle.find_bundled_assets(app)
+    assert found == app / "Contents" / "Resources" / "frontend" / "dist"
+    assert package_bundle.verify_assets(app, assets) == package_bundle.asset_hashes(assets)
+    # The incomplete-bundle check removes the real folder; the link is left dangling.
+    copy = tmp_path / "copy.app"
+    package_bundle.hardlinked_copy(app, copy)
+    shutil.rmtree(package_bundle.find_bundled_assets(copy))
+    assert not (copy / "Contents" / "Frameworks" / "frontend" / "dist" / "index.html").exists()
+    assert (found / "index.html").is_file()
+
+
+def test_network_isolation_is_refused_outside_linux():
+    package_bundle.require_network_isolation("linux")
+    for system in ("darwin", "win32"):
+        with pytest.raises(PackagingError, match="needs a Linux network namespace"):
+            package_bundle.require_network_isolation(system)
+
+
+class FakeTools:
+    """Stands in for codesign/spctl/sysctl and records each call."""
+
+    def __init__(self, results: dict[str, tuple[int, str, str]] | None = None) -> None:
+        self.calls: list[tuple[str, ...]] = []
+        self.results = results or {}
+
+    def __call__(self, *command: str, check: bool = False) -> subprocess.CompletedProcess[str]:
+        self.calls.append(command)
+        key = " ".join(command[:2])
+        code, stdout, stderr = self.results.get(key, (0, "", ""))
+        return subprocess.CompletedProcess(list(command), code, stdout, stderr)
+
+
+def test_sealing_resigns_the_application_ad_hoc_and_verifies_it(tmp_path, monkeypatch):
+    tools = FakeTools()
+    monkeypatch.setattr(package_bundle, "_tool", tools)
+    package_bundle.seal_application(tmp_path / "invsys-desktop.app")
+    app = str(tmp_path / "invsys-desktop.app")
+    assert tools.calls == [
+        ("codesign", "--force", "--sign", "-", app),
+        ("codesign", "--verify", "--deep", "--strict", app),
+    ]
+
+
+def test_a_broken_seal_or_missing_codesign_is_a_readable_build_failure(tmp_path, monkeypatch):
+    broken = FakeTools({"codesign --verify": (1, "", "a sealed resource is missing or invalid")})
+    monkeypatch.setattr(package_bundle, "_tool", broken)
+    with pytest.raises(PackagingError, match=r"--strict` failed .*sealed resource is missing"):
+        package_bundle.seal_application(tmp_path / "invsys-desktop.app")
+
+    def missing(*command, check=False):
+        raise FileNotFoundError(2, "No such file or directory", command[0])
+
+    monkeypatch.setattr(package_bundle, "_tool", missing)
+    with pytest.raises(PackagingError, match="Cannot run codesign"):
+        package_bundle.seal_application(tmp_path / "invsys-desktop.app")
+
+
+def test_application_evidence_records_seal_signature_and_gatekeeper(tmp_path, monkeypatch):
+    details = "Executable=/x\nIdentifier=io.github.theozex4ever.invsys\nSignature=adhoc\nHash=1\n"
+    tools = FakeTools(
+        {
+            "codesign --verify": (0, "", "valid on disk\nsatisfies its Designated Requirement\n"),
+            "codesign --display": (0, "", details),
+            "spctl --assess": (3, "", "invsys-desktop.app: rejected\n"),
+        }
+    )
+    monkeypatch.setattr(package_bundle, "_tool", tools)
+    record = package_bundle.signature_record(tmp_path / "invsys-desktop.app")
+    assert record["passed"] is True
+    assert record["signature"] == ["Identifier=io.github.theozex4ever.invsys", "Signature=adhoc"]
+    # Gatekeeper rejecting an unsigned application is recorded, not a smoke failure.
+    assert record["gatekeeper"] == ["invsys-desktop.app: rejected"]
+    tools.results["codesign --verify"] = (1, "", "invalid signature\n")
+    assert package_bundle.signature_record(tmp_path / "x.app")["passed"] is False
+
+    def missing(*command, check=False):
+        raise FileNotFoundError(2, "No such file or directory", command[0])
+
+    monkeypatch.setattr(package_bundle, "_tool", missing)
+    assert package_bundle.signature_record(tmp_path / "x.app")["passed"] is False
+
+
+def test_macos_machine_record_reads_hardware_from_sysctl(monkeypatch):
+    tools = FakeTools(
+        {
+            "sysctl -n": (0, "Apple M1 (Virtual)\n", ""),
+        }
+    )
+    monkeypatch.setattr(package_bundle, "_tool", tools)
+    record = package_bundle.machine_record("darwin")
+    assert record["cpu"] == "Apple M1 (Virtual)"
+    assert record["os"].startswith("macOS")
+    assert "libc" not in record
+    assert ("sysctl", "-n", "hw.memsize") in tools.calls
+    tools.results["sysctl -n"] = (1, "", "unknown oid")
+    assert package_bundle.machine_record("darwin")["cpu"] == "unknown"
 
 
 def test_manifest_records_assets_toolchain_and_source(tmp_path):

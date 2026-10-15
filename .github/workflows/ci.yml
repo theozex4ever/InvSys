@@ -345,9 +345,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The Windows and macOS packaging tickets add their runners here and
-        # extend scripts/package_bundle.py; the steps below are the shared shape.
-        os: [ubuntu-24.04]
+        # The Windows packaging ticket adds its runner here and extends
+        # scripts/package_bundle.py; the steps below are the shared shape.
+        # `bundle` is what the build delivers: a folder, or an .app on macOS.
+        include:
+          - os: ubuntu-24.04
+            bundle: invsys-desktop
+          # Apple silicon; the bundle targets the runner's architecture only.
+          - os: macos-15
+            bundle: invsys-desktop.app
     env:
       QTWEBENGINE_CHROMIUM_FLAGS: --force-prefers-reduced-motion
     steps:
@@ -413,6 +419,20 @@ jobs:
           --evidence "$RUNNER_TEMP/package-evidence.json"
           --isolate-network
 
+      # The runner's logged-in session is the display. macOS has no unprivileged
+      # network namespace, so offline rests on the smoke's file:// and
+      # no-HTTP-server checks there (see docs/frontend/packaging.md).
+      - name: Package smoke (macOS)
+        if: runner.os == 'macOS'
+        env:
+          BUNDLE: ${{ matrix.bundle }}
+        run: >-
+          python scripts/package_bundle.py smoke
+          --bundle "$RUNNER_TEMP/bundle-dist/$BUNDLE"
+          --assets frontend/dist
+          --workdir "$RUNNER_TEMP/invsys-package-smoke"
+          --evidence "$RUNNER_TEMP/package-evidence.json"
+
       - name: Package evidence summary
         if: ${{ !cancelled() }}
         run: |
@@ -421,7 +441,7 @@ jobs:
           {
             echo "### Package smoke (${RUNNER_OS})"
             echo '```json'
-            python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d[k] for k in ('result','machine','network_isolated')}, indent=2))" "$RUNNER_TEMP/package-evidence.json"
+            python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d.get(k) for k in ('result','machine','network_isolated','application_seal')}, indent=2))" "$RUNNER_TEMP/package-evidence.json"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -433,6 +453,7 @@ jobs:
           path: |
             ${{ runner.temp }}/package-evidence.json
             ${{ runner.temp }}/bundle-dist/invsys-desktop/bundle-manifest.json
+            ${{ runner.temp }}/bundle-dist/invsys-desktop.app/Contents/Resources/bundle-manifest.json
             ${{ runner.temp }}/invsys-package-smoke/inventory/smoke-captures/
             ${{ runner.temp }}/invsys-package-smoke/inventory/logs/
           retention-days: 14

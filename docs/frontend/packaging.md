@@ -2,16 +2,27 @@
 
 `scripts/package_bundle.py` turns the built frontend and the pywebview launcher into
 a self-contained, one-directory bundle that runs without Python, Node, a frontend
-development server, a CDN or any inventory HTTP service. Linux is delivered
-(ticket #52). The Windows and macOS tickets extend the same script, lock file and CI
-job; they do not add a second build path. Full installers, signing, auto-update and
-release publication are out of scope.
+development server, a CDN or any inventory HTTP service. Linux (ticket #52) and
+macOS (ticket #54) are delivered. The Windows ticket extends the same script, lock
+file and CI job; it does not add a second build path. Full installers, Developer ID
+signing, notarization, auto-update and release publication are out of scope.
 
 What the bundle is: PyInstaller (`--onedir`) freezing `inventory_desktop.py` with
 the exact `frontend/dist` assets, PySide6 with Qt WebEngine and pywebview's Qt
-backend. `bundle-manifest.json` beside the executable records the source commit,
-the Python/PyInstaller/PySide6/pywebview/QtPy versions and the SHA-256 of every
+backend. `bundle-manifest.json` records the source commit, the
+Python/PyInstaller/PySide6/pywebview/QtPy versions and the SHA-256 of every
 bundled asset.
+
+| Platform | Bundle | Executable | Manifest |
+| --- | --- | --- | --- |
+| Linux | `invsys-desktop/` folder | `invsys-desktop/invsys-desktop` | `invsys-desktop/bundle-manifest.json` |
+| macOS | `invsys-desktop.app` application (`--windowed`, bundle identifier `io.github.theozex4ever.invsys`) | `invsys-desktop.app/Contents/MacOS/invsys-desktop` | `invsys-desktop.app/Contents/Resources/bundle-manifest.json` |
+
+On macOS the folder PyInstaller builds the application from is removed; only the
+`.app` is delivered. PyInstaller signs the application ad hoc; adding the manifest
+breaks that seal, so the build re-signs it ad hoc (`codesign --force --sign -`) and
+fails unless `codesign --verify --deep --strict` accepts it. An ad-hoc signature
+is not a Developer ID signature: see [unsigned distribution](#unsigned-distribution-macos).
 
 ## Build
 
@@ -27,11 +38,16 @@ npm run build:assets --prefix frontend && npm run check:dist --prefix frontend
 python scripts/package_bundle.py build --assets frontend/dist --dist /tmp/invsys-dist --work /tmp/invsys-work
 ```
 
-Output: `/tmp/invsys-dist/invsys-desktop/` and a
-`invsys-desktop-linux-x86_64.tar.gz` archive (sorted entries, neutral ownership,
-no embedded timestamps; the archive is deterministic for identical bundle
+The commands are the same on macOS (`codesign`, part of macOS, re-seals the
+application). Output: `/tmp/invsys-dist/invsys-desktop/` and an
+`invsys-desktop-linux-x86_64.tar.gz` archive on Linux;
+`/tmp/invsys-dist/invsys-desktop.app` and `invsys-desktop-darwin-arm64.tar.gz` on
+Apple silicon. Archives have sorted entries, keep symbolic links and permissions,
+neutral ownership and
+no embedded timestamps; an archive is deterministic for identical bundle
 contents, but the frozen binaries themselves are not claimed to be bit-reproducible).
-Build with Python 3.12, the CI baseline. The build refuses to run without the
+Build with Python 3.12, the CI baseline. A macOS bundle contains the build
+machine's architecture only (the CI builds arm64 on Apple silicon). The build refuses to run without the
 built assets, verifies the bundled assets byte-for-byte against `frontend/dist`
 after freezing, and keeps the `.spec` file and scratch files in `--work`, outside
 the checkout. Choose `--dist` and `--work` outside the repository; the default
@@ -76,6 +92,65 @@ Install by extracting; remove by deleting the directory. Nothing is written insi
 the bundle. Upgrading replaces the directory only; inventory data, backups, exports
 and logs live beside the selected database, never in the bundle.
 
+## Install and run (macOS)
+
+Prerequisites on the operator's Mac:
+
+- macOS 13 Ventura or later: the bundled PySide6 6.11.2 (Qt 6.11) wheels are
+  built for macOS 13 and newer. **Verified target:** only the GitHub-hosted
+  `macos-15` runner (macOS 15, Apple silicon virtual machine) recorded
+  [below](#recorded-macos-evidence). Other macOS versions are untested.
+- Apple silicon (arm64). The bundle holds one architecture, the build machine's;
+  an Intel Mac needs a bundle built on an Intel Mac, which is untested.
+- A logged-in desktop session. Nothing else to install: the bundle carries
+  Python, Qt and Qt WebEngine, and the Settings folder buttons use the built-in
+  `open` command.
+
+```bash
+mkdir -p ~/Applications
+tar -xzf invsys-desktop-darwin-arm64.tar.gz -C ~/Applications
+~/Applications/invsys-desktop.app/Contents/MacOS/invsys-desktop --database ~/invsys-data/inventory.db
+```
+
+Launch from Terminal as above, so the readable startup failures (table below) are
+visible. `open ~/Applications/invsys-desktop.app --args --database <file>` also
+works but discards those messages. Opening the application from Finder or the Dock
+passes no `--database`, so it exits at once without a window: by design, a bundle
+never opens an inventory it was not told to open. Remove by deleting the `.app`;
+upgrade by replacing it. Nothing is written inside the application; inventory data,
+backups, exports and logs live beside the selected database.
+
+Choose a database folder such as `~/invsys-data`. Desktop, Documents, Downloads,
+iCloud Drive and removable or network volumes are privacy-protected: macOS asks
+whether Terminal (or the application) may access them, and a refusal ends the
+launch with "Cannot open the inventory database ... Operation not permitted".
+
+### Unsigned distribution (macOS)
+
+The application carries only an ad-hoc signature: no Developer ID, no
+notarization. Its seal is intact (the build and the smoke check it), but Gatekeeper
+does not trust it: the package smoke records `spctl --assess` rejecting the
+application. What that means for operators:
+
+- A copy that arrived through a browser, mail, AirDrop or a messaging app is
+  quarantined, and macOS refuses its first launch ("Apple could not verify ...").
+  Approve it once: after the refused launch, open System Settings > Privacy &
+  Security, choose **Open Anyway** for `invsys-desktop` and confirm (macOS 15 no
+  longer offers the Control-click > Open shortcut). Alternatively, after checking
+  the archive's SHA-256 against the build record, clear the quarantine flag of
+  this application only:
+  `xattr -dr com.apple.quarantine ~/Applications/invsys-desktop.app`.
+- Archives copied by `scp`, `rsync` or a USB drive, and local builds, are not
+  quarantined and launch directly.
+- Do not modify or re-sign files inside the application. A broken seal makes macOS
+  report the application as damaged, with no **Open Anyway** option.
+- A quarantined application started from Finder without being moved may run from
+  a randomized read-only location (App Translocation). Nothing is written inside
+  the bundle, so this does not affect data, which always follows `--database`.
+
+None of these Gatekeeper prompts were exercised: the CI bundle is never
+quarantined, and no Developer ID signature, notarized build or installer exists.
+
 ## Data selection
 
 Packaged launch **requires** `--database`, so a bundle can never silently open an
@@ -96,6 +171,8 @@ location):
 | database folder unusable (smoke-tested: a file where the folder belongs; also unwritable or full) | exit 1, "Cannot open the inventory database <path>: <reason>" |
 | file that is not SQLite, or a directory (both smoke-tested) | exit 1, same message with the reason |
 
+The messages and exit statuses are the same on Linux and macOS.
+
 ## Package smoke
 
 ```bash
@@ -105,7 +182,16 @@ xvfb-run -a -s "-screen 0 1920x1080x24" \
   --evidence /tmp/invsys-package-evidence.json --isolate-network
 ```
 
-(On a desktop session omit `xvfb-run`; the smoke opens real windows.) The workdir
+(On a desktop session omit `xvfb-run`; the smoke opens real windows.) On macOS,
+from a logged-in session:
+
+```bash
+python scripts/package_bundle.py smoke --bundle /tmp/invsys-dist/invsys-desktop.app \
+  --assets frontend/dist --workdir /tmp/invsys-package-smoke \
+  --evidence /tmp/invsys-package-evidence.json
+```
+
+The workdir
 must be empty and disposable; the smoke writes a real inventory there and never
 touches operational data. It:
 
@@ -123,8 +209,25 @@ touches operational data. It:
    run 1 wrote must still exist after run 2) and checks that nothing was written to
    `INVSYS_HOME`, the default data location, which the smoke points at an
    unused directory;
-5. with `--isolate-network`, runs everything inside an empty network namespace
-   (`unshare --net`, no interface at all) so any network use fails.
+5. with `--isolate-network` (Linux only), runs everything inside an empty network
+   namespace (`unshare --net`, no interface at all) so any network use fails;
+6. on macOS, after both runs, requires `codesign --verify --deep --strict` to
+   accept the application (which also shows nothing was written inside it) and
+   records its signature details and Gatekeeper's verdict.
+
+macOS differences, stated plainly:
+
+- **Offline:** macOS has no unprivileged network namespace, so `--isolate-network`
+  stops with a readable error there. Offline operation on macOS rests on the same
+  in-process checks as everywhere (assets load over `file://`, the smoke fails if
+  pywebview starts an HTTP server) and on `npm run check:dist`, which rejects
+  built assets containing network URLs. Network use by the
+  bundle itself is not ruled out by isolation on macOS.
+- **Import dialogs:** NSOpenPanel, the Cocoa panel Qt shows for file selection,
+  cannot be operated by another program. On macOS the smoke therefore switches Qt
+  to its own file dialog (`AA_DontUseNativeDialogs`, smoke runs only) before it
+  drives the three CSV imports. The bridge, pywebview and Qt selection path is the
+  one operators use; the Cocoa panel itself is exercised only by an operator.
 
 It exits non-zero on any failure and writes a JSON evidence record: reference
 machine (OS, kernel, glibc, CPU, memory, session), bundle size, file count,
@@ -139,27 +242,31 @@ parity acceptance is ticket 18 and is not claimed here.
 
 ## CI
 
-The `package-smoke` job (matrix over runners; Ubuntu 24.04 today) runs after the
-`frontend` job: it installs the package lock, downloads the exact `frontend-dist`
-artifact the other jobs tested, builds the bundle, checks the checkout stayed
-clean, runs the package smoke under Xvfb in an empty network namespace, and
-uploads `package-evidence.json`, the manifest, captures and logs for 14 days. The
-archive is not uploaded (about 260 MB). The job is part of **CI gate**.
+The `package-smoke` job (matrix over runners: `ubuntu-24.04` and `macos-15`)
+runs after the `frontend` job: it installs the package lock, downloads the exact
+`frontend-dist` artifact the other jobs tested, builds the bundle, checks the
+checkout stayed clean and runs the package smoke: under Xvfb in an empty network
+namespace on Linux, in the runner's logged-in session on macOS. It uploads
+`package-evidence.json`, the manifest, captures and logs for 14 days. Archives are
+not uploaded (about 260 MB each). Both legs are part of **CI gate**.
 
-## Extending to Windows and macOS
+## Extending to Windows
 
-Extend, do not fork: add the runner to the matrix and its display/runtime steps;
-adapt `pyinstaller_args`, `executable_path` and `make_archive` (zip, `.app`) in
+Extend, do not fork: add the runner to the matrix with its `bundle` name and its
+display/runtime steps; adapt `bundle_path`, `executable_path`, `manifest_path`,
+`pyinstaller_args` and, if needed, `make_archive` (zip) in
 `scripts/package_bundle.py`; keep `requirements-package.txt` as the single
 bundling dependency list, with platform markers if a tool is OS-specific. The
 launcher contract (explicit `--database`, `--smoke-check`) is unchanged.
 
 ## Limitations and evidence
 
-See the recorded Linux run below. Not established by this ticket: Windows/macOS
-bundles, distributions other than the recorded ones, glibc compatibility matrix,
-performance targets (P05 packaged launch time), human operator acceptance, signed
-installers, auto-update and release publication.
+See the recorded Linux and macOS runs below. Not established by these tickets:
+Windows bundles, Linux distributions and macOS versions other than the recorded
+ones, Intel Macs, the glibc compatibility matrix, Gatekeeper approval of a
+quarantined download, performance targets (P05 packaged launch time), human
+operator acceptance, Developer ID signing, notarization, installers, auto-update
+and release publication.
 
 ## Recorded Linux evidence
 
