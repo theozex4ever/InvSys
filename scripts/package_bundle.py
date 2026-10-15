@@ -460,6 +460,10 @@ def bundle_record(bundle: Path) -> dict[str, Any]:
 
 
 def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_network: bool) -> bool:
+    # Child launches use a separate cwd; keep every selected path anchored to this one.
+    bundle, assets, workdir, evidence = (
+        path.resolve() for path in (bundle, assets, workdir, evidence)
+    )
     if not executable_path(bundle).is_file():
         raise PackagingError(f"No bundle executable at {executable_path(bundle)}.")
     if workdir.exists() and any(workdir.iterdir()):

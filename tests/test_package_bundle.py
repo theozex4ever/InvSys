@@ -8,6 +8,7 @@ display or a PyInstaller run.
 import importlib.util
 import io
 import itertools
+import json
 import os
 import shutil
 import sys
@@ -202,6 +203,52 @@ def test_the_smoke_refuses_a_missing_executable_or_a_used_workdir(tmp_path):
     (used / "old").write_text("x", encoding="utf-8")
     with pytest.raises(PackagingError, match="must be empty"):
         package_bundle.smoke(bundle, assets, used, tmp_path / "e.json", False)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stand-in launcher is a POSIX script")
+def test_relative_smoke_paths_launch_from_another_cwd_and_retain_failure_evidence(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(package_bundle, "require_display", lambda: None)
+    write_assets(Path("assets"))
+    bundle = make_bundle(Path("dist"))
+    launcher = package_bundle.executable_path(bundle)
+    # A failed native run must still record the selected paths and its evidence.
+    launcher.write_text(
+        f"#!{sys.executable}\nimport json, os, sys\n"
+        "print(json.dumps([os.getcwd(), os.environ['INVSYS_HOME'], sys.argv[1:]]))\n"
+        "sys.exit(1)\n",
+        encoding="utf-8",
+    )
+    launcher.chmod(0o755)
+    assert (
+        package_bundle.main(
+            [
+                "smoke",
+                "--bundle",
+                str(bundle),
+                "--assets",
+                "assets",
+                "--workdir",
+                "smoke",
+                "--evidence",
+                "records/evidence.json",
+            ]
+        )
+        == 1
+    )
+    evidence = json.loads((tmp_path / "records" / "evidence.json").read_text())
+    assert evidence["result"] == "failed"
+    for run in evidence["runs"]:
+        cwd, home, arguments = json.loads("\n".join(run["stdout"]))
+        assert cwd == str(tmp_path / "smoke" / "cwd")
+        assert home == str(tmp_path / "smoke" / "unexpected-home")
+        assert arguments == [
+            "--database",
+            str(tmp_path / "smoke" / "inventory" / "inventory.db"),
+            "--smoke-check",
+        ]
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the stand-in launcher is a POSIX script")
