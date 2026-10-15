@@ -88,8 +88,8 @@ class _ImportSmoke:
             f"window.smokeImportCalls === 1 && {self.el('select')}.disabled",
             "duplicate and uncertain submission lock",
         )
-        # A failed status read, a failed History reconciliation read after a successful
-        # status read, and a failed repeat read each keep the lock.
+        # A failed status read, a failed History read that renders reconciliation data
+        # (after a successful status read), and a failed repeat read each keep the lock.
         for method, label in (
             ("import_status", "Recovery unavailable"),
             ("history", "History reconciliation unavailable"),
@@ -105,6 +105,11 @@ class _ImportSmoke:
                 f"{self.el('select')}.disabled && !{self.el('resolve')}",
                 "failed recovery keeps the lock and clears any prior decision",
             )
+            if method == "history":
+                self.require(
+                    f"document.querySelector('#history-data').textContent.includes('{label}')",
+                    "the failed read is the one rendering History",
+                )
             self.run(
                 f"window.smokeAPI.{method} = window.smokeOriginal; {self.el('recover')}.click()"
             )

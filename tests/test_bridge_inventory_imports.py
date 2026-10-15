@@ -134,6 +134,8 @@ def test_malformed_files_are_blocked_before_commit(tmp_path, text):
         "part_number,location,lot_number,quantity,Quantity \nA,Stock,L1,5,900\n",
         f"{HEADER}\nA,Stock,L1,1,000\n",
         f"{HEADER},\nA,Stock,L1,5,7\n",
+        f"{HEADER},,\nA,Stock,L1,1,000,\n",
+        "part_number,,location,lot_number,quantity,\nA,9,Stock,L1,5,\n",
         f'{HEADER},notes\nA,Stock,L1,5,"unterminated\n',
         f'{HEADER},notes\nA,Stock,L1,5,"x"y\n',
     ],
@@ -147,6 +149,18 @@ def test_ambiguous_csv_structure_cannot_change_stock(tmp_path, text):
     assert records(bridge) == []
     assert balances(bridge) == {}
     assert not context.backups.exists()
+
+
+def test_legitimate_spreadsheet_quirks_still_import(tmp_path):
+    _store, bridge, _context, _host = launch(
+        tmp_path,
+        f'\ufeff{HEADER},notes,,\r\nA,Stock,L1,5,"Dock 2, ""north""\nshelf",,\r\n\r\nB,Stock,L2,3\r\n',
+    )
+    review = bridge.select_import("inventory")["data"]
+    assert review["preview"]["errors"] == []
+    assert commit(bridge, review)["data"]["rows_imported"] == 2
+    notes = {row["part_number"]: row["notes"] for row in records(bridge)}
+    assert notes == {"A": 'Dock 2, "north"\nshelf', "B": ""}
 
 
 def test_a_malformed_row_counts_only_itself_as_invalid(tmp_path):
