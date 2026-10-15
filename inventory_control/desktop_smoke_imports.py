@@ -56,7 +56,9 @@ class _ImportSmoke:
                     else:
                         widget.selectFile(str(self.path))
                         widget.accept()
-                    selected = True
+                    # QFileDialog.accept() can leave the dialog open; retry until dismissal.
+                    # Only wait for the bridge once selection really dismissed it.
+                    selected = not widget.isVisible()
                     return
 
         while not selected and time.monotonic() < deadline:
