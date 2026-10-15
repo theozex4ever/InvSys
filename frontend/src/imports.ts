@@ -15,6 +15,11 @@ const copy: Record<ImportKind, { title: string; summary: string; fields: string;
     fields: 'Required: part_number, location, lot_number (a real Lot), quantity. Optional: reference (defaults to "CSV import"), notes. Each row posts a RECEIVE to the Stock ledger, attributed to the current operator. Committing the same file again receives the stock again.',
     select: 'Select Inventory CSV', confirm: 'I confirm these receipts and the required backup.', commit: 'Commit Inventory import', done: 'Inventory import completed', inspect: 'Stock and History',
   },
+  bom: {
+    title: 'BOM CSV import', summary: 'Preview BOM definition changes, then confirm. Every import requires a verified backup.',
+    fields: 'Required: parent_part_number, component_part_number, quantity_per. Parent and component Parts must exist and be active. Rows add direct links or update the quantity of existing links; links not in the file are kept and none are removed. Self-references, cycles and invalid quantities are blocked. Stock, History and past shipment snapshots are not changed; a reviewed BOM shipment affected by a changed definition must be reviewed again.',
+    select: 'Select BOM CSV', confirm: 'I confirm these BOM definition changes and the required backup.', commit: 'Commit BOM import', done: 'BOM import completed', inspect: 'BOM definitions',
+  },
 };
 
 export function importWorkflow(getAPI: () => API, operator: () => string, changed: () => Promise<void>, kind: ImportKind) {

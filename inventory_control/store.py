@@ -820,6 +820,8 @@ class InventoryStore:
                     raise ValueError("A part cannot contain itself.")
                 if quantity_per <= 0:
                     raise ValueError("Component quantity must be greater than zero.")
+                if quantity_per > 2**31 - 1:
+                    raise ValueError("Component quantity cannot exceed 2147483647.")
                 parent_part = self._require_part(session, parent)
                 component_part = self._require_part(session, component)
                 existing = session.scalar(

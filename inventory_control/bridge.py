@@ -31,7 +31,7 @@ from inventory_control.utilities import DesktopHost, UtilityContext
 logger = logging.getLogger(__name__)
 
 # Enabled CSV import kinds, mapped to the records each one changes (for outcome messages).
-IMPORT_KIND_RECORDS = {"parts": "catalog", "inventory": "stock"}
+IMPORT_KIND_RECORDS = {"parts": "catalog", "inventory": "stock", "bom": "BOM definition"}
 
 
 class BridgeError(ValueError):
@@ -647,7 +647,7 @@ class InventoryBridge:
     def select_import(self, kind: Any) -> dict[str, Any]:
         def select() -> dict[str, Any]:
             if kind not in IMPORT_KIND_RECORDS:
-                raise ValueError("Choose Parts or Inventory receipt import.")
+                raise ValueError("Choose Parts, Inventory receipt or BOM import.")
             launch = self._launch()
             if self._host is None:
                 raise BridgeError("UNAVAILABLE", "File selection is not available in this launch.")
@@ -656,11 +656,11 @@ class InventoryBridge:
                 if path is None:
                     return {"cancelled": True}
                 service = self._import_service()
-                review_csv = (
-                    service.review_parts_import_csv
-                    if kind == "parts"
-                    else service.review_inventory_import_csv
-                )
+                review_csv = {
+                    "parts": service.review_parts_import_csv,
+                    "inventory": service.review_inventory_import_csv,
+                    "bom": service.review_bom_import_csv,
+                }[kind]
                 preview, digest = review_csv(path)
             except OSError as error:
                 raise BridgeError("FILE_ERROR", f"Could not select or read CSV: {error}") from error
@@ -713,11 +713,11 @@ class InventoryBridge:
             # Consume before attempting writes; an error never makes a mutation retryable.
             review["state"] = "failed"
             service = self._import_service()
-            import_csv = (
-                service.import_parts_csv
-                if reviewed["kind"] == "parts"
-                else service.import_inventory_csv
-            )
+            import_csv = {
+                "parts": service.import_parts_csv,
+                "inventory": service.import_inventory_csv,
+                "bom": service.import_bom_csv,
+            }[reviewed["kind"]]
             try:
                 result = import_csv(
                     Path(reviewed["path"]),

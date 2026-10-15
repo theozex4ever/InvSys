@@ -44,6 +44,16 @@ class TestBOMSetup:
         with pytest.raises(ValueError, match="Component quantity must be greater than zero"):
             blank_store.add_bom_component("KIT-001", "SCREW-001", 0)
 
+    def test_bulk_import_applies_the_same_quantity_limits_as_authoring(self, blank_store):
+        blank_store.add_part("KIT-001", "Service Kit")
+        blank_store.add_part("SCREW-001", "Socket Screw")
+        row = {"parent_part_number": "KIT-001", "component_part_number": "SCREW-001"}
+
+        with pytest.raises(ValueError, match="cannot exceed 2147483647"):
+            blank_store.import_bom_components([{**row, "quantity_per": 2**31}])
+
+        assert blank_store.bom_components == {}
+
     def test_bom_cycles_are_rejected(self, blank_store):
         blank_store.add_part("KIT-001", "Service Kit")
         blank_store.add_part("SUB-001", "Nested Subassembly")
