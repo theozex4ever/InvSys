@@ -1,0 +1,8 @@
+# Standalone-bundle build tooling (scripts/package_bundle.py). Kept apart from
+# requirements-dev.txt so test legs never install the bundler, and constrained
+# to requirements.lock.txt so the bundle contains exactly the runtime versions
+# the tests exercised. Regenerate requirements-package.lock.txt with
+# `scripts/lock.sh` after editing this file.
+#
+-r requirements-desktop.txt
+pyinstaller>=6.22,<7  # freezes the app; GPLv2 with the bootloader exception, so the bundle is not GPL-bound

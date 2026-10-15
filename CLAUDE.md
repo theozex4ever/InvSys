@@ -26,6 +26,10 @@ npm run check --prefix frontend
 npm run build:assets --prefix frontend && npm run check:dist --prefix frontend
 ```
 
+The standalone Linux bundle is built and smoke-tested with
+`scripts/package_bundle.py` (locked `requirements-package.lock.txt`); see
+`docs/frontend/packaging.md`. CI runs it as `package-smoke`.
+
 Gate rules to keep green:
 
 - pytest config lives in `pyproject.toml`: random order, warnings are errors,

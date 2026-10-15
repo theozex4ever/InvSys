@@ -7,6 +7,8 @@
 #
 # CI runs this script with no arguments and fails if the lock files change, so
 # a manifest edit without a lock refresh (or a hand-edited lock) cannot merge.
+# requirements-package.lock.txt is compiled after requirements.lock.txt because it
+# is constrained to it.
 # Locks are universal: one file covers Linux, Windows and macOS on Python 3.12+.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -20,3 +22,7 @@ common=(
 )
 uv pip compile requirements-dev.txt "${common[@]}" "$@" -o requirements.lock.txt
 uv pip compile requirements-ci.txt "${common[@]}" "$@" -o requirements-ci.lock.txt
+# The bundle tooling is constrained to the tested lock: shared packages (PySide6,
+# pywebview, SQLAlchemy...) resolve to the versions the test suite ran against.
+uv pip compile requirements-package.txt "${common[@]}" --constraint requirements.lock.txt "$@" \
+  -o requirements-package.lock.txt
