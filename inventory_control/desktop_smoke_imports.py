@@ -47,7 +47,7 @@ class _ImportSmoke:
             nonlocal selected
             for widget in QApplication.topLevelWidgets():
                 if isinstance(widget, QFileDialog) and widget.isVisible():
-                    if widget.directory().absolutePath() != str(self.directory):
+                    if Path(widget.directory().absolutePath()) != self.directory:
                         raise RuntimeError(
                             "Import dialog opened outside the selected database folder."
                         )

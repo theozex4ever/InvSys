@@ -1,5 +1,7 @@
 """Native import probes must finish the dialog before waiting for the bridge."""
 
+from pathlib import Path
+
 from PySide6.QtWidgets import QFileDialog
 
 from inventory_control.desktop_smoke_imports import _ImportSmoke
@@ -33,7 +35,7 @@ def test_import_selection_retries_when_accept_leaves_the_dialog_open(qapp, tmp_p
     try:
         smoke.select()
         assert dialog.attempts == 2
-        assert dialog.selectedFiles() == [str(path)]
+        assert [Path(selected) for selected in dialog.selectedFiles()] == [path]
     finally:
         dialog.close()
         dialog.deleteLater()
