@@ -47,7 +47,7 @@ class _ImportSmoke:
             nonlocal selected
             for widget in QApplication.topLevelWidgets():
                 if isinstance(widget, QFileDialog) and widget.isVisible():
-                    if widget.directory().absolutePath() != str(self.directory):
+                    if Path(widget.directory().absolutePath()) != self.directory:
                         raise RuntimeError(
                             "Import dialog opened outside the selected database folder."
                         )
@@ -56,7 +56,9 @@ class _ImportSmoke:
                     else:
                         widget.selectFile(str(self.path))
                         widget.accept()
-                    selected = True
+                    # QFileDialog.accept() can leave the dialog open; retry until dismissal.
+                    # Only wait for the bridge once selection really dismissed it.
+                    selected = not widget.isVisible()
                     return
 
         while not selected and time.monotonic() < deadline:

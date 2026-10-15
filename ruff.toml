@@ -62,6 +62,9 @@ ignore = [
 # The native smoke probes are CLI tools that report progress on stdout.
 "inventory_control/desktop_smoke*.py" = ["T201"]
 "inventory_control/desktop.py" = ["T201"]
+# The bundle tool is a CLI that reports progress on stdout and drives subprocesses
+# built from fixed arguments (annotated per call).
+"scripts/package_bundle.py" = ["T201"]
 
 [lint.flake8-pytest-style]
 parametrize-names-type = "csv"

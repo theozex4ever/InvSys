@@ -113,7 +113,7 @@ jobs:
       - name: Lock files match their inputs
         run: |
           scripts/lock.sh
-          if ! git diff --exit-code -- requirements.lock.txt requirements-ci.lock.txt; then
+          if ! git diff --exit-code -- requirements.lock.txt requirements-ci.lock.txt requirements-package.lock.txt; then
             echo "::error::A lock file is stale or hand-edited. Run scripts/lock.sh and commit the result."
             exit 1
           fi
@@ -335,6 +335,109 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+  package-smoke:
+    name: Package smoke (${{ matrix.os }})
+    needs: frontend
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # The Windows and macOS packaging tickets add their runners here and
+        # extend scripts/package_bundle.py; the steps below are the shared shape.
+        os: [ubuntu-24.04]
+    env:
+      QTWEBENGINE_CHROMIUM_FLAGS: --force-prefers-reduced-motion
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-package.lock.txt
+
+      - name: Install display server and Qt WebEngine libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          # shellcheck disable=SC2086 # word-splitting the package list is intended
+          sudo apt-get install --no-install-recommends -y -qq xvfb xauth $QT_APT_PACKAGES
+          # Chromium's sandbox needs unprivileged user namespaces (blocked by default
+          # on Ubuntu 24.04); the offline check also runs the bundle in a fresh one.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Install packaging dependencies (hash-locked)
+        run: python -m pip install --require-hashes -r requirements-package.lock.txt
+
+      # The exact bytes the frontend job built and tested, not a rebuild.
+      - name: Download built assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: Build standalone bundle
+        run: >-
+          python scripts/package_bundle.py build
+          --assets frontend/dist
+          --dist "$RUNNER_TEMP/bundle-dist"
+          --work "$RUNNER_TEMP/bundle-work"
+
+      - name: Build left the checkout untouched
+        run: |
+          leaked="$(git status --porcelain --ignored --untracked-files=all \
+            | grep -vE '^(!!|\?\?) frontend/dist/' || true)"
+          if [ -n "$leaked" ]; then
+            echo "::error::The package build wrote into the checkout: $(echo "$leaked" | tr '\n' ' ')"
+            exit 1
+          fi
+
+      # Failure behaviour, then two native runs of the frozen bundle against one
+      # disposable inventory (second run: restart persistence and startup backup),
+      # inside an empty network namespace so any network use fails outright.
+      - name: Package smoke
+        if: runner.os == 'Linux'
+        run: >-
+          xvfb-run -a -s "-screen 0 1920x1080x24"
+          python scripts/package_bundle.py smoke
+          --bundle "$RUNNER_TEMP/bundle-dist/invsys-desktop"
+          --assets frontend/dist
+          --workdir "$RUNNER_TEMP/invsys-package-smoke"
+          --evidence "$RUNNER_TEMP/package-evidence.json"
+          --isolate-network
+
+      - name: Package evidence summary
+        if: ${{ !cancelled() }}
+        run: |
+          # The smoke may have failed before writing its record.
+          [ -f "$RUNNER_TEMP/package-evidence.json" ] || exit 0
+          {
+            echo "### Package smoke (${RUNNER_OS})"
+            echo '```json'
+            python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d[k] for k in ('result','machine','network_isolated')}, indent=2))" "$RUNNER_TEMP/package-evidence.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload package evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-evidence-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/package-evidence.json
+            ${{ runner.temp }}/bundle-dist/invsys-desktop/bundle-manifest.json
+            ${{ runner.temp }}/invsys-package-smoke/inventory/smoke-captures/
+            ${{ runner.temp }}/invsys-package-smoke/inventory/logs/
+          retention-days: 14
+          if-no-files-found: warn
+
   dependency-audit:
     name: Dependency audit
     runs-on: ubuntu-24.04
@@ -361,6 +464,9 @@ jobs:
         run: |
           pip-audit --strict --progress-spinner=off --disable-pip --require-hashes \
             -r requirements.lock.txt -r requirements-ci.lock.txt
+          # The bundle toolchain is a separate hash-locked set (same runtime pins).
+          pip-audit --strict --progress-spinner=off --disable-pip --require-hashes \
+            -r requirements-package.lock.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -398,6 +504,7 @@ jobs:
       - python-tests
       - frontend
       - desktop-e2e
+      - package-smoke
       - dependency-audit
       - dependency-review
     runs-on: ubuntu-24.04
