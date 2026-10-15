@@ -77,8 +77,8 @@ def main() -> int:
         parser.exit(
             1,
             f"Cannot open the inventory database {database}: {reason}\n"
-            "Choose an existing SQLite inventory, or a new file in a folder this account can "
-            "write, with --database.\n",
+            "Check that --database names a readable, writable SQLite inventory (or a new file "
+            "in a folder this account can write).\n",
         )
     smoke: DesktopSmoke | None = None
     # The smoke records folder requests instead of opening a file manager window.

@@ -270,9 +270,14 @@ def run_bundle(
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
-        raise PackagingError(
-            f"{' '.join(command)} did not finish within {RUN_TIMEOUT_SECONDS} s."
-        ) from exc
+        # A hung bundle is a failed run with evidence, not a lost record.
+        return {
+            "arguments": arguments,
+            "exit_code": -1,
+            "seconds": RUN_TIMEOUT_SECONDS,
+            "stdout": _text(exc.stdout),
+            "stderr": _text(exc.stderr) + f"\nTimed out after {RUN_TIMEOUT_SECONDS} s.",
+        }
     return {
         "arguments": arguments,
         "exit_code": result.returncode,
@@ -280,6 +285,10 @@ def run_bundle(
         "stdout": result.stdout,
         "stderr": result.stderr,
     }
+
+
+def _text(output: str | bytes | None) -> str:
+    return output.decode(errors="replace") if isinstance(output, bytes) else output or ""
 
 
 def excerpt(text: str) -> list[str]:
@@ -297,6 +306,11 @@ def database_counts(database: Path) -> dict[str, int | str]:
             row = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()  # noqa: S608
             counts[table] = row[0]
     return counts
+
+
+def transaction_ids(database: Path) -> set[int]:
+    with closing(sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True)) as connection:
+        return {row[0] for row in connection.execute("SELECT id FROM inventory_transactions")}
 
 
 def startup_backups(database: Path) -> list[str]:
@@ -329,6 +343,8 @@ def failure_checks(
     garbage = workdir / "garbage" / "inventory.db"
     garbage.parent.mkdir()
     garbage.write_text("not an SQLite database", encoding="utf-8")
+    directory = workdir / "directory" / "inventory.db"
+    directory.mkdir(parents=True)
     missing_db = workdir / "missing-assets" / "inventory.db"
     incomplete = workdir / "incomplete-bundle"
     hardlinked_copy(bundle, incomplete)
@@ -348,6 +364,13 @@ def failure_checks(
             1,
             "Cannot open the inventory database",
             ["--database", str(blocker / "inventory.db")],
+            bundle,
+        ),
+        (
+            "database-path-is-a-directory",
+            1,
+            "Cannot open the inventory database",
+            ["--database", str(directory)],
             bundle,
         ),
         (
@@ -458,6 +481,8 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
     }
     database = workdir / "inventory" / "inventory.db"
     ok = all(check["passed"] for check in record["failure_checks"])
+    first_ids: set[int] = set()
+    ids: set[int] = set()
     for number in (1, 2):
         run = run_bundle(
             bundle,
@@ -468,9 +493,21 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
         )
         backups = startup_backups(database) if database.is_file() else []
         run_ok = run["exit_code"] == 0 and "no HTTP server" in run["stdout"]
-        if number == 2:
-            run_ok = run_ok and bool(backups)
         counts = database_counts(database) if database.is_file() else {}
+        ids = transaction_ids(database) if database.is_file() else set()
+        backed_up: int | None = None
+        if number == 1:
+            # A fresh inventory has nothing to back up at startup.
+            run_ok = run_ok and not backups
+        else:
+            run_ok = run_ok and bool(backups)
+            if backups:
+                # The startup backup must hold exactly what run 1 left behind.
+                copy = database_counts(database.parent / "backups" / backups[-1])
+                backed_up = int(copy["inventory_transactions"])
+                run_ok = run_ok and copy["integrity_check"] == "ok"
+                run_ok = run_ok and backed_up == len(first_ids)
+        first_ids = first_ids or ids
         record["runs"].append(
             {
                 "run": number,
@@ -479,17 +516,17 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
                 "stdout": excerpt(run["stdout"]),
                 "stderr": excerpt(run["stderr"]),
                 "startup_backups": backups,
+                "startup_backup_transactions": backed_up,
                 "database": counts,
                 "passed": run_ok,
             }
         )
         ok = ok and run_ok
-    first, second = (run["database"] for run in record["runs"])
+    # Every ledger row run 1 wrote must still be there after the restart.
     persisted = (
-        bool(first)
-        and bool(second)
-        and second["inventory_transactions"] >= first["inventory_transactions"] > 0
-        and second["integrity_check"] == "ok"
+        bool(first_ids)
+        and first_ids <= ids
+        and record["runs"][1]["database"].get("integrity_check") == "ok"
     )
     record["restart_persistence"] = {"passed": persisted}
     record["no_writes_outside_selected_inventory"] = {"passed": not unexpected.exists()}
@@ -509,14 +546,13 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("build", "smoke"):
-        sub = commands.add_parser(name)
+    build_parser = commands.add_parser("build")
+    smoke_parser = commands.add_parser("smoke")
+    for sub in (build_parser, smoke_parser):
         sub.add_argument("--assets", type=Path, default=ROOT / "frontend" / "dist")
-    build_parser = commands.choices["build"]
     build_parser.add_argument("--dist", type=Path, default=ROOT / "dist")
     build_parser.add_argument("--work", type=Path, default=ROOT / "build")
     build_parser.add_argument("--no-archive", action="store_true")
-    smoke_parser = commands.choices["smoke"]
     smoke_parser.add_argument("--bundle", type=Path, default=ROOT / "dist" / APP_NAME)
     smoke_parser.add_argument("--workdir", type=Path, required=True)
     smoke_parser.add_argument("--evidence", type=Path, required=True)

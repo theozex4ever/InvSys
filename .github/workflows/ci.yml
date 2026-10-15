@@ -414,8 +414,10 @@ jobs:
           --isolate-network
 
       - name: Package evidence summary
-        if: ${{ !cancelled() && hashFiles(format('{0}/package-evidence.json', runner.temp)) != '' }}
+        if: ${{ !cancelled() }}
         run: |
+          # The smoke may have failed before writing its record.
+          [ -f "$RUNNER_TEMP/package-evidence.json" ] || exit 0
           {
             echo "### Package smoke (${RUNNER_OS})"
             echo '```json'

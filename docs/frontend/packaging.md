@@ -45,14 +45,20 @@ if the lock is stale and audits it with the other locks.
 
 Prerequisites on the operator's workstation:
 
-- x86-64 Linux with glibc at least as new as the build machine's (the frozen
-  interpreter and Qt link against it; build on the oldest distribution you
-  support), and a working X11 or Wayland session. The launcher is not an
-  offscreen browser.
-- The system libraries Qt WebEngine does not bundle. On Ubuntu 24.04 CI installs
-  exactly `QT_APT_PACKAGES` from [`ci.yml`](../../.github/workflows/ci.yml)
-  (`libegl1 libopengl0 libxkbcommon0 libxkbcommon-x11-0 libxcb-*`, `libnss3`,
-  `libxcomposite1 libxdamage1 libxrandr2 libxtst6 libasound2t64`). Other
+- x86-64 Linux and a working X11 or Wayland session; the launcher is not an
+  offscreen browser. **Verified targets:** Ubuntu 24.04 (the CI job, under Xvfb)
+  and the CachyOS reference machine below. Other distributions are untested. The
+  bundle links the build machine's glibc, so a bundle must be built on a machine
+  no newer than the oldest distribution it should run on; the recorded local
+  bundle was built on glibc 2.44 and is not claimed to run on older systems, while
+  the CI bundle is built on Ubuntu 24.04 (glibc 2.39).
+- The system libraries Qt WebEngine does not bundle. On Ubuntu 24.04 the CI job
+  installs exactly: `libegl1 libopengl0 libxkbcommon0 libxkbcommon-x11-0
+  libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0
+  libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libnss3
+  libxcomposite1 libxdamage1 libxrandr2 libxtst6 libasound2t64` (the
+  `QT_APT_PACKAGES` list in [`ci.yml`](../../.github/workflows/ci.yml), which
+  stays authoritative), plus `xvfb xauth` only for headless runs. Other
   distributions need the equivalents.
 - `xdg-open` for the Settings folder buttons.
 - Chromium's sandbox needs unprivileged user namespaces. Distributions that block
@@ -87,8 +93,8 @@ location):
 | --- | --- |
 | no `--database` | exit 2, "Packaged launch requires --database ..." |
 | bundled assets missing | exit 2, "This bundle is incomplete ... Extract the bundle again" |
-| database folder unusable (not a folder, unwritable, no space) | exit 1, "Cannot open the inventory database <path>: <reason>" |
-| file that is not SQLite, or a directory | exit 1, same message with the reason |
+| database folder unusable (smoke-tested: a file where the folder belongs; also unwritable or full) | exit 1, "Cannot open the inventory database <path>: <reason>" |
+| file that is not SQLite, or a directory (both smoke-tested) | exit 1, same message with the reason |
 
 ## Package smoke
 
@@ -105,15 +111,16 @@ touches operational data. It:
 
 1. verifies the bundled assets are byte-identical to `frontend/dist`;
 2. launches the bundle with no database, with its assets removed (from a hard-linked
-   copy), with a database folder that is a file and with a non-SQLite file, expecting
-   the readable failures above and no inventory created;
+   copy), with a database folder that is a file, a directory as the database and a
+   non-SQLite file, expecting the readable failures above and no inventory created;
 3. runs the bundle's native `--smoke-check` **twice** against one inventory:
    every delivered workflow (receive, ship, BOM, move, adjust, History, Settings
    backup/folder, five CSV exports, CSV imports, themes, keyboard/layout) and the
-   in-process restart-persistence check; the second run must create a
-   `*-startup.db` backup of the existing inventory;
-4. reads the inventory independently (SQLite integrity check, counts that must
-   not shrink between runs) and checks that nothing was written to
+   in-process restart-persistence check; the first run must take no startup backup,
+   the second must create a `*-startup.db` backup holding exactly the ledger rows
+   run 1 left;
+4. reads the inventory independently (SQLite integrity check, and every ledger row
+   run 1 wrote must still exist after run 2) and checks that nothing was written to
    `INVSYS_HOME`, the default data location, which the smoke points at an
    unused directory;
 5. with `--isolate-network`, runs everything inside an empty network namespace

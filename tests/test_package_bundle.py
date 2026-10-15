@@ -167,6 +167,7 @@ def test_database_evidence_reports_integrity_counts_and_startup_backups(tmp_path
     assert counts["integrity_check"] == "ok"
     assert counts["parts"] == 1
     assert counts["inventory_transactions"] == 0
+    assert package_bundle.transaction_ids(database) == set()
     assert len(package_bundle.startup_backups(database)) == 1
 
 
@@ -201,3 +202,17 @@ def test_the_smoke_refuses_a_missing_executable_or_a_used_workdir(tmp_path):
     (used / "old").write_text("x", encoding="utf-8")
     with pytest.raises(PackagingError, match="must be empty"):
         package_bundle.smoke(bundle, assets, used, tmp_path / "e.json", False)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stand-in launcher is a POSIX script")
+def test_a_hung_launcher_is_a_failed_run_with_a_record(tmp_path, monkeypatch):
+    bundle = tmp_path / "invsys-desktop"
+    bundle.mkdir()
+    launcher = bundle / "invsys-desktop"
+    launcher.write_text("#!/bin/sh\necho started\nexec sleep 30\n", encoding="utf-8")
+    launcher.chmod(0o755)
+    monkeypatch.setattr(package_bundle, "RUN_TIMEOUT_SECONDS", 1)
+    run = package_bundle.run_bundle(bundle, [], tmp_path, {})
+    assert run["exit_code"] == -1
+    assert "Timed out after 1 s" in run["stderr"]
+    assert run["stdout"].strip() == "started"
