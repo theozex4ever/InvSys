@@ -10,6 +10,8 @@ from contextlib import closing
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from sqlalchemy.exc import DatabaseError
+
 from inventory_control.backup import backup_database
 from inventory_control.bridge import InventoryBridge
 from inventory_control.config import PROJECT_ROOT
@@ -18,6 +20,9 @@ from inventory_control.utilities import NativeHost, UtilityContext
 
 if TYPE_CHECKING:
     from inventory_control.desktop_smoke import DesktopSmoke
+
+# Files a built frontend must contain; scripts/package_bundle.py checks the same set.
+REQUIRED_ASSETS = ("index.html", "app.js", "style.css")
 
 
 def main() -> int:
@@ -46,7 +51,12 @@ def main() -> int:
         )
     asset_root = Path(getattr(sys, "_MEIPASS", PROJECT_ROOT))
     assets = (args.assets or asset_root / "frontend" / "dist").resolve()
-    if not all((assets / name).is_file() for name in ("index.html", "app.js", "style.css")):
+    if not all((assets / name).is_file() for name in REQUIRED_ASSETS):
+        if getattr(sys, "frozen", False) and args.assets is None:
+            parser.error(
+                f"This bundle is incomplete: the frontend assets are missing from {assets}. "
+                "Extract the bundle again from its archive."
+            )
         parser.error(
             "Built frontend assets are missing. Run npm ci and npm run build in frontend/."
         )
@@ -57,10 +67,19 @@ def main() -> int:
 
     context = UtilityContext.for_launch(args.database)
     database = context.database
-    context.logs.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(filename=context.logs / "desktop.log", level=logging.INFO)
-    backup_database(db_path=database, backup_dir=context.backups, reason="startup")
-    store = InventoryStore(database, seed=False)
+    try:
+        context.logs.mkdir(parents=True, exist_ok=True)
+        logging.basicConfig(filename=context.logs / "desktop.log", level=logging.INFO)
+        backup_database(db_path=database, backup_dir=context.backups, reason="startup")
+        store = InventoryStore(database, seed=False)
+    except (OSError, DatabaseError) as exc:
+        reason = exc.orig if isinstance(exc, DatabaseError) else exc.strerror or exc
+        parser.exit(
+            1,
+            f"Cannot open the inventory database {database}: {reason}\n"
+            "Choose an existing SQLite inventory, or a new file in a folder this account can "
+            "write, with --database.\n",
+        )
     smoke: DesktopSmoke | None = None
     # The smoke records folder requests instead of opening a file manager window.
     opened_folders: list[Path] = []

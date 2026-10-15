@@ -64,8 +64,8 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 42 | Duplicate-click prevention; lock uncertain submissions | Improved | Native double-submit/lost-response checks |
 | 43 | Authoritative recovery; failed reads retain lock | Improved | Native recovery UI checks, bridge stock/history reads |
 | 44 | Readable validation/stale/file/database errors | Missing | Delivered bridge safely handles errors; utilities cases remain |
-| 45 | Offline standalone Windows/Linux/macOS bundles | Missing | Source/native smoke and Linux proof are insufficient |
-| 46 | Explicit packaged database; source defaults preserved | Equivalent | `test_desktop_launcher.py`; actual three-platform package evidence Missing |
+| 45 | Offline standalone Windows/Linux/macOS bundles | Missing | Linux delivered (ticket #52): repeatable build, twice-run package smoke, CI job and recorded evidence in [packaging.md](packaging.md); Windows and macOS Missing |
+| 46 | Explicit packaged database; source defaults preserved | Equivalent | `test_desktop_launcher.py` and the Linux package smoke (explicit database, readable missing-asset/inaccessible-path failures); Windows/macOS package evidence Missing |
 | 47 | Approved workloads meet response limits | Missing | Executable large fixture below; no reference-machine timings yet |
 | 48 | Copied-data upgrade and restart | Missing | Synthetic restart proven; representative copied-data rehearsal needed |
 | 49 | Operator sign-off and all-platform acceptance | Missing | Evidence record below; no sign-off inferred |
@@ -252,7 +252,7 @@ and platform bundle commands are in [desktop.md](desktop.md).
 | A12 | Navigate with Ctrl+1–9/Ctrl+K and contextual links; all dialogs keyboard-only; visible focus, both themes, reduced motion, 640×480 actions reachable by scrolling; screen-reader labels and non-color status/contrast review | Native checks delivered, numbered shortcuts and human review Missing |
 | A13 | Double-click each mutation; simulated committed/lost response and unsent response preserve draft/lock. Failed recovery read remains locked; authoritative reads show exact Lot/operator/metadata; explicit completion/absence decision only; never auto-retry | Native delivered stock checks; future mutation coverage Missing |
 | A14 | Rehearse upgrade on a copy of representative pre-migration DB; compare Parts/Lots/balances/ledger/shipments/BOM snapshots before/after launch and restart; closed-app backup restore on a separate copy; record reconciled rollback | Copied-data/operator evidence Missing |
-| A15 | Each platform's standalone offline bundle, selected DB, two native runs, no HTTP/dev server, correct assets, startup backup, retained metadata/restart; all performance scenarios below | Three-platform package evidence Missing |
+| A15 | Each platform's standalone offline bundle, selected DB, two native runs, no HTTP/dev server, correct assets, startup backup, retained metadata/restart; all performance scenarios below | Linux package evidence delivered (`scripts/package_bundle.py smoke`, [packaging.md](packaging.md)); Windows/macOS and performance scenarios Missing |
 | A16 | On a fresh workflow fixture, History text search `Disposable baseline` returns 8 receipt records; `Shipping Bench` returns both Move records; `MOVE_` matches MOVE_OUT and MOVE_IN without selecting a type; the baseline timestamp date matches all 15 records. Verify case-insensitive matching, source/destination Location searches, combination with exact-type filter and Clear filters; all records remain immutable | Replacement Missing: these current Notes, Location, timestamp and type text searches return zero; existing Part/Lot/operator/reference/shipment search remains required |
 | A17 | On a fresh workflow fixture, sort History ascending then descending by Time, Type, Part, Lot, Qty, From, To, Operator and Reference. Qty ascending starts at -9 and descending at +30, with signed numeric ordering; other columns follow displayed values. Verify the same matching record set and unchanged ledger after sorting, filtering, drawer inspection and restart | Replacement Missing: fixed descending-ID order and no column-sort controls |
 
@@ -385,3 +385,18 @@ human accessibility/operator sign-off. Those remain explicit retirement gates.
   corrected before those two successful runs. Folder opening used the recording host.
 - Independent Standards and Spec reviews against starting commit `4e8b4ae` found
   no actionable findings. Platform packages and operator acceptance remain pending.
+
+### Ticket #52 Linux standalone bundle validation — 2026-10-14
+
+- Full randomized coverage suite (Python 3.12.13): 657 passed in 576 s; coverage
+  87.47% against the unchanged 85% floor. Ruff lint/format, strict mypy (now
+  including `scripts/package_bundle.py`), `tsc`, actionlint, zizmor (pedantic) and
+  `pip-audit` of `requirements-package.lock.txt` passed.
+- Three complete package smokes on the reference machine in
+  [packaging.md](packaging.md#recorded-linux-evidence) (build output; build output
+  in an empty network namespace; extracted archive in an empty network namespace),
+  each: assets byte-identical, four readable startup failures, two native runs,
+  startup backup on the second, restart persistence. Real desktop session, not Xvfb.
+- Not established: the GitHub `package-smoke` job result (pending the PR run),
+  Windows/macOS bundles, other Linux distributions, P05 packaged launch timing,
+  operator sign-off. Stories 45/46 stay Missing/partial until three platforms pass.

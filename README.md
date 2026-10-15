@@ -53,7 +53,7 @@ The newer [pywebview desktop frontend](#optional-live-desktop-frontend) shown be
 | Language | Python 3.12+ |
 | UI | PySide6 (Qt6) |
 | Data | SQLite + SQLAlchemy ORM |
-| Packaging (planned) | PyInstaller |
+| Packaging | PyInstaller (Linux standalone bundle; Windows/macOS planned) |
 | Tests | pytest |
 | Lint / Format | ruff |
 
@@ -163,8 +163,9 @@ python inventory_desktop.py --database /tmp/invsys-review/inventory.db
 
 Omit `--database` to use the existing operational data and startup backups.
 Built assets load offline without a frontend development server or HTTP server.
-See [desktop launch, scope, package smoke, and validation](docs/frontend/desktop.md)
-and the [frontend roadmap](docs/frontend/roadmap.md).
+See [desktop launch, scope, and validation](docs/frontend/desktop.md), the
+[standalone offline bundle](docs/frontend/packaging.md) (build, install and package
+smoke; Linux today) and the [frontend roadmap](docs/frontend/roadmap.md).
 
 ---
 

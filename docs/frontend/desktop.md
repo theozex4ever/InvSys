@@ -87,28 +87,17 @@ There is no Vite process, HTTP server, CDN, or network inventory service require
 The build including CSV exports and Parts/Inventory receipt CSV imports uses about 33 KB
 gzipped JavaScript; its asset budget is 33 KB (CSS 8 KB, HTML 1 KB).
 
-## Basic package proof
+## Standalone bundle
 
-Full installers and release packaging remain deferred. A Linux one-directory
-PyInstaller proof includes the built frontend:
-
-```bash
-pip install pyinstaller
-pyinstaller --noconfirm --name invsys-desktop --onedir \
-  --add-data frontend/dist:frontend/dist \
-  --hidden-import webview.platforms.qt \
-  --hidden-import PySide6.QtWebEngineWidgets \
-  --hidden-import PySide6.QtWebEngineCore \
-  --exclude-module PyQt5 --exclude-module PyQt6 --exclude-module PySide2 \
-  --exclude-module tkinter --exclude-module gi inventory_desktop.py
-./dist/invsys-desktop/invsys-desktop --database /tmp/invsys-packaged/inventory.db --smoke-check
-```
-
-Packaged launch requires `--database` explicitly, so it cannot silently open an
-inventory file inside a bundle or temporary extraction directory. Select the
-existing operational file explicitly when appropriate. `--assets` overrides the
-built asset directory for local review; it is not needed for bundled assets.
-This package is a platform-specific smoke artifact, not a distributable release.
+A repeatable offline Linux bundle (PyInstaller one-directory, exact built assets,
+Qt WebEngine) is built and smoke-tested with `scripts/package_bundle.py`; see
+[standalone offline bundle](packaging.md) for build, install, prerequisites, data
+selection, readable failures, the twice-run package smoke, CI and recorded
+evidence. Packaged launch requires `--database` explicitly, so it cannot silently
+open an inventory file inside a bundle or temporary extraction directory. `--assets`
+overrides the built asset directory for local review; it is not needed for bundled
+assets. Windows/macOS bundles, installers, signing and release publication remain
+outstanding.
 
 ## Scope and contract
 
@@ -433,7 +422,7 @@ The shell directs operators to the original application for
 location administration and BOM CSV import. Backup restoration requires closing the app as described above.
 Global search is part search only.
 
-Not yet validated: Windows/macOS packages and installers, screen-reader review,
+Not yet validated: Windows/macOS packages and installers (Linux: [packaging](packaging.md)), screen-reader review,
 human operator acceptance, and performance/release hardening. The native smoke is
 scripted desktop acceptance, not exhaustive accessibility review. Mutation
 reconciliation is operator-assisted, without durable request deduplication.
