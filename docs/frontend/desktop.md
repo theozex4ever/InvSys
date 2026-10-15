@@ -1,7 +1,7 @@
 # Live desktop inventory workflows
 
 The pywebview frontend covers the dashboard, Parts catalog, Receive, standard and
-nested BOM Ship, Move, Adjust Count, BOM authoring, a read-only BOM explorer, History, and Settings CSV exports/backups, using
+nested BOM Ship, Move, Adjust Count, BOM authoring, a read-only BOM explorer, History, and Settings CSV exports/backups/Parts and Inventory receipt imports, using
 [approved layout A](phase0-design.md). The
 original PySide6 application remains available for every other workflow. See the
 [frontend roadmap](roadmap.md) for remaining phases.
@@ -84,7 +84,7 @@ file URI avoids pywebview automatically starting a server for a bare local path
 ([pywebview usage](https://pywebview.flowrl.com/guide/usage.html)). The build uses
 relative local assets ([Vite build documentation](https://vite.dev/guide/build.html)).
 There is no Vite process, HTTP server, CDN, or network inventory service required.
-The build including CSV exports and Parts CSV import uses about 33 KB
+The build including CSV exports and Parts/Inventory receipt CSV imports uses about 33 KB
 gzipped JavaScript; its asset budget is 33 KB (CSS 8 KB, HTML 1 KB).
 
 ## Basic package proof
@@ -141,7 +141,7 @@ The bridge exposes dashboard, preferences, save operator/theme, locations,
 part search/detail/create/edit/active state, BOM definition read/save/remove, stock context, receive, standard shipment preview,
 standard ship, BOM preview/confirmation, Move preview/confirmation, Adjust Count
 preview/submission, read-only BOM exploration, searchable paged History, transaction/shipment inspection,
-and Settings CSV export/backup/folder utilities and reviewed Parts CSV import. Stock context contains current part/lot/location balances,
+and Settings CSV export/backup/folder utilities and reviewed Parts/Inventory receipt CSV imports. Stock context contains current part/lot/location balances,
 BOM presence, and that part's immutable transactions and shipments for recovery. It validates input shapes/types before using the store
 and returns `{ok: true, data}` or `{ok: false, error: {code, message}}`. Stable
 codes: `VALIDATION`, `DUPLICATE`, `NOT_FOUND`, `INTERNAL`, `PLAN_CHANGED` for a rejected BOM allocation,
@@ -345,6 +345,11 @@ optional fields remain `default_location`, `minimum_quantity` and `active`.
 Existing numbers update their catalog fields; new numbers create Parts. Ignored
 legacy fields such as `barcode` produce warnings. Stock and History stay intact.
 
+Every CSV import kind rejects ambiguous structure instead of guessing:
+duplicate column names (after trimming and case folding), values beyond the named
+columns (for example an unquoted comma inside `1,000`) and malformed quoting are
+errors, in both applications.
+
 Confirm the reviewed catalog changes using the checkbox, then **Commit Parts
 import**. Python rereads the selected file, rejects changed bytes, validates again,
 and verifies a pre-import backup in this inventory's backup folder before writes.
@@ -354,20 +359,51 @@ semantics of other import kinds. Success displays the imported row count and bac
 path and refreshes catalog, dashboard and cached Part details.
 
 Selection, issues and results survive navigation. A lost response locks selection
-and submission: **Check import outcome** reads the session-local attempt status;
-a failed read keeps the lock. Accept a reported completion explicitly, or inspect
+and submission: **Check import outcome** reads the session-local attempt status
+and then current Parts, dashboard and History; any failed read keeps the lock. Accept a reported completion explicitly, or inspect
 the catalog and backups and explicitly allow a new review. No mutation is retried
 automatically. Reviews and recovery status last for this application session;
 after restart, inspect the catalog and backup before selecting input again.
 
-The typed API adds `select_import("parts")`, `commit_import` (review ID,
+The typed API adds `select_import(kind)`, `commit_import` (review ID,
 confirmation, operator) and `import_status`. Paths remain owned by the native
 selection and Python service. The review lifecycle in `frontend/src/imports.ts`
-has a typed kind parameter for subsequent Inventory/BOM slices; only Parts is
-currently enabled. Public bridge tests use real temporary SQLite. The native
+renders one Settings panel per enabled kind (`parts`, `inventory`); each kind
+keeps its own current review, so selecting one kind never supersedes another.
+Public bridge tests use real temporary SQLite. The native
 smoke drives real Qt file selection/cancellation, invalid rows and warnings,
 changed-file rejection, confirmation, duplicate clicks and lost-response recovery,
 then verifies imported catalog fields after reopening the database.
+
+## Inventory receipt CSV import
+
+In Settings, select **Select Inventory CSV**. Selection, cancellation, the preview
+and lost-response recovery follow the Parts lifecycle above. Required fields are
+`part_number`, `location`, `lot_number` and `quantity`; optional `reference`
+(default `CSV import`) and `notes` are kept on each receipt. Rows are blocking
+errors when the Part is missing or inactive, the Location is missing, the Lot is
+blank, the quantity is not a whole number from 1 to 2147483647, or a
+Part/Location/Lot repeats in the file. Other columns, such as `description` or
+`operator` from an Inventory export, produce warnings and are not imported.
+The quantity limit matches desktop Receive. It also applies to the original
+application's Settings import, which previously accepted larger values: an
+intentional compatibility restriction.
+
+Confirm the receipts using the checkbox, then **Commit Inventory import**; an
+operator name is required and attributes every receipt. Python rereads the file,
+rejects changed bytes, and validates again against current inventory: if, for
+example, a Part was deactivated after review, the commit is rejected as stale and
+needs a new selection. It then verifies a pre-import backup before writes. Each row
+posts one `RECEIVE` through the Stock ledger; the existing service writes all rows
+in one database transaction, so a failure leaves stock and History unchanged.
+Committing the same file again in a new review receives the stock again; inspect
+History before re-importing. Success refreshes Parts, dashboard, cached Part
+details, History and the latest-backup status.
+
+The native smoke drives real dialog selection/cancellation, a blank-Lot error,
+blocked commit without an operator, changed-file rejection, duplicate clicks and
+lost-response recovery with failed reads, checks refreshed History and dashboard,
+and verifies the Stock balances after reopening the database.
 
 ## Restore and rollback (closed app only)
 
@@ -394,7 +430,7 @@ displaced database files back together.
 ## Deferred workflows
 
 The shell directs operators to the original application for
-location administration and Inventory/BOM CSV import. Backup restoration requires closing the app as described above.
+location administration and BOM CSV import. Backup restoration requires closing the app as described above.
 Global search is part search only.
 
 Not yet validated: Windows/macOS packages and installers, screen-reader review,

@@ -43,6 +43,19 @@ SHIPMENT_HEADERS = [
 ]
 BOM_HEADERS = ["parent_part_number", "component_part_number", "quantity_per"]
 
+RowValidator = Callable[[int, dict[str, str], set[tuple[str, ...]]], list[CSVRowIssue]]
+
+# Matches the desktop Receive limit so imported quantities fit SQLite integers.
+MAX_QUANTITY = 2**31 - 1
+
+INVENTORY_IMPORT_COLUMNS = {
+    "part_number",
+    "location",
+    "lot_number",
+    "quantity",
+    "reference",
+    "notes",
+}
 IGNORED_PART_COLUMNS = {"barcode", "category", "unit_of_measure", "revision", "notes"}
 
 
@@ -52,6 +65,10 @@ class CSVChanged(ValueError):
 
 class CSVFileError(ValueError):
     """A readable file error compatible with the original UI's validation handling."""
+
+
+class ReviewInvalidated(ValueError):
+    """Unchanged bytes no longer validate against current inventory state."""
 
 
 class ImportExportService:
@@ -158,18 +175,10 @@ class ImportExportService:
         ]
 
     def preview_parts_import_csv(self, path: Path) -> CSVPreview:
-        rows, errors, warnings = self._read_csv(path, "parts", {"part_number", "description"})
-        return self._preview_rows("parts", path, rows, errors, warnings, self._validate_part_row)
+        return self._preview_content("parts", Path(path))[0]
 
     def review_parts_import_csv(self, path: Path) -> tuple[CSVPreview, str]:
-        content = path.read_bytes()
-        rows, header_errors, warnings = self._read_csv(
-            path, "parts", {"part_number", "description"}, content
-        )
-        preview = self._preview_rows(
-            "parts", path, rows, header_errors, warnings, self._validate_part_row
-        )
-        return preview, hashlib.sha256(content).hexdigest()
+        return self._review("parts", Path(path))
 
     # Parts and BOM links carry no operator column; the argument keeps every
     # import entry point's signature uniform for the Settings view.
@@ -181,53 +190,34 @@ class ImportExportService:
         expected_digest: str | None = None,
         require_backup: bool = False,
     ) -> ImportResult:
-        # Read once: validation and posting must use the same bytes, even if the
-        # selected file is replaced while the required backup is being written.
-        path = Path(path)
-        try:
-            content = path.read_bytes()
-        except OSError as error:
-            raise CSVFileError(f"Could not read CSV: {error}.") from error
-        if expected_digest is not None and hashlib.sha256(content).hexdigest() != expected_digest:
-            raise CSVChanged("The selected CSV changed. Preview it again before importing.")
-        raw, errors, warnings = self._read_csv(
-            path, "parts", {"part_number", "description"}, content
-        )
-        preview = self._preview_rows("parts", path, raw, errors, warnings, self._validate_part_row)
-        self._require_importable(preview)
-        rows = [self._part_import_row(row) for _, row in raw]
-        if require_backup:
-            backup = write_backup(self.db_path, self.backup_dir, reason="pre-import")
-            if backup is None:
-                raise OSError("The selected database could not be backed up. Import blocked.")
-            try:
-                verify_backup(backup)
-            except Exception:
-                backup.unlink(missing_ok=True)
-                raise
-            prune_backups(self.backup_dir)
-        else:
-            backup = self._pre_import_backup()
+        rows = [
+            self._part_import_row(row)
+            for row in self._reviewed_rows("parts", Path(path), expected_digest)
+        ]
+        backup = self._backup_before_import(require_backup)
         self.store.import_parts(rows, notify=True)
         return ImportResult("parts", len(rows), str(backup or ""))
 
     def preview_inventory_import_csv(self, path: Path) -> CSVPreview:
-        required = {"part_number", "location", "lot_number", "quantity"}
-        rows, header_errors, warnings = self._read_csv(path, "inventory", required)
-        return self._preview_rows(
-            "inventory", path, rows, header_errors, warnings, self._validate_inventory_row
-        )
+        return self._preview_content("inventory", Path(path))[0]
 
-    def import_inventory_csv(self, path: Path, operator: str) -> ImportResult:
-        preview = self.preview_inventory_import_csv(path)
-        self._require_importable(preview)
+    def review_inventory_import_csv(self, path: Path) -> tuple[CSVPreview, str]:
+        return self._review("inventory", Path(path))
+
+    def import_inventory_csv(
+        self,
+        path: Path | str,
+        operator: str,
+        *,
+        expected_digest: str | None = None,
+        require_backup: bool = False,
+    ) -> ImportResult:
         rows = [
             self._inventory_import_row(row)
-            for _, row in self._read_csv(
-                path, "inventory", {"part_number", "location", "lot_number", "quantity"}
-            )[0]
+            for row in self._reviewed_rows("inventory", Path(path), expected_digest)
         ]
-        backup = self._pre_import_backup()
+        backup = self._backup_before_import(require_backup)
+        # One store transaction: a failed receipt rolls back every row.
         self.store.import_inventory_receipts(rows, operator, notify=True)
         return ImportResult("inventory", len(rows), str(backup or ""))
 
@@ -254,6 +244,57 @@ class ImportExportService:
         backup = self._pre_import_backup()
         self.store.import_bom_components(rows, notify=True)
         return ImportResult("bom", len(rows), str(backup or ""))
+
+    def _review(self, kind: str, path: Path) -> tuple[CSVPreview, str]:
+        content = path.read_bytes()
+        return self._preview_content(kind, path, content)[0], hashlib.sha256(content).hexdigest()
+
+    def _preview_content(
+        self, kind: str, path: Path, content: bytes | None = None
+    ) -> tuple[CSVPreview, list[tuple[int, dict[str, str]]]]:
+        validator: RowValidator
+        if kind == "parts":
+            required, validator = {"part_number", "description"}, self._validate_part_row
+        else:
+            required = INVENTORY_IMPORT_COLUMNS - {"reference", "notes"}
+            validator = self._inventory_validator()
+        rows, errors, warnings = self._read_csv(path, kind, required, content)
+        return self._preview_rows(kind, path, rows, errors, warnings, validator), rows
+
+    def _reviewed_rows(
+        self, kind: str, path: Path, expected_digest: str | None
+    ) -> list[dict[str, str]]:
+        # Read once: validation and posting must use the same bytes, even if the
+        # selected file is replaced while the required backup is being written.
+        try:
+            content = path.read_bytes()
+        except OSError as error:
+            raise CSVFileError(f"Could not read CSV: {error}.") from error
+        if expected_digest is not None and hashlib.sha256(content).hexdigest() != expected_digest:
+            raise CSVChanged("The selected CSV changed. Preview it again before importing.")
+        preview, rows = self._preview_content(kind, path, content)
+        if expected_digest is not None and preview.errors:
+            first = preview.errors[0]
+            raise ReviewInvalidated(
+                "Current data no longer validates the reviewed CSV. "
+                f"Row {first.row_number}: {first.message} Select the CSV again for a new review."
+            )
+        self._require_importable(preview)
+        return [row for _, row in rows]
+
+    def _backup_before_import(self, require_backup: bool) -> Path | None:
+        if not require_backup:
+            return self._pre_import_backup()
+        backup = write_backup(self.db_path, self.backup_dir, reason="pre-import")
+        if backup is None:
+            raise OSError("The selected database could not be backed up. Import blocked.")
+        try:
+            verify_backup(backup)
+        except Exception:
+            backup.unlink(missing_ok=True)
+            raise
+        prune_backups(self.backup_dir)
+        return backup
 
     def _write_csv(
         self,
@@ -293,10 +334,17 @@ class ImportExportService:
                 if content is None
                 else StringIO(content.decode("utf-8-sig"), newline="")
             ) as handle:
-                reader = csv.DictReader(handle)
-                if reader.fieldnames is None:
+                # Ambiguous structure must block the import rather than be guessed
+                # at: strict quoting, unique headers, and every non-blank cell read
+                # positionally under a named column (so repeated blank headers
+                # cannot overwrite each other).
+                reader = csv.reader(handle, strict=True)
+                header_row = next(reader, None)
+                if header_row is None:
                     return [], [CSVRowIssue(1, "", "CSV file is empty.")], []
-                headers = [header.strip().lower() for header in reader.fieldnames]
+                headers = [header.strip().lower() for header in header_row]
+                for column in sorted({h for h in headers if h and headers.count(h) > 1}):
+                    errors.append(CSVRowIssue(1, column, f"Duplicate column: {column}."))
                 missing = sorted(required - set(headers))
                 for column in missing:
                     errors.append(CSVRowIssue(1, column, f"Missing required column: {column}."))
@@ -310,10 +358,34 @@ class ImportExportService:
                                 "warning",
                             )
                         )
-                for row_number, raw in enumerate(reader, start=2):
-                    normalized = {}
-                    for original, header in zip(reader.fieldnames, headers, strict=True):
-                        normalized[header] = (raw.get(original) or "").strip()
+                if kind == "inventory":
+                    # Receipts take the operator from the session and Part fields
+                    # from the catalog; say so rather than drop columns silently.
+                    for column in sorted(set(headers) - INVENTORY_IMPORT_COLUMNS - {""}):
+                        warnings.append(
+                            CSVRowIssue(1, column, f"Column {column} is not imported.", "warning")
+                        )
+                # Blank lines are skipped, as csv.DictReader did.
+                for row_number, cells in enumerate((row for row in reader if row), start=2):
+                    named = [cell.strip() for cell in cells[: len(headers)]]
+                    unnamed = cells[len(headers) :] + [
+                        cell for cell, header in zip(named, headers, strict=False) if not header
+                    ]
+                    if any(cell.strip() for cell in unnamed):
+                        errors.append(
+                            CSVRowIssue(
+                                row_number,
+                                "",
+                                "Row has values outside the named columns. Check for unquoted commas.",
+                            )
+                        )
+                    normalized = dict.fromkeys(headers, "")
+                    normalized.update(
+                        (header, cell)
+                        for header, cell in zip(headers, named, strict=False)
+                        if header
+                    )
+                    normalized.pop("", None)
                     rows.append((row_number, normalized))
         except (OSError, UnicodeError, csv.Error) as exc:
             return [], [CSVRowIssue(1, "", f"Could not read CSV: {exc}.")], []
@@ -328,13 +400,13 @@ class ImportExportService:
         rows: list[tuple[int, dict[str, str]]],
         errors: list[CSVRowIssue],
         warnings: list[CSVRowIssue],
-        validator: Callable[[int, dict[str, str], set[tuple[str, ...]]], list[CSVRowIssue]],
+        validator: RowValidator,
     ) -> CSVPreview:
         seen: set[tuple[str, ...]] = set()
         all_errors = list(errors)
         for row_number, row in rows:
             all_errors.extend(validator(row_number, row, seen))
-        if errors:
+        if any(error.row_number <= 1 for error in errors):
             valid_count = 0
         else:
             bad_rows = {error.row_number for error in all_errors if error.row_number > 1}
@@ -375,38 +447,57 @@ class ImportExportService:
             errors.append(CSVRowIssue(row_number, "active", "Active must be true or false."))
         return errors
 
-    def _validate_inventory_row(
+    def _inventory_validator(
         self,
-        row_number: int,
-        row: dict[str, str],
-        seen: set[tuple[str, ...]],
-    ) -> list[CSVRowIssue]:
-        errors = []
-        part_number = row.get("part_number", "").strip().upper()
-        location = row.get("location", "").strip()
-        lot_number = row.get("lot_number", "").strip().upper()
-        key = (part_number, location, lot_number)
-        if not part_number:
-            errors.append(CSVRowIssue(row_number, "part_number", "Part number required."))
-        elif part_number not in self.store.parts:
-            errors.append(CSVRowIssue(row_number, "part_number", "Part does not exist."))
-        if not location:
-            errors.append(CSVRowIssue(row_number, "location", "Location required."))
-        elif location not in self.store.locations:
-            errors.append(CSVRowIssue(row_number, "location", "Location does not exist."))
-        if not lot_number:
-            errors.append(CSVRowIssue(row_number, "lot_number", "Lot number required."))
-        quantity = self._parse_positive_int(row.get("quantity", ""))
-        if quantity is None:
-            errors.append(
-                CSVRowIssue(row_number, "quantity", "Quantity must be a positive integer.")
-            )
-        if key in seen:
-            errors.append(
-                CSVRowIssue(row_number, "lot_number", "Duplicate part/location/lot row in CSV.")
-            )
-        seen.add(key)
-        return errors
+    ) -> RowValidator:
+        # One catalog read per preview rather than per row.
+        parts = self.store.parts
+        locations = set(self.store.locations)
+
+        def validate(
+            row_number: int, row: dict[str, str], seen: set[tuple[str, ...]]
+        ) -> list[CSVRowIssue]:
+            errors = []
+            part_number = row.get("part_number", "").strip().upper()
+            location = row.get("location", "").strip()
+            lot_number = row.get("lot_number", "").strip().upper()
+            key = (part_number, location, lot_number)
+            part = parts.get(part_number)
+            if not part_number:
+                errors.append(CSVRowIssue(row_number, "part_number", "Part number required."))
+            elif part is None:
+                errors.append(CSVRowIssue(row_number, "part_number", "Part does not exist."))
+            elif not part.active:
+                errors.append(
+                    CSVRowIssue(
+                        row_number,
+                        "part_number",
+                        f"Part {part_number} is inactive. Reactivate it before recording inventory activity.",
+                    )
+                )
+            if not location:
+                errors.append(CSVRowIssue(row_number, "location", "Location required."))
+            elif location not in locations:
+                errors.append(CSVRowIssue(row_number, "location", "Location does not exist."))
+            if not lot_number:
+                errors.append(CSVRowIssue(row_number, "lot_number", "Lot number required."))
+            quantity = self._parse_positive_int(row.get("quantity", ""))
+            if quantity is None or quantity > MAX_QUANTITY:
+                errors.append(
+                    CSVRowIssue(
+                        row_number,
+                        "quantity",
+                        f"Quantity must be a whole number between 1 and {MAX_QUANTITY}.",
+                    )
+                )
+            if key in seen:
+                errors.append(
+                    CSVRowIssue(row_number, "lot_number", "Duplicate part/location/lot row in CSV.")
+                )
+            seen.add(key)
+            return errors
+
+        return validate
 
     def _validate_bom_row(
         self,

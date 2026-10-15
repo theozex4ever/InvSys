@@ -3,10 +3,24 @@ import { read, RequestError, type ready, type ImportKind, type ImportReview, typ
 
 type API = Awaited<ReturnType<typeof ready>>;
 
-// Kind, selection and posting stay behind the typed API. Future import kinds
-// share this review lifecycle while keeping their validation in Python.
-export function importWorkflow(getAPI: () => API, operator: () => string, changed: () => Promise<void>, kind: ImportKind = 'parts') {
-  $('#settings').insertAdjacentHTML('beforeend', `<div class="panel settings-panel"><div class="panel-head"><div><h2>Parts CSV import</h2><p>Preview catalog changes, then confirm. Every import requires a verified backup.</p></div></div><div class="panel-body"><p>Fields: part_number, description, default_location, minimum_quantity, active. Existing Part numbers are updated; other rows create Parts. Stock and History are preserved.</p><div id="import-review"></div><div id="import-result" aria-live="polite"></div><div id="import-actions" class="settings-actions"></div></div></div>`);
+// Presentation only: selection, validation and posting stay behind the typed API.
+const copy: Record<ImportKind, { title: string; summary: string; fields: string; select: string; confirm: string; commit: string; done: string; inspect: string }> = {
+  parts: {
+    title: 'Parts CSV import', summary: 'Preview catalog changes, then confirm. Every import requires a verified backup.',
+    fields: 'Fields: part_number, description, default_location, minimum_quantity, active. Existing Part numbers are updated; other rows create Parts. Stock and History are preserved.',
+    select: 'Select Parts CSV', confirm: 'I confirm the catalog changes and required backup.', commit: 'Commit Parts import', done: 'Parts import completed', inspect: 'catalog',
+  },
+  inventory: {
+    title: 'Inventory receipt CSV import', summary: 'Preview receipts, then confirm. Every import requires a verified backup.',
+    fields: 'Required: part_number, location, lot_number (a real Lot), quantity. Optional: reference (defaults to "CSV import"), notes. Each row posts a RECEIVE to the Stock ledger, attributed to the current operator. Committing the same file again receives the stock again.',
+    select: 'Select Inventory CSV', confirm: 'I confirm these receipts and the required backup.', commit: 'Commit Inventory import', done: 'Inventory import completed', inspect: 'Stock and History',
+  },
+};
+
+export function importWorkflow(getAPI: () => API, operator: () => string, changed: () => Promise<void>, kind: ImportKind) {
+  const text = copy[kind];
+  const id = (part: string) => `#${kind}-import-${part}`;
+  $('#settings').insertAdjacentHTML('beforeend', `<div class="panel settings-panel"><div class="panel-head"><div><h2>${text.title}</h2><p>${text.summary}</p></div></div><div class="panel-body"><p>${esc(text.fields)}</p><div id="${kind}-import-review"></div><div id="${kind}-import-result" aria-live="polite"></div><div id="${kind}-import-actions" class="settings-actions"></div></div></div>`);
   let review: ImportReview | null = null;
   let pending = false;
   let uncertain = false;
@@ -14,21 +28,23 @@ export function importWorkflow(getAPI: () => API, operator: () => string, change
   let confirmed = false;
   let resultText = '';
   let error = false;
+  const ready = () => confirmed && review?.state === 'reviewed' && review.preview.can_import && !!operator().trim();
 
   function render() {
     const preview = review?.preview;
-    $('#import-review').innerHTML = preview ? `${pair('Selected CSV', preview.path)}${pair('Data rows', preview.row_count)}${pair('Valid rows', preview.valid_count)}${pair('Commit eligibility', preview.can_import ? 'Eligible after confirmation' : 'Blocked — correct the errors and select again')}${preview.errors.length || preview.warnings.length ? `<div class="table-scroll"><table><thead><tr><th>Level</th><th>Row</th><th>Field</th><th>Issue</th></tr></thead><tbody>${[...preview.errors, ...preview.warnings].map(issue => `<tr><td>${esc(issue.level)}</td><td>${issue.row_number}</td><td>${esc(issue.field || 'File')}</td><td>${esc(issue.message)}</td></tr>`).join('')}</tbody></table></div>` : status('No row errors or warnings.')}` : '';
-    $('#import-result').innerHTML = resultText ? status(resultText, error) : '';
-    $('#import-actions').innerHTML = `<button class="btn" data-import="select" ${pending || uncertain ? 'disabled' : ''}>Select Parts CSV</button>${review?.state === 'reviewed' && !uncertain ? `<label><input id="import-confirm" type="checkbox" ${confirmed ? 'checked' : ''} ${pending || !preview?.can_import ? 'disabled' : ''}> I confirm the catalog changes and required backup.</label><button class="btn primary" data-import="commit" ${pending || !confirmed || !preview?.can_import ? 'disabled' : ''}>Commit Parts import</button>` : ''}${uncertain ? `<button class="btn" data-import="recover" ${pending ? 'disabled' : ''}>Check import outcome</button>${recovered ? `<button class="btn primary" data-import="resolve">${recovered.state === 'completed' ? 'Accept completed import' : 'Keep input and allow a new review'}</button>` : ''}` : ''}`;
+    $(id('review')).innerHTML = preview ? `${pair('Selected CSV', preview.path)}${pair('Data rows', preview.row_count)}${pair('Valid rows', preview.valid_count)}${pair('Commit eligibility', preview.can_import ? 'Eligible after confirmation' : 'Blocked — correct the errors and select again')}${preview.errors.length || preview.warnings.length ? `<div class="table-scroll"><table><thead><tr><th>Level</th><th>Row</th><th>Field</th><th>Issue</th></tr></thead><tbody>${[...preview.errors, ...preview.warnings].map(issue => `<tr><td>${esc(issue.level)}</td><td>${issue.row_number}</td><td>${esc(issue.field || 'File')}</td><td>${esc(issue.message)}</td></tr>`).join('')}</tbody></table></div>` : status('No row errors or warnings.')}` : '';
+    $(id('result')).innerHTML = resultText ? status(resultText, error) : '';
+    const reviewed = review?.state === 'reviewed' && !uncertain;
+    $(id('actions')).innerHTML = `<button class="btn" data-import="select" ${pending || uncertain ? 'disabled' : ''}>${text.select}</button>${reviewed ? `<label><input id="${kind}-import-confirm" type="checkbox" ${confirmed ? 'checked' : ''} ${pending || !preview?.can_import ? 'disabled' : ''}> ${text.confirm}</label><button class="btn primary" data-import="commit" ${pending || !ready() ? 'disabled' : ''}>${text.commit}</button>${preview?.can_import && !operator().trim() ? '<span class="help">Enter your operator name before committing.</span>' : ''}` : ''}${uncertain ? `<button class="btn" data-import="recover" ${pending ? 'disabled' : ''}>Check import outcome</button>${recovered ? `<button class="btn primary" data-import="resolve">${recovered.state === 'completed' ? 'Accept completed import' : 'Keep input and allow a new review'}</button>` : ''}` : ''}`;
   }
   async function refresh() {
     try { await changed(); }
-    catch { resultText += ' The catalog refresh failed. Use Refresh to read current data.'; }
+    catch { resultText += ` The ${text.inspect} refresh failed. Use Refresh to read current data.`; }
   }
   function completed(result: ImportResult) {
     if (review) { review.state = 'completed'; review.result = result; }
     confirmed = false;
-    resultText = `Parts import completed: ${result.rows_imported} rows imported. Backup: ${result.backup_path}`;
+    resultText = `${text.done}: ${result.rows_imported} rows imported. Backup: ${result.backup_path}`;
     error = false;
   }
   async function perform(action: string) {
@@ -48,13 +64,16 @@ export function importWorkflow(getAPI: () => API, operator: () => string, change
         completed(result);
         await refresh();
       } else if (action === 'recover' && review) {
-        recovered = await read(getAPI().import_status(review.review_id));
-        resultText = recovered.state === 'completed' && recovered.result ? `Python reports ${recovered.result.rows_imported} rows imported. Backup: ${recovered.result.backup_path}. Accept this outcome to unlock selection.` : 'No completed import reported. Inspect the catalog and backups, then allow a new review.';
-        await refresh();
+        const outcome = await read(getAPI().import_status(review.review_id));
+        // Offer a decision only after the authoritative reads succeed; any failure keeps the lock.
+        await changed();
+        recovered = outcome;
+        resultText = outcome.state === 'completed' && outcome.result ? `Python reports ${outcome.result.rows_imported} rows imported. Backup: ${outcome.result.backup_path}. Accept this outcome to unlock selection.` : `No completed import reported. Inspect ${text.inspect} and backups, then allow a new review.`;
       }
     } catch (failure) {
       error = true;
       resultText = message(failure);
+      if (action === 'recover') resultText += ' Submission stays locked until the outcome and current data are read.';
       if (action === 'commit') {
         confirmed = false;
         uncertain = failure instanceof RequestError && ['TRANSPORT', 'INTERNAL'].includes(failure.code);
@@ -63,15 +82,16 @@ export function importWorkflow(getAPI: () => API, operator: () => string, change
       }
     } finally { pending = false; render(); }
   }
-  $('#import-actions').addEventListener('change', () => { confirmed = $<HTMLInputElement>('#import-confirm').checked; render(); $<HTMLInputElement>('#import-confirm').focus(); });
-  $('#import-actions').addEventListener('click', event => {
+  $(id('actions')).addEventListener('change', () => { confirmed = $<HTMLInputElement>(id('confirm')).checked; render(); $<HTMLInputElement>(id('confirm')).focus(); });
+  $(id('actions')).addEventListener('click', event => {
     const action = (event.target as HTMLElement).closest<HTMLElement>('[data-import]')?.dataset.import;
     if (!action || pending) return;
     if (action === 'resolve' && recovered) {
       if (recovered.result) completed(recovered.result);
       else { if (review) review.state = 'failed'; resultText = 'Input retained. Select the CSV to validate and review it again.'; error = false; }
       uncertain = false; recovered = null; render();
-    } else if (action === 'recover' || (!uncertain && (action === 'select' || (action === 'commit' && confirmed && review?.state === 'reviewed' && review.preview.can_import)))) void perform(action);
+    } else if (action === 'recover' || (!uncertain && (action === 'select' || (action === 'commit' && ready())))) void perform(action);
   });
   render();
+  return { operatorChanged: () => { if (!pending) render(); } };
 }

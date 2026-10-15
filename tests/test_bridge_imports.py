@@ -58,6 +58,8 @@ def test_review_confirmation_backup_and_persistence(tmp_path):
         "part_number,description\nA,One\nA,Two\n",
         "description\nBearing\n",
         "part_number,description\n",
+        "part_number,description,description\nA,Bearing,Unreviewed\n",
+        "part_number,description\nA,Bearing,extra\n",
     ],
 )
 def test_invalid_rows_cannot_be_committed(tmp_path, text):
@@ -216,4 +218,4 @@ def test_unavailable_host_or_launch_context_and_unsupported_kinds(tmp_path):
     store, bridge, context, _host = launch(tmp_path)
     assert InventoryBridge(store).select_import("parts")["error"]["code"] == "UNAVAILABLE"
     assert InventoryBridge(store, context).select_import("parts")["error"]["code"] == "UNAVAILABLE"
-    assert bridge.select_import("inventory")["error"]["code"] == "VALIDATION"
+    assert bridge.select_import("bom")["error"]["code"] == "VALIDATION"

@@ -50,19 +50,20 @@ export function historyWorkflow(getAPI: () => API) {
   function shipment(detail: ShipmentDetail) {
     return `<h3>Linked shipment ${esc(detail.shipment_number)}</h3>${pair('Parent part / shipped quantity', `${detail.part_number} / ${detail.quantity}`)}${pair('Recipient', detail.recipient)}${pair('Timestamp', detail.timestamp)}${pair('Carrier', detail.carrier)}${pair('Tracking', detail.tracking_number)}${pair('Reference', detail.reference)}<h3>Persisted component consumption</h3>${detail.consumed_components.length ? `<div class="table-wrap"><table><thead><tr><th>Material</th><th>Lot</th><th>Location</th><th class="num">Consumed</th></tr></thead><tbody>${detail.consumed_components.map(c => `<tr><td>${esc(c.part_number)}</td><td>${esc(c.lot_number)}</td><td>${esc(c.location)}</td><td class="num">${c.quantity}</td></tr>`).join('')}</tbody></table></div>` : '<p>Standard shipment — no BOM component consumption.</p>'}<h3>Shipment audit records</h3>${detail.transactions.map(tx => `<div class="status"><button class="text-link" data-history-id="${tx.transaction_id}">${esc(tx.tx_type)} · ${esc(tx.part_number)} · ${tx.quantity_change} · Lot ${esc(tx.lot_number || '—')}</button></div>`).join('')}`;
   }
-  async function load(savedPosition?: typeof position) {
+  // `strict` rejects unless current History rendered, for callers that must reconcile.
+  async function load(savedPosition?: typeof position, strict = false) {
     const current = ++version; const saved = savedPosition ?? ($('#history').hidden ? pagePosition : remember());
     $('#history-filters').textContent = `Search: ${search.query || 'Any'} · Type: ${search.tx_type || 'All types'} · Page: ${search.page + 1}`;
     $('#history-data').innerHTML = status('Loading History…');
     try {
       const result = await read(getAPI().history({ ...search }));
-      if (current !== version) return;
+      if (current !== version) { if (strict) throw new Error('Another refresh started while reconciling. Check the outcome again.'); return; }
       const types = Array.from(new Set([...result.types, ...(search.tx_type ? [search.tx_type] : [])]));
       $('#history-type').innerHTML = '<option value="">All types</option>' + types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
       $<HTMLSelectElement>('#history-type').value = search.tx_type;
       $('#history-data').innerHTML = result.records.length ? `<div class="table-wrap"><table><thead><tr><th>Timestamp</th><th>Type / Part</th><th class="num">Change</th><th>Lot / Location</th><th>Operator</th><th>Reference / Shipment</th></tr></thead><tbody>${result.records.map(tx => `<tr ${selected === tx.transaction_id ? 'class="selected"' : ''}><td><button class="text-link" data-history-id="${tx.transaction_id}">${esc(tx.timestamp)}</button></td><td>${esc(tx.tx_type)}<br><strong>${esc(tx.part_number)}</strong></td><td class="num">${tx.quantity_change > 0 ? '+' : ''}${tx.quantity_change}</td><td>${esc(tx.lot_number || '—')}<br>${esc([tx.location_from, tx.location_to].filter(Boolean).join(' → '))}</td><td>${esc(tx.operator)}</td><td>${esc(tx.reference || '—')}${tx.shipment_number ? `<br><button class="text-link" data-shipment="${esc(tx.shipment_number)}">${esc(tx.shipment_number)}</button>` : ''}</td></tr>`).join('')}</tbody></table></div><div class="table-footer">${result.matching} matching records · Page ${result.page + 1}<div><button class="btn small" data-history-page="${Math.max(0, result.page - 1)}" ${result.page === 0 ? 'disabled' : ''}>Previous</button> <button class="btn small" data-history-page="${result.page + 1}" ${(result.page + 1) * 50 >= result.matching ? 'disabled' : ''}>Next</button></div></div>` : status(result.total ? 'No records match these filters. Clear filters to see all History.' : 'No inventory history yet. Receive stock to record the first change.');
       pagePosition = saved; restore(saved);
-    } catch (error) { if (current === version) $('#history-data').innerHTML = status(message(error, 'Unable to read History.') + ' Use Refresh to try again.', true); }
+    } catch (error) { if (current === version) $('#history-data').innerHTML = status(message(error, 'Unable to read History.') + ' Use Refresh to try again.', true); if (strict) throw error; }
   }
   async function inspect(id: number | string, origin: HTMLElement) {
     const current = ++detailVersion;
