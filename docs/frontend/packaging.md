@@ -163,32 +163,31 @@ installers, auto-update and release publication.
 
 ## Recorded Linux evidence
 
-Recorded 2026-10-14 by `scripts/package_bundle.py` on the reference machine below.
-These runs used a real desktop session, **not** Xvfb, and were made from a working
-tree with the changes of this ticket not yet committed (the manifest records base
-commit `d378088` with `uncommitted_changes: true`). The CI job (Ubuntu 24.04 under
-Xvfb) is the repeatable evidence; its result and uploaded evidence are on the pull
-request checks.
+Recorded 2026-10-15 (UTC timestamps in the record) by `scripts/package_bundle.py`
+on the reference machine below, from a clean checkout of commit `a94cdfe`
+(`uncommitted_changes: false` in the manifest). The run used a real desktop
+session, **not** Xvfb. The CI job (Ubuntu 24.04 under Xvfb) is the repeatable
+evidence; its result and uploaded evidence are on the pull request checks.
 
 | Item | Value |
 | --- | --- |
 | Reference machine | AMD Ryzen 5 1600 (12 logical CPUs), 32 GB RAM, CachyOS, Linux 7.2.9-2-cachyos x86-64, glibc 2.44, Wayland session |
 | Toolchain | Python 3.12.13, PyInstaller 6.22.3, pyinstaller-hooks-contrib 2026.8, PySide6 6.11.2, pywebview 6.2.1, QtPy 2.4.3 (from `requirements-package.lock.txt`) |
-| Bundle | 3,017 files, 686,878,043 bytes; `invsys-desktop` SHA-256 `e93e0a12…2fba3182` |
-| Archive | `invsys-desktop-linux-x86_64.tar.gz`, 270,472,514 bytes, SHA-256 `6dba68fd…a8cd8378` |
+| Bundle | 3,017 files, 686,878,052 bytes; `invsys-desktop` SHA-256 `a8a1f90e…eea52fc9` |
+| Archive | `invsys-desktop-linux-x86_64.tar.gz`, 270,472,314 bytes, SHA-256 `9591c37b…d8bf1f`; the smoke ran on the archive extracted into a fresh directory |
 | Assets | `index.html`, `app.js`, `style.css` byte-identical to `frontend/dist` (SHA-256 per file in the manifest) |
-| Failure checks | no database, missing bundled assets, database folder that is a file, non-SQLite file: all exit as documented with readable messages, no traceback, no inventory created |
-| Native smoke, run 1 and 2 | both exit 0 (about 61 s each, dominated by the probe's own waits; this is **not** the P05 launch-time measurement); run 2 wrote an `inventory-*-startup.db` backup |
-| Persistence | SQLite integrity `ok`; transactions 39 → 76, parts 13 → 22, shipments 5 → 10 across the restart; nothing written to `INVSYS_HOME` |
-| Offline | the same runs inside an empty network namespace (`--isolate-network`) and no HTTP server (the smoke fails if pywebview starts one); native reduced-motion check passed |
+| Failure checks | no database, missing bundled assets, database folder that is a file, database path that is a directory, non-SQLite file: all exit as documented with readable messages, no traceback, no inventory created |
+| Native smoke, run 1 and 2 | both exit 0 (about 61 s each, dominated by the probe's own waits; this is **not** the P05 launch-time measurement); run 1 took no startup backup; run 2 took one holding exactly run 1's 39 ledger rows |
+| Persistence | SQLite integrity `ok`; all 39 ledger rows of run 1 present after run 2 (76 total), parts 13 → 22, shipments 5 → 10; nothing written to `INVSYS_HOME` |
+| Offline | run inside an empty network namespace (`--isolate-network`) with no HTTP server (the smoke fails if pywebview starts one); native reduced-motion check passed (`QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion`) |
 
-Three complete runs were made, each with its own disposable inventory: the build
-output without network isolation, the build output with `--isolate-network` and
-`QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion`, and the archive
-extracted into a fresh directory with the same flags. All three passed. The
-record of the last (installed-archive) run is kept in
-[`evidence/linux-package-2026-10-14.json`](evidence/linux-package-2026-10-14.json);
-the CI job uploads its own on every run.
+[`evidence/linux-package-2026-10-15.json`](evidence/linux-package-2026-10-15.json)
+holds the full record. During development, earlier builds of this ticket's tree
+passed the same checks three times (build output with and without network
+isolation, and an extracted archive); only this final run on the committed tree is
+retained. Two builds of the same commit are not byte-identical (frozen binaries
+embed build metadata); the guarantee is the exact-asset check, not bundle
+reproducibility.
 
 Not exercised: the Xvfb path and the CI job locally (no Xvfb on the reference
 machine), distributions other than CachyOS, X11-only sessions, the file-manager

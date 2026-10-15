@@ -386,17 +386,17 @@ human accessibility/operator sign-off. Those remain explicit retirement gates.
 - Independent Standards and Spec reviews against starting commit `4e8b4ae` found
   no actionable findings. Platform packages and operator acceptance remain pending.
 
-### Ticket #52 Linux standalone bundle validation — 2026-10-14
+### Ticket #52 Linux standalone bundle validation — 2026-10-15
 
-- Full randomized coverage suite (Python 3.12.13): 657 passed in 576 s; coverage
+- Full randomized coverage suite (Python 3.12.13): 658 passed in 530 s; coverage
   87.47% against the unchanged 85% floor. Ruff lint/format, strict mypy (now
   including `scripts/package_bundle.py`), `tsc`, actionlint, zizmor (pedantic) and
   `pip-audit` of `requirements-package.lock.txt` passed.
-- Three complete package smokes on the reference machine in
-  [packaging.md](packaging.md#recorded-linux-evidence) (build output; build output
-  in an empty network namespace; extracted archive in an empty network namespace),
-  each: assets byte-identical, four readable startup failures, two native runs,
-  startup backup on the second, restart persistence. Real desktop session, not Xvfb.
+- Package smoke on the reference machine (final committed tree `a94cdfe`, archive
+  extracted, empty network namespace) in
+  [packaging.md](packaging.md#recorded-linux-evidence): assets byte-identical,
+  five readable startup failures, two native runs, startup backup on the second
+  holding run 1's ledger rows, restart persistence. Real desktop session, not Xvfb.
 - Not established: the GitHub `package-smoke` job result (pending the PR run),
   Windows/macOS bundles, other Linux distributions, P05 packaged launch timing,
   operator sign-off. Stories 45/46 stay Missing/partial until three platforms pass.

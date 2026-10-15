@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-15T03:51:09+00:00",
+  "recorded_at": "2026-10-15T04:08:32+00:00",
   "machine": {
     "platform": "Linux-7.2.9-2-cachyos-x86_64-with-glibc2.44",
     "machine": "x86_64",
@@ -14,13 +14,13 @@
   "bundle": {
     "directory": "invsys-desktop",
     "file_count": 3017,
-    "size_bytes": 686878043,
-    "executable_sha256": "e93e0a1218f256c2f287282d732d694e098e6364f9cd4d82b73dd2e92fba3182",
+    "size_bytes": 686878052,
+    "executable_sha256": "a8a1f90ea993057330dae81f031b9d4d830b23a98dfcf009866b10d4eea52fc9",
     "manifest": {
       "app": "invsys-desktop",
       "source": {
-        "commit": "d3780884bd205b7bc169141878faa359d9124aa3",
-        "uncommitted_changes": true
+        "commit": "a94cdfe0291c82078387cfe098ee7d7b1593de8b",
+        "uncommitted_changes": false
       },
       "python": "3.12.13",
       "platform": "linux-x86_64",
@@ -63,7 +63,7 @@
       "stderr": [
         "usage: invsys-desktop [-h] [--database DATABASE] [--assets ASSETS]",
         "                      [--smoke-check]",
-        "invsys-desktop: error: This bundle is incomplete: the frontend assets are missing from /tmp/invsys-tools/smoke3/incomplete-bundle/_internal/frontend/dist. Extract the bundle again from its archive."
+        "invsys-desktop: error: This bundle is incomplete: the frontend assets are missing from /tmp/invsys-tools/smoke4/incomplete-bundle/_internal/frontend/dist. Extract the bundle again from its archive."
       ],
       "passed": true
     },
@@ -72,8 +72,18 @@
       "expected_exit_code": 1,
       "exit_code": 1,
       "stderr": [
-        "Cannot open the inventory database /tmp/invsys-tools/smoke3/not-a-folder/inventory.db: Not a directory",
-        "Choose an existing SQLite inventory, or a new file in a folder this account can write, with --database."
+        "Cannot open the inventory database /tmp/invsys-tools/smoke4/not-a-folder/inventory.db: Not a directory",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-path-is-a-directory",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database /tmp/invsys-tools/smoke4/directory/inventory.db: Is a directory",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
       ],
       "passed": true
     },
@@ -82,8 +92,8 @@
       "expected_exit_code": 1,
       "exit_code": 1,
       "stderr": [
-        "Cannot open the inventory database /tmp/invsys-tools/smoke3/garbage/inventory.db: file is not a database",
-        "Choose an existing SQLite inventory, or a new file in a folder this account can write, with --database."
+        "Cannot open the inventory database /tmp/invsys-tools/smoke4/garbage/inventory.db: file is not a database",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
       ],
       "passed": true
     },
@@ -96,7 +106,7 @@
     {
       "run": 1,
       "exit_code": 0,
-      "seconds": 60.4,
+      "seconds": 60.6,
       "stdout": [
         "Desktop smoke: explicit History/catalog/dashboard refresh after external receipt passed.",
         "Desktop smoke: uncertain BOM response, failed recovery read, preserved draft and snapshot reconciliation without retry passed.",
@@ -115,6 +125,7 @@
         "GBM is not supported with the current configuration. Fallback to Vulkan rendering in Chromium."
       ],
       "startup_backups": [],
+      "startup_backup_transactions": null,
       "database": {
         "integrity_check": "ok",
         "parts": 13,
@@ -145,8 +156,9 @@
         "GBM is not supported with the current configuration. Fallback to Vulkan rendering in Chromium."
       ],
       "startup_backups": [
-        "inventory-20261014-235213-startup.db"
+        "inventory-20261015-000937-startup.db"
       ],
+      "startup_backup_transactions": 39,
       "database": {
         "integrity_check": "ok",
         "parts": 22,
