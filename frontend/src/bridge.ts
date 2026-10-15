@@ -64,7 +64,7 @@ export interface UtilityContext {
   latest_backup: BackupInfo | null; backup_count: number; backup_retention: number; backup_error: string | null;
 }
 export type Folder = 'backups' | 'exports';
-export type ImportKind = 'parts';
+export type ImportKind = 'parts' | 'inventory';
 export interface CSVIssue { row_number: number; field: string; message: string; level: string }
 export interface CSVPreview { kind: ImportKind; path: string; row_count: number; valid_count: number; errors: CSVIssue[]; warnings: CSVIssue[]; can_import: boolean }
 export interface ImportResult { kind: ImportKind; rows_imported: number; backup_path: string }

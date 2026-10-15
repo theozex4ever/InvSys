@@ -128,6 +128,9 @@ def main() -> int:
                 or not bridge.part_detail("DESKTOP-SMOKE")["ok"]
                 or bridge.part_detail(smoke.imported_part)["data"]["description"]
                 != "Reviewed bearing"
+                or smoke.receipt_import is None
+                or bridge.stock_context(smoke.receipt_import["part"])["data"]
+                != smoke.receipt_import["context"]
                 or bridge.stock_context("DESKTOP-SMOKE")["data"] != smoke.stock_result
                 or bridge.stock_context(smoke.adjust_part)["data"] != smoke.adjust_result
                 or bridge.shipment_detail(smoke.bom_result["shipment_number"])["data"]

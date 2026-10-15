@@ -57,13 +57,15 @@ const history = historyWorkflow(() => api);
 const bomExplore = bomExploreWorkflow(() => api, part => { navigate('history', false); void history.open(part); $('#history-query').focus(); });
 const bom = bomWorkflow(() => api);
 const settings = settingsWorkflow(() => api);
-importWorkflow(() => api, () => $<HTMLInputElement>('#operator').value, async () => {
-  await Promise.all([loadParts(), loadDashboard()]);
+// Imports change catalog fields or Stock ledger rows; refresh every page showing them.
+const importChanged = async () => {
+  await Promise.all([loadParts(), loadDashboard(), history.load(), settings.open()]);
   if (currentPart) {
     currentPart = await read(api.part_detail(currentPart.part_number));
     $('#drawer-data').innerHTML = detailHTML(currentPart); icons();
   }
-});
+};
+const imports = (['parts', 'inventory'] as const).map(kind => importWorkflow(() => api, () => $<HTMLInputElement>('#operator').value, importChanged, kind));
 const stockChanged = async () => { await Promise.all([loadParts(), loadDashboard(), history.load()]); };
 const stockToast = (text: string, summary?: string) => { notice(text); const element = document.createElement('div'); element.className = 'stock-toast'; element.setAttribute('role', 'status'); element.innerHTML = `${icon('check')}<span>${esc(summary ?? text)}</span>`; document.body.append(element); icons(); setTimeout(() => element.remove(), 5000); };
 const stock = stockWorkflows(() => api, () => $<HTMLInputElement>('#operator').value, stockChanged, stockToast);
@@ -114,7 +116,7 @@ async function loadDashboard() {
     if (version !== dashboardVersion) return;
     $('#dashboard-data').innerHTML = `<div class="dashboard-grid"><div class="panel"><div class="panel-head"><div class="attention-heading"><span class="icon-tile">${icon('triangle-alert')}</span><div><h2>Needs attention</h2><p>Active parts at or below their minimum stock.</p></div></div><span class="badge warn">${data.low_stock.length} low</span></div>
 ${data.low_stock.length ? data.low_stock.slice(0, 5).map(p => `<div class="attention-row"><div><button class="part-id" data-part="${esc(p.part_number)}">${esc(p.part_number)}</button><div class="part-description description">${esc(p.description)}</div></div><div><div class="stock-meter"><strong>${p.quantity}</strong> / ${p.minimum_quantity} min</div><div class="meter" aria-hidden="true"><span style="width:${Math.min(100, p.minimum_quantity > 0 ? p.quantity / p.minimum_quantity * 100 : 0)}%"></span></div>${p.quantity === 0 ? '<span class="stock-label">No stock</span>' : ''}</div><button class="icon-btn" data-stock="receive" data-number="${esc(p.part_number)}" aria-label="Receive ${esc(p.part_number)}">${icon('arrow-right')}</button></div>`).join('') : status('No low-stock parts.')}<div class="table-footer"><button class="text-link" data-low-stock>View all low-stock parts ${icon('arrow-right')}</button></div></div>
-<div class="panel"><div class="panel-head"><h2>Quick actions</h2></div><div class="panel-body"><div class="quick-actions"><button class="action-tile" data-page="receive">${icon('arrow-down-to-line')}<strong>Receive stock</strong><small>Record incoming inventory</small></button><button class="action-tile" data-page="ship">${icon('arrow-up-from-line')}<strong>Ship stock</strong><small>Review lots and send</small></button><button class="action-tile" data-page="move">${icon('arrow-left-right')}<strong>Move stock</strong><small>Transfer a lot between locations</small></button><button class="action-tile" data-new>${icon('plus')}<strong>Create a part</strong><small>Add to your catalog</small></button></div><p class="help migration-note">CSV exports and Parts CSV import are in Settings. Inventory and BOM CSV import use the original application.</p></div></div></div>
+<div class="panel"><div class="panel-head"><h2>Quick actions</h2></div><div class="panel-body"><div class="quick-actions"><button class="action-tile" data-page="receive">${icon('arrow-down-to-line')}<strong>Receive stock</strong><small>Record incoming inventory</small></button><button class="action-tile" data-page="ship">${icon('arrow-up-from-line')}<strong>Ship stock</strong><small>Review lots and send</small></button><button class="action-tile" data-page="move">${icon('arrow-left-right')}<strong>Move stock</strong><small>Transfer a lot between locations</small></button><button class="action-tile" data-new>${icon('plus')}<strong>Create a part</strong><small>Add to your catalog</small></button></div><p class="help migration-note">CSV exports and Parts and Inventory receipt CSV imports are in Settings. BOM CSV import uses the original application.</p></div></div></div>
 <div class="stats dashboard-stats"><div class="panel stat"><div class="stat-title">Active parts ${icon('package')}</div><div class="stat-value">${data.active_parts}</div><div class="stat-foot">In your catalog</div></div><button class="panel stat stat-button warning" data-low-stock aria-label="View low-stock parts"><span class="stat-title">Low-stock parts ${icon('triangle-alert')}</span><span class="stat-value">${data.low_stock.length}</span><span class="stat-foot">At or below minimum · View parts</span></button><div class="panel stat"><div class="stat-title">Recorded shipments ${icon('arrow-up-from-line')}</div><div class="stat-value">${data.shipment_count}</div><div class="stat-foot">Tracked in History</div></div></div>
 <div class="panel activity-panel"><div class="panel-head"><h2>Recent activity</h2><button class="text-link" data-page="history">View History ${icon('arrow-right')}</button></div>${data.activity.length ? data.activity.map(tx => `<div class="activity-item ${tx.tx_type === 'RECEIVE' ? 'receive' : tx.tx_type.startsWith('SHIP') ? 'ship' : 'other'}"><span class="icon-tile">${icon(tx.tx_type === 'RECEIVE' ? 'arrow-down-to-line' : tx.tx_type.startsWith('SHIP') ? 'arrow-up-from-line' : 'arrow-left-right')}</span><div><button class="text-link" data-history-id="${tx.transaction_id}">${esc(tx.part_number)} · ${tx.quantity_change > 0 ? '+' : ''}${tx.quantity_change}</button><p>${esc(tx.tx_type)} · ${esc(tx.operator)} · Lot ${esc(tx.lot_number || '—')} · ${esc(tx.location_from || tx.location_to)}</p></div><time>${esc(tx.timestamp)}</time></div>`).join('') : status('No inventory activity yet.')}</div>`;
     icons();
@@ -215,7 +217,7 @@ $('#drawer-data').onclick = event => {
   }
   if (target?.dataset.adjust && api) { $<HTMLDialogElement>('#drawer').close(); navigate('adjust', false); void adjust.open(target.dataset.adjust); }
 };
-$('#operator').addEventListener('input', () => { stock.operatorChanged(); move.operatorChanged(); adjust.operatorChanged(); });
+$('#operator').addEventListener('input', () => { stock.operatorChanged(); move.operatorChanged(); adjust.operatorChanged(); imports.forEach(item => item.operatorChanged()); });
 $('#global-search').onclick = () => { navigate('parts'); $('#query').focus(); };
 document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open]')) { event.preventDefault(); $('#global-search').click(); } });
 let debounce: ReturnType<typeof setTimeout>;

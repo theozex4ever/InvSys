@@ -20,6 +20,7 @@ class DesktopSmoke:
         self.opened_folders: list[Path] = []
         self.backup_path: Path | None = None
         self.imported_part = ""
+        self.receipt_import: dict[str, Any] | None = None
         self.export_paths: list[Path] = []
 
     def run(self, window: Any) -> None:
@@ -92,9 +93,15 @@ class DesktopSmoke:
 
             self.adjust_part = adjust_part_name()
             self.adjust_result = check_adjust(window, wait, self.adjust_part)
-            from inventory_control.desktop_smoke_imports import check_parts_import
+            from inventory_control.desktop_smoke_imports import (
+                check_inventory_import,
+                check_parts_import,
+            )
 
             self.imported_part = check_parts_import(window, wait, self.captures.parent)
+            self.receipt_import = check_inventory_import(
+                window, wait, self.captures.parent, self.imported_part
+            )
             print(
                 "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
                 flush=True,

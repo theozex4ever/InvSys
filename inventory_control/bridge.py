@@ -18,12 +18,20 @@ from inventory_control.backup import (
     verify_backup,
     write_backup,
 )
-from inventory_control.import_export import CSVChanged, CSVFileError, ImportExportService
+from inventory_control.import_export import (
+    CSVChanged,
+    CSVFileError,
+    ImportExportService,
+    ReviewInvalidated,
+)
 from inventory_control.models import BOMShipmentPlan
 from inventory_control.store import InventoryStore, ShipmentReviewNotFound, StockChanged
 from inventory_control.utilities import DesktopHost, UtilityContext
 
 logger = logging.getLogger(__name__)
+
+# Enabled CSV import kinds, mapped to the records each one changes (for outcome messages).
+IMPORT_KIND_RECORDS = {"parts": "catalog", "inventory": "stock"}
 
 
 class BridgeError(ValueError):
@@ -638,8 +646,8 @@ class InventoryBridge:
 
     def select_import(self, kind: Any) -> dict[str, Any]:
         def select() -> dict[str, Any]:
-            if kind != "parts":
-                raise ValueError("Choose Parts import.")
+            if kind not in IMPORT_KIND_RECORDS:
+                raise ValueError("Choose Parts or Inventory receipt import.")
             launch = self._launch()
             if self._host is None:
                 raise BridgeError("UNAVAILABLE", "File selection is not available in this launch.")
@@ -647,7 +655,13 @@ class InventoryBridge:
                 path = self._host.choose_file(launch.database.parent, ("CSV files (*.csv)",))
                 if path is None:
                     return {"cancelled": True}
-                preview, digest = self._import_service().review_parts_import_csv(path)
+                service = self._import_service()
+                review_csv = (
+                    service.review_parts_import_csv
+                    if kind == "parts"
+                    else service.review_inventory_import_csv
+                )
+                preview, digest = review_csv(path)
             except OSError as error:
                 raise BridgeError("FILE_ERROR", f"Could not select or read CSV: {error}") from error
             review_id = token_urlsafe(24)
@@ -657,12 +671,17 @@ class InventoryBridge:
                 "state": "reviewed",
                 "result": None,
             }
-            # Only the most recent selected file is eligible for submission.
-            # Completed/failed attempts stay available for lost-response recovery.
+            # Only the most recent selected file of each kind is eligible for
+            # submission. Completed/failed attempts stay available for recovery.
             for previous in self._import_reviews.values():
-                if previous["review"]["state"] == "reviewed":
+                if previous["kind"] == kind and previous["review"]["state"] == "reviewed":
                     previous["review"]["state"] = "superseded"
-            self._import_reviews[review_id] = {"path": path, "digest": digest, "review": review}
+            self._import_reviews[review_id] = {
+                "kind": kind,
+                "path": path,
+                "digest": digest,
+                "review": review,
+            }
             return {"cancelled": False, **review}
 
         return self._respond(select)
@@ -693,18 +712,25 @@ class InventoryBridge:
                 )
             # Consume before attempting writes; an error never makes a mutation retryable.
             review["state"] = "failed"
+            service = self._import_service()
+            import_csv = (
+                service.import_parts_csv
+                if reviewed["kind"] == "parts"
+                else service.import_inventory_csv
+            )
             try:
-                result = self._import_service().import_parts_csv(
+                result = import_csv(
                     Path(reviewed["path"]),
                     operator,
                     expected_digest=reviewed["digest"],
                     require_backup=True,
                 )
-            except CSVChanged as error:
+            except (CSVChanged, ReviewInvalidated) as error:
                 raise BridgeError("STALE", str(error)) from error
             except (CSVFileError, OSError, sqlite3.Error) as error:
                 raise BridgeError(
-                    "FILE_ERROR", f"Import failed; no catalog changes were committed: {error}"
+                    "FILE_ERROR",
+                    f"Import failed; no {IMPORT_KIND_RECORDS[reviewed['kind']]} changes were committed: {error}",
                 ) from error
             review["state"] = "completed"
             response = asdict(result)
