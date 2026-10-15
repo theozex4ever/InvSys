@@ -9,15 +9,16 @@ import { bomExploreWorkflow } from './bom-explore';
 import { adjustWorkflow } from './adjust';
 import { partEditor } from './partEdit';
 import { moveWorkflow } from './move';
-import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History, ListTree, Network, Settings } from 'lucide';
+import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History, ListTree, Network, Settings, ClipboardCheck } from 'lucide';
 import { ready, read, RequestError, type Search, type Part, type PartDetail, type Dashboard } from './bridge';
 
-const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search: SearchIcon, Check, History, ListTree, Network, Settings } });
+const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search: SearchIcon, Check, History, ListTree, Network, Settings, ClipboardCheck } });
 const icon = (name: string) => `<i data-lucide="${name}" aria-hidden="true"></i>`;
 const badges = (part: Part) => `<span class="badge ${part.active ? 'good' : 'neutral'}">${part.active ? 'Active' : 'Inactive'}</span> ${part.low_stock ? `<span class="badge warn">${part.quantity === 0 ? 'Low stock · No stock' : 'Low stock'}</span>` : ''}`;
 const search: Search = { query: '', status: 'all', low_stock: false, sort: 'part_number', descending: false };
 let api: Awaited<ReturnType<typeof ready>>;
-let page: 'dashboard' | 'parts' | 'bom' | 'bom-explore' | 'receive' | 'ship' | 'move' | 'adjust' | 'history' | 'settings' = 'dashboard';
+type Page = 'dashboard' | 'parts' | 'bom' | 'bom-explore' | 'receive' | 'ship' | 'move' | 'adjust' | 'history' | 'settings';
+let page: Page = 'dashboard';
 let searchVersion = 0;
 let dashboardVersion = 0;
 let detailVersion = 0;
@@ -33,7 +34,7 @@ let theme: 'light' | 'dark' = 'light';
 
 $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar" aria-label="Main navigation">
 <div class="brand"><div class="brand-mark">${icon('boxes')}</div><div><strong>INVSYS</strong><small>INVENTORY CONTROL</small></div></div>
-<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><button class="nav-button" data-page="bom" aria-label="BOM">${icon('list-tree')}<span>BOM</span></button><button class="nav-button" data-page="bom-explore" aria-label="BOM explorer">${icon('network')}<span>BOM explorer</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button><button class="nav-button" data-page="move" aria-label="Move stock">${icon('arrow-left-right')}<span>Move</span></button><button class="nav-button" data-page="adjust" aria-label="Adjust count">${icon('arrow-left-right')}<span>Adjust</span></button><button class="nav-button" data-page="history" aria-label="History">${icon('history')}<span>History</span></button><div class="nav-group eyebrow">System</div><button class="nav-button" data-page="settings" aria-label="Settings">${icon('settings')}<span>Settings</span></button></nav>
+<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><button class="nav-button" data-page="bom" aria-label="BOM">${icon('list-tree')}<span>BOM</span></button><button class="nav-button" data-page="bom-explore" aria-label="BOM explorer">${icon('network')}<span>BOM explorer</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button><button class="nav-button" data-page="move" aria-label="Move stock">${icon('arrow-left-right')}<span>Move</span></button><button class="nav-button" data-page="adjust" aria-label="Adjust count">${icon('clipboard-check')}<span>Adjust</span></button><button class="nav-button" data-page="history" aria-label="History">${icon('history')}<span>History</span></button><div class="nav-group eyebrow">System</div><button class="nav-button" data-page="settings" aria-label="Settings">${icon('settings')}<span>Settings</span></button></nav>
 
 <div class="sidebar-bottom"><button id="theme" class="nav-button" disabled aria-label="Switch to dark mode">${icon('moon')}<span>Dark mode</span></button><div class="local-status">STORED ON THIS DEVICE</div></div></aside>
 <div class="workspace"><header class="topbar"><div class="breadcrumb">Workspace / <strong id="page-name">Dashboard</strong></div>
@@ -75,7 +76,7 @@ const move = moveWorkflow(() => api, () => $<HTMLInputElement>('#operator').valu
 
 const editor = partEditor(() => api, { show: part => { currentPart = part; $('#drawer-data').innerHTML = detailHTML(part); icons(); $('#drawer-data').querySelector<HTMLElement>('[data-edit]')?.focus(); }, refresh: async () => { await Promise.all([loadParts(), loadDashboard()]); }, notice });
 
-const adjust = adjustWorkflow(() => api, () => $<HTMLInputElement>('#operator').value, async () => { await Promise.all([loadParts(), loadDashboard(), history.load()]); }, (text, summary) => { notice(text); const element = document.createElement('div'); element.className = 'stock-toast'; element.setAttribute('role', 'status'); element.innerHTML = `${icon('check')}<span>${esc(summary ?? text)}</span>`; document.body.append(element); icons(); setTimeout(() => element.remove(), 5000); });
+const adjust = adjustWorkflow(() => api, () => $<HTMLInputElement>('#operator').value, stockChanged, stockToast);
 
 // Native dialog focus can otherwise escape into the Qt browser chrome on Tab.
 for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
@@ -90,11 +91,33 @@ for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
   });
 }
 
+// The original application's Ctrl+1–9 destinations, in its order.
+const destinations: Page[] = ['dashboard', 'parts', 'bom', 'receive', 'ship', 'move', 'history', 'settings', 'adjust'];
+// Shortcut navigation focuses each page's primary input, as the original screens did.
+const primaryInputs: Partial<Record<Page, string>> = { dashboard: '#dashboard-data .attention-row [data-part]', parts: '#query', bom: '#bom-parent', receive: '#receive-part_number', ship: '#ship-part_number', move: '#move-part_number', adjust: '#adjust-part_number', history: '#history-query' };
+destinations.forEach((name, index) => {
+  const button = $(`.nav-button[data-page="${name}"]`);
+  button.setAttribute('aria-keyshortcuts', `Control+${index + 1} Meta+${index + 1}`);
+  button.insertAdjacentHTML('beforeend', `<kbd class="nav-key" aria-hidden="true">Ctrl ${index + 1}</kbd>`);
+});
+function focusPrimary(target: Page) {
+  const selector = primaryInputs[target];
+  const input = selector ? document.querySelector<HTMLInputElement>(selector) : null;
+  if (input && !input.disabled && input.getClientRects().length) { input.focus(); return; }
+  // Locked or empty pages fall back to the heading so the page change is announced.
+  const heading = $(`#${target} h1`); heading.tabIndex = -1; heading.focus();
+}
+async function jump(target: Page) {
+  await navigate(target);
+  // Like the original shortcuts, land on the primary input once the page has loaded.
+  if (page === target && !document.querySelector('dialog[open]')) focusPrimary(target);
+}
+
 function notice(text: string, error = false) {
   $('#notice').textContent = text;
   $('#notice').className = error ? 'alert error' : 'alert success';
 }
-function navigate(next: typeof page, refresh = true) {
+function navigate(next: Page, refresh = true): Promise<unknown> {
   if (page === 'history' && page !== next) history.leave();
   if (page === 'bom-explore' && page !== next) bomExplore.leave();
   if (page === 'bom' && page !== next) bom.leave();
@@ -108,7 +131,8 @@ function navigate(next: typeof page, refresh = true) {
     button.classList.toggle('active', button.dataset.page === next);
     if (button.dataset.page === next) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
-  if (api && refresh) { if (next === 'receive' || next === 'ship') void stock.open(next); else if (next === 'adjust') void adjust.open(); else if (next === 'bom') void bom.open(); else if (next === 'settings') void settings.open(); else if (next === 'move') void move.open(); else void (next === 'history' ? history.open() : next === 'bom-explore' ? bomExplore.open() : next === 'dashboard' ? loadDashboard() : loadParts()); }
+  if (!api || !refresh) return Promise.resolve();
+  return next === 'receive' || next === 'ship' ? stock.open(next) : next === 'adjust' ? adjust.open() : next === 'bom' ? bom.open() : next === 'settings' ? settings.open() : next === 'move' ? move.open() : next === 'history' ? history.open() : next === 'bom-explore' ? Promise.resolve(bomExplore.open()) : next === 'dashboard' ? loadDashboard() : loadParts();
 }
 async function loadDashboard(strict = false) {
   const version = ++dashboardVersion;
@@ -188,7 +212,7 @@ document.addEventListener('click', event => {
   if (!target) return;
   if (target.dataset.historyId && api) { void history.inspect(Number(target.dataset.historyId), target); }
   if (target.dataset.shipment && api) { void history.inspect(target.dataset.shipment, target); }
-  if (target.dataset.page) navigate(target.dataset.page as typeof page);
+  if (target.dataset.page) navigate(target.dataset.page as Page);
   if (target.dataset.part && api) void openPart(target.dataset.part, target);
   if (target.dataset.stock && api && !target.closest('#drawer-data')) {
     const mode = target.dataset.stock as 'receive' | 'ship' | 'move';
@@ -221,7 +245,15 @@ $('#drawer-data').onclick = event => {
 };
 $('#operator').addEventListener('input', () => { stock.operatorChanged(); move.operatorChanged(); adjust.operatorChanged(); imports.forEach(item => item.operatorChanged()); });
 $('#global-search').onclick = () => { navigate('parts'); $('#query').focus(); };
-document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open]')) { event.preventDefault(); $('#global-search').click(); } });
+document.addEventListener('keydown', event => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || document.querySelector('dialog[open]')) return;
+  if (event.key.toLowerCase() === 'k') { event.preventDefault(); $('#global-search').click(); return; }
+  // Synthetic native key events may lack a physical code; fall back to the typed digit.
+  const digit = /^(?:Digit|Numpad)([1-9])$/.exec(event.code)?.[1] ?? (/^[1-9]$/.test(event.key) ? event.key : '');
+  if (!digit || event.shiftKey) return;
+  event.preventDefault();
+  if (api) void jump(destinations[Number(digit) - 1]!);
+});
 let debounce: ReturnType<typeof setTimeout>;
 $('#query').addEventListener('input', () => {
   search.query = $<HTMLInputElement>('#query').value; ++searchVersion;

@@ -1,11 +1,8 @@
+import { esc, message, optionalPair as pair, status } from './presentation';
 import { read, RequestError, type ready, type BackupInfo, type ExportKind, type Folder, type UtilityContext } from './bridge';
 
 type API = Awaited<ReturnType<typeof ready>>;
-const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const pair = (label: string, value: unknown) => `<div class="detail-pair"><span>${esc(label)}</span><strong>${esc(value || '—')}</strong></div>`;
-const status = (text: string, error = false) => `<div class="status ${error ? 'error' : ''}" role="${error ? 'alert' : 'status'}">${esc(text)}</div>`;
 const success = (text: string) => `<div class="status success" role="status">${esc(text)}</div>`;
-const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete the request.';
 const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
 const describe = (backup: BackupInfo) => `${backup.name} · ${backup.modified} · ${size(backup.size_bytes)}`;
 const exportLabels: Record<ExportKind, string> = { parts: 'Parts', inventory: 'Inventory', transactions: 'Transactions', shipments: 'Shipments', bom: 'BOM definitions' };
