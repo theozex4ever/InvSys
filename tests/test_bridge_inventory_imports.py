@@ -152,9 +152,10 @@ def test_ambiguous_csv_structure_cannot_change_stock(tmp_path, text):
 
 
 def test_legitimate_spreadsheet_quirks_still_import(tmp_path):
-    _store, bridge, _context, _host = launch(
-        tmp_path,
-        f'\ufeff{HEADER},notes,,\r\nA,Stock,L1,5,"Dock 2, ""north""\nshelf",,\r\n\r\nB,Stock,L2,3\r\n',
+    _store, bridge, _context, host = launch(tmp_path)
+    # Exact bytes: text-mode writes would translate the quoted newline on Windows.
+    host.selection.write_bytes(
+        f'\ufeff{HEADER},notes,,\r\nA,Stock,L1,5,"Dock 2, ""north""\nshelf",,\r\n\r\nB,Stock,L2,3\r\n'.encode()
     )
     review = bridge.select_import("inventory")["data"]
     assert review["preview"]["errors"] == []
