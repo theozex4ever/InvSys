@@ -1,5 +1,6 @@
 import json
 
+from inventory_control.acceptance import create_fixture
 from inventory_control.bridge import InventoryBridge
 from inventory_control.store import InventoryStore
 
@@ -86,7 +87,88 @@ def test_history_pages_are_bounded_without_hiding_older_matches(tmp_path):
     assert bridge.history({"query": "L-0"})["data"]["records"][0]["lot_number"] == "L-0"
     for page in (-1, True, "1", 1.2):
         assert bridge.history({"page": page})["error"]["code"] == "VALIDATION"
+    # Sorting happens before paging, so pages partition the sorted matches.
+    ascending = [
+        record["lot_number"]
+        for page in (0, 1)
+        for record in bridge.history({"sort": "lot_number", "descending": False, "page": page})[
+            "data"
+        ]["records"]
+    ]
+    assert ascending == sorted(f"L-{index}" for index in range(55))
+    for invalid in ({"sort": "id"}, {"sort": None}, {"descending": "yes"}, {"descending": 0}):
+        assert bridge.history(invalid)["error"]["code"] == "VALIDATION"
     store.engine.dispose()
+
+
+def test_history_text_search_covers_every_original_column(tmp_path):
+    """A16: Notes, both Locations, timestamp and type text, alongside the exact-type filter."""
+    path = create_fixture(tmp_path / "acceptance")
+    store = InventoryStore(path, seed=False)
+    bridge = InventoryBridge(store)
+
+    def matches(**search):
+        return bridge.history(search)["data"]["records"]
+
+    assert len(matches()) == 15
+    date = matches()[0]["timestamp"][:10]
+    assert len(matches(query="Disposable baseline")) == 8
+    assert len(matches(query="dISPOSABLE BASELINE")) == 8
+    assert {r["tx_type"] for r in matches(query="Shipping Bench")} == {"MOVE_OUT", "MOVE_IN"}
+    assert {r["tx_type"] for r in matches(query="move_")} == {"MOVE_OUT", "MOVE_IN"}
+    assert [r["tx_type"] for r in matches(query="MOVE_", tx_type="MOVE_IN")] == ["MOVE_IN"]
+    assert len(matches(query=date)) == 15
+    assert [r["part_number"] for r in matches(query="used by kit")] == ["LEAF", "LEAF"]
+    # A later transfer out of Shipping Bench matches by source; Scrap only by destination.
+    store.move("STANDARD", 1, "Shipping Bench", "Scrap", "B", "Pat")
+    assert len(matches(query="Shipping Bench")) == 4
+    assert {(r["location_from"], r["location_to"]) for r in matches(query="scrap")} == {
+        ("Shipping Bench", "Scrap")
+    }
+    # Existing Part, Lot, operator, reference and shipment searches keep working.
+    assert len(matches(query="INTERMEDIATE")) == 1
+    assert len(matches(query="ACCEPT-STANDARD")) == 1
+    assert len(matches(query="Pat")) == 2
+    assert len(matches()) == 17
+    store.engine.dispose()
+
+
+def test_history_sorts_every_original_column_without_changing_records(tmp_path):
+    """A17: ascending and descending sort on all nine columns, signed Qty numerically."""
+    path = create_fixture(tmp_path / "acceptance")
+    store = InventoryStore(path, seed=False)
+    bridge = InventoryBridge(store)
+    before = bridge.history({})["data"]
+    for sort in InventoryStore.HISTORY_SORTS:
+        for descending in (False, True):
+            result = bridge.history({"sort": sort, "descending": descending})["data"]
+            keys = [(r[sort], r["transaction_id"]) for r in result["records"]]
+            assert keys == sorted(keys, reverse=descending), (sort, descending)
+            assert result["matching"] == 15
+            assert sorted(map(json.dumps, result["records"])) == sorted(
+                map(json.dumps, before["records"])
+            )
+    quantities = bridge.history({"sort": "quantity_change", "descending": False})["data"]
+    assert quantities["records"][0]["quantity_change"] == -9
+    newest = bridge.history({"sort": "quantity_change"})["data"]["records"][0]
+    assert newest["quantity_change"] == 30
+    # The default order stays newest first, and sorting combines with filters.
+    assert bridge.history({})["data"]["records"][0]["tx_type"] == "SHIP_BOM"
+    assert [
+        r["quantity_change"]
+        for r in bridge.history(
+            {
+                "query": "LEAF",
+                "tx_type": "BOM_CONSUME",
+                "sort": "quantity_change",
+                "descending": False,
+            }
+        )["data"]["records"]
+    ] == [-9, -5]
+    store.engine.dispose()
+    reopened = InventoryStore(path, seed=False)
+    assert InventoryBridge(reopened).history({})["data"] == before
+    reopened.engine.dispose()
 
 
 def test_history_search_treats_wildcards_as_literal_text(tmp_path):
