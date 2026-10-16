@@ -339,15 +339,15 @@ jobs:
     name: Package smoke (${{ matrix.os }})
     needs: frontend
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        # The Windows and macOS packaging tickets add their runners here and
-        # extend scripts/package_bundle.py; the steps below are the shared shape.
-        os: [ubuntu-24.04]
+        # The macOS packaging ticket adds its runner here and extends
+        # scripts/package_bundle.py; the steps below are the shared shape.
+        os: [ubuntu-24.04, windows-2025]
     env:
       QTWEBENGINE_CHROMIUM_FLAGS: --force-prefers-reduced-motion
     steps:
@@ -413,6 +413,28 @@ jobs:
           --evidence "$RUNNER_TEMP/package-evidence.json"
           --isolate-network
 
+      # Operators install a Windows bundle by extracting the zip, so the smoke
+      # runs on the extracted archive. The runner session is an interactive
+      # desktop, so no virtual display is needed; the smoke blocks outbound
+      # traffic of every bundled program with temporary Windows Firewall rules.
+      - name: Install the archive as an operator would
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem "$env:RUNNER_TEMP/bundle-dist" -Filter 'invsys-desktop-*.zip' | Select-Object -First 1
+          if (-not $archive) { throw 'The build produced no zip archive.' }
+          Expand-Archive -Path $archive.FullName -DestinationPath "$env:RUNNER_TEMP/bundle-installed"
+
+      - name: Package smoke
+        if: runner.os == 'Windows'
+        run: >-
+          python scripts/package_bundle.py smoke
+          --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
+          --assets frontend/dist
+          --workdir "$RUNNER_TEMP/invsys-package-smoke"
+          --evidence "$RUNNER_TEMP/package-evidence.json"
+          --isolate-network
+
       - name: Package evidence summary
         if: ${{ !cancelled() }}
         run: |
@@ -421,7 +443,7 @@ jobs:
           {
             echo "### Package smoke (${RUNNER_OS})"
             echo '```json'
-            python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d[k] for k in ('result','machine','network_isolated')}, indent=2))" "$RUNNER_TEMP/package-evidence.json"
+            python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d[k] for k in ('result','machine','network_isolated','network_isolation')}, indent=2))" "$RUNNER_TEMP/package-evidence.json"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
