@@ -13,6 +13,7 @@ import os
 import shutil
 import sys
 import tarfile
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -263,3 +264,163 @@ def test_a_hung_launcher_is_a_failed_run_with_a_record(tmp_path, monkeypatch):
     assert run["exit_code"] == -1
     assert "Timed out after 1 s" in run["stderr"]
     assert run["stdout"].strip() == "started"
+
+
+# ---------------------------------------------------------------- Windows bundle
+
+
+def test_the_launcher_is_an_exe_on_windows_only():
+    assert package_bundle.executable_path(Path("b"), "win32") == Path("b") / "invsys-desktop.exe"
+    for platform_name in ("linux", "darwin"):
+        assert (
+            package_bundle.executable_path(Path("b"), platform_name) == Path("b") / "invsys-desktop"
+        )
+
+
+def test_windows_bundles_are_zip_archives_and_others_gzipped_tar():
+    assert package_bundle.archive_name("win32", "AMD64") == "invsys-desktop-win32-amd64.zip"
+    assert package_bundle.archive_name("linux", "x86_64") == "invsys-desktop-linux-x86_64.tar.gz"
+
+
+def test_the_windows_freeze_keeps_the_shared_arguments_and_drops_the_dotnet_backends(tmp_path):
+    assets, dist, work = tmp_path / "assets", tmp_path / "dist", tmp_path / "work"
+    shared = package_bundle.pyinstaller_args(Path("/repo"), assets, dist, work, "linux")
+    windows = package_bundle.pyinstaller_args(Path("/repo"), assets, dist, work, "win32")
+    pairs = list(itertools.pairwise(windows))
+    # Everything the Linux freeze does is still done: one build path, not a fork.
+    assert set(shared) <= set(windows)
+    for module in ("clr", "clr_loader", "pythonnet"):
+        assert ("--exclude-module", module) in pairs
+        assert ("--exclude-module", module) not in list(itertools.pairwise(shared))
+    # A console executable keeps the readable startup failures visible.
+    assert "--noupx" in windows
+    assert "--windowed" not in windows
+    assert "--noconsole" not in windows
+    assert windows[-1] == str(Path("/repo") / "inventory_desktop.py")
+
+
+def test_a_zip_archive_keeps_the_layout_and_is_reproducible(tmp_path):
+    bundle = make_bundle(tmp_path)
+    (bundle / "invsys-desktop.exe").write_bytes(b"MZ")
+    first, second = tmp_path / "a.zip", tmp_path / "b.zip"
+    package_bundle.make_archive(bundle, first)
+    # Changing modification times must not change the archive.
+    os.utime(bundle / "_internal" / "frontend" / "dist" / "app.js", (86400 * 400, 86400 * 400))
+    package_bundle.make_archive(bundle, second)
+    assert first.read_bytes() == second.read_bytes()
+    with zipfile.ZipFile(first) as archive:
+        names = archive.namelist()
+        assert names == sorted(names)
+        assert "invsys-desktop/invsys-desktop.exe" in names
+        assert "invsys-desktop/_internal/frontend/dist/app.js" in names
+        assert archive.read("invsys-desktop/_internal/frontend/dist/app.js") == b"console.log(1)"
+        assert {info.date_time for info in archive.infolist()} == {(1980, 1, 1, 0, 0, 0)}
+        assert archive.testzip() is None
+
+
+def test_network_isolation_is_native_to_the_platform_or_refused(tmp_path):
+    bundle = make_bundle(tmp_path)
+    with package_bundle.network_isolation(bundle, False, "darwin") as record:
+        assert record == {"enabled": False}
+    with package_bundle.network_isolation(bundle, True, "linux") as record:
+        assert record["mechanism"] == "linux-empty-network-namespace"
+    with (
+        pytest.raises(PackagingError, match="not available on darwin"),
+        package_bundle.network_isolation(bundle, True, "darwin"),
+    ):
+        pytest.fail("macOS has no isolation yet; the smoke must refuse to start")
+
+
+def windows_bundle(root: Path) -> tuple[Path, Path, Path]:
+    bundle = make_bundle(root)
+    launcher = bundle / "invsys-desktop.exe"
+    helper = bundle / "_internal" / "PySide6" / "QtWebEngineProcess.exe"
+    helper.parent.mkdir(parents=True)
+    for program in (launcher, helper):
+        program.write_bytes(b"MZ")
+    return bundle, launcher, helper
+
+
+def test_windows_isolation_blocks_outbound_traffic_of_every_bundled_program(tmp_path):
+    bundle, launcher, helper = windows_bundle(tmp_path)
+    commands: list[list[str]] = []
+
+    def fake_netsh(command: list[str]) -> str:
+        commands.append(command)
+        return "Rule Name: invsys-package-smoke\n" * 2
+
+    with package_bundle.network_isolation(bundle, True, "win32", fake_netsh) as record:
+        assert record["mechanism"] == "windows-firewall-outbound-block"
+        assert record["blocked_programs"] == sorted([str(launcher), str(helper)])
+        added = [command for command in commands if "add" in command]
+        assert sorted(command[-1] for command in added) == [
+            f"program={program}" for program in sorted([launcher, helper])
+        ]
+        for command in added:
+            assert {"dir=out", "action=block", "enable=yes"} <= set(command)
+        assert "delete" not in commands[-1]
+    # The rules never outlive the smoke.
+    assert commands[-1][:6] == [
+        "netsh",
+        "advfirewall",
+        "firewall",
+        "delete",
+        "rule",
+        f"name={package_bundle.FIREWALL_RULE}",
+    ]
+
+
+def test_windows_isolation_removes_its_rules_when_the_smoke_fails(tmp_path):
+    bundle, _, _ = windows_bundle(tmp_path)
+    commands: list[list[str]] = []
+
+    def fake_netsh(command: list[str]) -> str:
+        commands.append(command)
+        return "Rule Name: x\n" * 2
+
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        package_bundle.network_isolation(bundle, True, "win32", fake_netsh),
+    ):
+        raise RuntimeError("boom")
+    assert "delete" in commands[-1]
+
+
+def test_a_rule_that_windows_does_not_list_fails_the_isolation(tmp_path, capsys):
+    bundle, _, _ = windows_bundle(tmp_path)
+
+    def one_rule_listed(command: list[str]) -> str:
+        return "Rule Name: x\n"
+
+    with (
+        pytest.raises(PackagingError, match="Expected 2 outbound block rules"),
+        package_bundle.network_isolation(bundle, True, "win32", one_rule_listed),
+    ):
+        pytest.fail("the isolation was not verified")
+    assert capsys.readouterr().err == ""
+
+
+def test_a_refused_firewall_change_is_a_readable_packaging_error(tmp_path, capsys):
+    bundle, _, _ = windows_bundle(tmp_path)
+
+    def refused(command: list[str]) -> str:
+        raise PackagingError("netsh refused: run from an elevated prompt")
+
+    with (
+        pytest.raises(PackagingError, match="elevated"),
+        package_bundle.network_isolation(bundle, True, "win32", refused),
+    ):
+        pytest.fail("the isolation was not installed")
+    # The failed clean-up is reported instead of raised over the original error.
+    assert "could not remove the firewall rules" in capsys.readouterr().err
+
+
+def test_netsh_failures_name_the_command_and_the_elevation_requirement(monkeypatch):
+    class Result:
+        returncode = 1
+        stdout = "Access is denied."
+        stderr = ""
+
+    monkeypatch.setattr(package_bundle.subprocess, "run", lambda *_args, **_kwargs: Result())
+    with pytest.raises(PackagingError, match=r"Access is denied.*administrator"):
+        package_bundle.run_netsh(["netsh", "advfirewall", "firewall", "add", "rule"])
