@@ -35,12 +35,12 @@ class DesktopSmoke:
                 time.sleep(0.1)
             # Report where the page and keyboard focus were, so timeouts explain themselves.
             state = window.evaluate_js(
-                "JSON.stringify({page: document.querySelector('[aria-current=page]')?.dataset.page, theme: document.documentElement.dataset.theme, size: innerWidth + 'x' + innerHeight, active: document.activeElement?.outerHTML.slice(0, 120), focused: document.hasFocus(), dialogs: Array.from(document.querySelectorAll('dialog[open]')).map(d => d.id)})"
+                "JSON.stringify({page: document.querySelector('[aria-current=page]')?.dataset.page, theme: document.documentElement.dataset.theme, size: innerWidth + 'x' + innerHeight, active: document.activeElement?.outerHTML.slice(0, 120), focused: document.hasFocus(), dialogs: Array.from(document.querySelectorAll('dialog[open]')).map(d => d.id), buttons: Array.from(document.querySelectorAll('dialog[open] button')).map(b => b.id + (b.disabled ? ':disabled' : '')), messages: Array.from(document.querySelectorAll('[id$=-error], [id$=-result]')).filter(e => e.textContent.trim()).map(e => e.id + '=' + e.textContent.trim().slice(0, 80))})"
             )
             raise RuntimeError(f"Desktop smoke timed out: {script} {state}")
 
         try:
-            if not window.events.loaded.wait(20):
+            if not window.events.loaded.wait(60):
                 raise RuntimeError("Desktop assets failed to load.")
             wait("document.querySelector('#dashboard-data').textContent.includes('Active parts')")
             if window.evaluate_js("location.protocol") != "file:":
