@@ -98,7 +98,15 @@ class _ImportSmoke:
                 f"{self.el('actions')}?.innerText + ' | ' + {self.el('result')}?.innerText"
             )
             raise RuntimeError(f"Native import file dialog was not dismissed. {widgets} {panel}")
+        self.dialog_log.append(  # DEBUG-TEMP
+            "after-dismiss panel: "
+            + str(self.run(f"{self.el('actions')}.innerText + '|' + {self.el('result')}.innerText"))
+        )
         self.wait(f"!{self.el('select')}.disabled")
+        self.dialog_log.append(  # DEBUG-TEMP
+            "enabled panel: "
+            + str(self.run(f"{self.el('actions')}.innerText + '|' + {self.el('result')}.innerText"))
+        )
 
     def confirm_and_commit(self) -> None:
         self.run(f"{self.el('confirm')}.click(); {self.el('commit')}.click()")
