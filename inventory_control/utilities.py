@@ -96,7 +96,4 @@ class NativeHost:
             allow_multiple=False,
             file_types=tuple(file_types),
         )
-        import logging  # DEBUG-TEMP
-
-        logging.getLogger(__name__).info("DEBUG choose_file returned %r", selection)  # DEBUG-TEMP
         return Path(selection[0]) if selection else None
