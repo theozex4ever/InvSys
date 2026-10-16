@@ -20,6 +20,7 @@ class _ImportSmoke:
         self.kind = kind
         self.path = directory / name
         self.actions = _GuiActions()
+        self.dialog_log: list[str] = []
         app = QApplication.instance()
         if app is None:
             raise RuntimeError("Native import smoke requires the Qt application.")
@@ -41,7 +42,10 @@ class _ImportSmoke:
                 "['actions', 'review', 'result'].map(part => "
                 f"document.querySelector('#{self.kind}-import-' + part)?.innerText).join(' | ')"
             )
-            raise RuntimeError(f"Desktop {self.kind} import smoke failed: {label}. Panel: {panel}")
+            raise RuntimeError(
+                f"Desktop {self.kind} import smoke failed: {label}. Panel: {panel}. "
+                f"Dialogs: {self.dialog_log}"
+            )
 
     def select(self, cancel: bool = False) -> None:
         # Results render before the panel's refresh settles; a click while pending is ignored.
@@ -58,6 +62,10 @@ class _ImportSmoke:
                         raise RuntimeError(
                             "Import dialog opened outside the selected database folder."
                         )
+                    self.dialog_log.append(
+                        f"cancel={cancel} directory={widget.directory().absolutePath()} "
+                        f"mode={widget.fileMode()} before={widget.selectedFiles()}"
+                    )
                     if cancel:
                         widget.reject()
                     else:
@@ -70,6 +78,10 @@ class _ImportSmoke:
                     # QFileDialog.accept() can leave the dialog open; retry until dismissal.
                     # Only wait for the bridge once selection really dismissed it.
                     selected = not widget.isVisible()
+                    self.dialog_log.append(
+                        f"result={widget.result()} visible={widget.isVisible()} "
+                        f"after={widget.selectedFiles()}"
+                    )
                     return
 
         while not selected and time.monotonic() < deadline:
