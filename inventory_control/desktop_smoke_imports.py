@@ -36,7 +36,12 @@ class _ImportSmoke:
 
     def require(self, script: str, label: str) -> None:
         if not self.run(script):
-            raise RuntimeError(f"Desktop {self.kind} import smoke failed: {label}")
+            # The visible panel text is what an operator would have seen; keep it with the failure.
+            panel = self.run(
+                "['actions', 'review', 'result'].map(part => "
+                f"document.querySelector('#{self.kind}-import-' + part)?.innerText).join(' | ')"
+            )
+            raise RuntimeError(f"Desktop {self.kind} import smoke failed: {label}. Panel: {panel}")
 
     def select(self, cancel: bool = False) -> None:
         # Results render before the panel's refresh settles; a click while pending is ignored.
