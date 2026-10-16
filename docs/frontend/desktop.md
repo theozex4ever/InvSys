@@ -72,22 +72,39 @@ rejection and contextual entry, checking persisted balances and paired records.
 It also exercises contextual part-to-History navigation, failed
 History detail retry, explicit refresh after another operator's receipt, and
 uncertain BOM reconciliation, including a failed recovery read. It uses real Qt
-keyboard events for all four dialogs and captures eight pages and dialogs in both
+keyboard events for all four dialogs and captures all ten pages and dialogs in both
 themes at four sizes to `smoke-captures/` beside the database. On Linux, use
 `QT_API=pyside6 QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion`
 to select PySide6 and exercise reduced-motion behavior. The smoke also explores the
 disposable nested BOM, compares the graph with `explore_bom`, fits/zooms/selects,
 fails and refreshes a read, and checks that exploring adds no transactions.
 
+The smoke also creates Parts through a double click and a lost response, once after
+the request committed (`DESKTOP-CREATE-*`) and once before it was sent
+(`DESKTOP-UNSENT-*`). Each time the form stays locked through a failed read-back;
+a successful read offers one explicit created/not-created decision, and Python
+rejects a duplicate resubmission. Manual backup is double-clicked, then loses its
+response after and before writing. Create backup stays disabled through a failed
+read and a read that cannot list the backups (`backup_error`), and until the
+operator confirms the re-read backups; nothing is retried. Last, real Qt Ctrl+1–9 and Ctrl+K (which selects existing search text) keys reach every numbered
+destination and its primary input with visible focus, are ignored behind an open
+dialog, and leave catalog filters/sort/selection, the contextual Move draft and
+History search/sort intact. History rows must match Python's order for text
+searches and column sorts. A rendered audit, first proven against a planted
+failure, checks WCAG text contrast and accessible names/labels on all ten pages and
+the Part drawer in both themes, including SVG text over the BOM graph's node cards.
+
 Built assets load directly over `file://` with `http_server=False`. An explicit
 file URI avoids pywebview automatically starting a server for a bare local path
 ([pywebview usage](https://pywebview.flowrl.com/guide/usage.html)). The build uses
 relative local assets ([Vite build documentation](https://vite.dev/guide/build.html)).
 There is no Vite process, HTTP server, CDN, or network inventory service required.
-The build including CSV exports and Parts/Inventory receipt/BOM CSV imports uses about 33 KB
-gzipped JavaScript; its asset budget is 33 KB (CSS 8 KB, HTML 1 KB). Headroom is
-nearly exhausted (32,988 of 33,000 bytes), so the next frontend slice needs an
-explicit budget decision.
+The complete frontend uses about 33.6 KB gzipped JavaScript (33,609 bytes). Ticket
+#51 raised the JavaScript budget from 33 KB to 34 KB as an explicit decision for
+numbered destinations, History search/sort and a distinct Adjust icon, after
+shared helpers replaced per-module copies (CSS 8 KB, HTML 1 KB unchanged). Review
+added explicit Part creation and backup recovery decisions; about 0.4 KB of
+headroom remains; further increases need another explicit decision.
 
 ## Standalone bundle
 
@@ -127,6 +144,16 @@ stock or invents catalog fields.
 Deferred workflows are identified in the shell and drawer (see
 [below](#deferred-workflows)). Dashboard activity opens the exact immutable
 History record using its existing database transaction ID.
+
+Keyboard destinations keep the original application's numbering: Ctrl+1 Dashboard,
+2 Parts, 3 BOM, 4 Receive, 5 Ship, 6 Move, 7 History, 8 Settings and 9 Adjust (Cmd on
+macOS). Ctrl+K opens Parts search. Shortcuts work from any field, are ignored while
+a dialog is open, and keep drafts, filters and selections like the sidebar. After
+the page loads they focus its primary input: the first Needs-attention Part, catalog
+search, BOM parent, the Part of Receive/Ship/Move/Adjust, History search, or the page
+heading for Settings and for a locked form. The sidebar shows each shortcut and exposes it through `aria-keyshortcuts`;
+the BOM explorer, which the original lacked, has no number. Sidebar clicks keep
+focus on the navigation button, so keyboard users can continue through it.
 
 The bridge exposes dashboard, preferences, save operator/theme, locations,
 part search/detail/create/edit/active state, BOM definition read/save/remove, stock context, receive, standard shipment preview,
@@ -246,9 +273,15 @@ not survive process restart. Changed allocation rejects the submission without
 writes; the form preserves input, reads and displays updated allocations, and
 requires Review shipment and confirmation again. It never retries a mutation.
 
-History filters and pages in Python, returning at most 50 records per page. Search
-part, lot, operator, custom reference, or generated shipment number; type/search
-filters stay visible. Table selection and position survive drawer inspection.
+History filters, sorts and pages in Python, returning at most 50 records per page.
+Case-insensitive text search (Unicode case folding, like the catalog) covers the original columns (timestamp, transaction
+type, Part, Lot, source and destination Location, operator, reference) and Notes,
+plus generated shipment numbers and shipment references; it combines with the exact
+type filter. Sort by Time, Type, Part, Lot, Qty (signed, numeric), From, To, Operator
+or Reference, ascending or descending; ties follow record ID in the same direction,
+so pages never overlap.
+The default is newest first. Clear filters and contextual Part History restore it.
+Search, type and sort stay visible. Table selection and position survive drawer inspection.
 The drawer shows transaction details, linked standard/BOM shipment data and
 persisted consumption snapshots. Links follow the existing shipment foreign key,
 even when a standard shipment has a custom reference. No identifiers or component
@@ -479,7 +512,8 @@ The shell directs operators to the original application for
 location administration. Backup restoration requires closing the app as described above.
 Global search is part search only.
 
-Not yet validated: Windows/macOS packages and installers (Linux: [packaging](packaging.md)), screen-reader review,
+Not yet validated: Windows/macOS packages and installers (Linux: [packaging](packaging.md)), human screen-reader review,
 human operator acceptance, and performance/release hardening. The native smoke is
-scripted desktop acceptance, not exhaustive accessibility review. Mutation
+scripted desktop acceptance, including a rendered contrast/name audit, not an
+exhaustive accessibility review (see the [accessibility record](acceptance.md#accessibility-review-record)). Mutation
 reconciliation is operator-assisted, without durable request deduplication.

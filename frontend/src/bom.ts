@@ -1,10 +1,8 @@
+import { esc, message, pair } from './presentation';
 import { read, RequestError, type ready, type BOMDefinition, type BOMLink } from './bridge';
 
 type API = Awaited<ReturnType<typeof ready>>;
 type Change = { kind: 'save'; parent: string; component: string; quantity_per: number } | { kind: 'remove'; parent: string; component: string };
-const esc = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const message = (error: unknown) => error instanceof Error ? error.message : 'Unable to complete the request.';
-const pair = (label: string, value: unknown) => `<div class="detail-pair"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
 
 // BOM authoring: direct components of nested definitions. Python owns every rule; this module collects input and shows results.
 export function bomWorkflow(getAPI: () => API) {

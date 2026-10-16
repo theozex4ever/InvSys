@@ -30,12 +30,12 @@ server or build plugin. All icons and styles are bundled locally.
 - `src/bridge.ts`: strict use-case client and response DTOs. Waits for
   `pywebviewready` and reports a timeout with a reconnect action. Never falls
   back to fixture data or retries mutations.
-- `src/main.ts`: shell, dashboard, Parts catalog and drawer, dialogs, theme.
+- `src/main.ts`: shell, Ctrl+1–9/Ctrl+K navigation, dashboard, Parts catalog and drawer, dialogs, theme.
 - `src/partEdit.ts`: Part editing, deactivate/reactivate, discard confirmation, and
   uncertain-save reconciliation inside the Part drawer.
 - `src/stock.ts`: Receive and standard/BOM Ship drafts, reviews, and uncertain
   submission reconciliation.
-- `src/history.ts`: History search, filters, paging, and the read-only drawer.
+- `src/history.ts`: History search, filters, sorting, paging, and the read-only drawer.
 - `src/styles.css`: design tokens and both themes.
 
 ## Presentation and navigation
@@ -50,5 +50,10 @@ No stock label at zero; blocked shipment shortages and errors use red.
 
 Part details have a contextual View History action; failed transaction or
 shipment detail reads offer Retry details inside the open drawer.
+
+Ctrl+1–9 (Cmd on macOS) open Dashboard, Parts, BOM, Receive, Ship, Move, History,
+Settings and Adjust in the original application's order, then focus the page's
+primary input; Ctrl+K opens Parts search. Shortcuts are ignored while a dialog is
+open and preserve drafts, filters and selections.
 See [confirmed frontend polish decisions](../docs/frontend/polish-decisions.md)
 for the presentation scope and its executed native validation.

@@ -147,8 +147,8 @@ No database setup required — default locations (`Receiving`, `Stock`, `Shippin
 The new pywebview shell provides a live Attention first dashboard and parts
 catalog: search/filter/sort, create parts, inspect lot/location stock, receive real
 lots, review and ship standard stock or existing nested BOM parents, move lots
-between locations, reconcile Adjust Count, and search History with persisted
-shipment/component traceability. Drafts survive session
+between locations, reconcile Adjust Count, and search and sort History with persisted
+shipment/component traceability. The original Ctrl+1–9 destinations and Ctrl+K work. Drafts survive session
 navigation; results and audit records survive restart. It uses the existing InventoryStore
 and SQLite schema and remembers operator/theme choices. BOM authoring, a read-only
 BOM explorer, and Settings with five CSV exports, backups and folder access, and reviewed Parts, Inventory receipt and BOM CSV imports are

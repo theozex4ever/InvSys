@@ -12,8 +12,12 @@ const DIST = new URL('../dist/', import.meta.url);
 // Gzipped byte budgets. The combined BOM authoring and Adjust Count workflows
 // used about 26.2 KB. The dependency-free BOM explorer (hand-built SVG graph) adds
 // about 4.4 KB, so 32 KB keeps bounded headroom for the expanded desktop scope.
+// Ticket #51's required parity (Ctrl+1–9 destinations, History search/sort and a
+// distinct Adjust icon for the icon-only narrow sidebar) needed 34 KB after shared
+// helpers replaced per-module copies; review-driven Part creation and backup
+// recovery decisions leave about 0.4 KB of headroom.
 // Further increases require a reviewed scope or asset-size decision.
-const BUDGETS = { 'app.js': 33_000, 'style.css': 8_000, 'index.html': 1_000 };
+const BUDGETS = { 'app.js': 34_000, 'style.css': 8_000, 'index.html': 1_000 };
 
 // XML namespace identifiers are inert strings, not fetches.
 const ALLOWED_URLS = new Set(['http://www.w3.org/2000/svg']);

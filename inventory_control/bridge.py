@@ -157,13 +157,17 @@ class InventoryBridge:
 
     def history(self, request: Any) -> dict[str, Any]:
         def read() -> dict[str, Any]:
-            fields = self._request(request, {"query", "tx_type", "page"})
+            fields = self._request(request, {"query", "tx_type", "page", "sort", "descending"})
             query = self._text(fields.get("query", ""), "Search", required=False)
             tx_type = self._text(fields.get("tx_type", ""), "Transaction type", required=False)
             page = fields.get("page", 0)
             if type(page) is not int or not 0 <= page <= 2**31 - 1:
                 raise ValueError("History page must be a nonnegative whole number.")
-            return self._store.search_history(query, tx_type, page)
+            sort = fields.get("sort", "timestamp")
+            descending = fields.get("descending", True)
+            if sort not in InventoryStore.HISTORY_SORTS or type(descending) is not bool:
+                raise ValueError("Invalid History sort.")
+            return self._store.search_history(query, tx_type, page, sort, descending)
 
         return self._respond(read)
 

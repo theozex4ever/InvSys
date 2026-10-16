@@ -9,15 +9,16 @@ import { bomExploreWorkflow } from './bom-explore';
 import { adjustWorkflow } from './adjust';
 import { partEditor } from './partEdit';
 import { moveWorkflow } from './move';
-import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History, ListTree, Network, Settings } from 'lucide';
+import { createIcons, Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search as SearchIcon, Check, History, ListTree, Network, Settings, ClipboardCheck } from 'lucide';
 import { ready, read, RequestError, type Search, type Part, type PartDetail, type Dashboard } from './bridge';
 
-const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search: SearchIcon, Check, History, ListTree, Network, Settings } });
+const icons = () => createIcons({ icons: { Boxes, LayoutDashboard, Package, Moon, Sun, Plus, X, RefreshCw, ArrowDownToLine, ArrowUpFromLine, ArrowRight, ArrowLeftRight, TriangleAlert, Search: SearchIcon, Check, History, ListTree, Network, Settings, ClipboardCheck } });
 const icon = (name: string) => `<i data-lucide="${name}" aria-hidden="true"></i>`;
 const badges = (part: Part) => `<span class="badge ${part.active ? 'good' : 'neutral'}">${part.active ? 'Active' : 'Inactive'}</span> ${part.low_stock ? `<span class="badge warn">${part.quantity === 0 ? 'Low stock · No stock' : 'Low stock'}</span>` : ''}`;
 const search: Search = { query: '', status: 'all', low_stock: false, sort: 'part_number', descending: false };
 let api: Awaited<ReturnType<typeof ready>>;
-let page: 'dashboard' | 'parts' | 'bom' | 'bom-explore' | 'receive' | 'ship' | 'move' | 'adjust' | 'history' | 'settings' = 'dashboard';
+type Page = 'dashboard' | 'parts' | 'bom' | 'bom-explore' | 'receive' | 'ship' | 'move' | 'adjust' | 'history' | 'settings';
+let page: Page = 'dashboard';
 let searchVersion = 0;
 let dashboardVersion = 0;
 let detailVersion = 0;
@@ -33,7 +34,7 @@ let theme: 'light' | 'dark' = 'light';
 
 $('#app').innerHTML = `<div class="app-shell"><aside class="sidebar" aria-label="Main navigation">
 <div class="brand"><div class="brand-mark">${icon('boxes')}</div><div><strong>INVSYS</strong><small>INVENTORY CONTROL</small></div></div>
-<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><button class="nav-button" data-page="bom" aria-label="BOM">${icon('list-tree')}<span>BOM</span></button><button class="nav-button" data-page="bom-explore" aria-label="BOM explorer">${icon('network')}<span>BOM explorer</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button><button class="nav-button" data-page="move" aria-label="Move stock">${icon('arrow-left-right')}<span>Move</span></button><button class="nav-button" data-page="adjust" aria-label="Adjust count">${icon('arrow-left-right')}<span>Adjust</span></button><button class="nav-button" data-page="history" aria-label="History">${icon('history')}<span>History</span></button><div class="nav-group eyebrow">System</div><button class="nav-button" data-page="settings" aria-label="Settings">${icon('settings')}<span>Settings</span></button></nav>
+<nav><button class="nav-button active" data-page="dashboard" aria-label="Dashboard" aria-current="page">${icon('layout-dashboard')}<span>Dashboard</span></button><div class="nav-group eyebrow">Catalog</div><button class="nav-button" data-page="parts" aria-label="Parts">${icon('package')}<span>Parts</span></button><button class="nav-button" data-page="bom" aria-label="BOM">${icon('list-tree')}<span>BOM</span></button><button class="nav-button" data-page="bom-explore" aria-label="BOM explorer">${icon('network')}<span>BOM explorer</span></button><div class="nav-group eyebrow">Stock</div><button class="nav-button" data-page="receive" aria-label="Receive stock">${icon('arrow-down-to-line')}<span>Receive</span></button><button class="nav-button" data-page="ship" aria-label="Ship stock">${icon('arrow-up-from-line')}<span>Ship</span></button><button class="nav-button" data-page="move" aria-label="Move stock">${icon('arrow-left-right')}<span>Move</span></button><button class="nav-button" data-page="adjust" aria-label="Adjust count">${icon('clipboard-check')}<span>Adjust</span></button><button class="nav-button" data-page="history" aria-label="History">${icon('history')}<span>History</span></button><div class="nav-group eyebrow">System</div><button class="nav-button" data-page="settings" aria-label="Settings">${icon('settings')}<span>Settings</span></button></nav>
 
 <div class="sidebar-bottom"><button id="theme" class="nav-button" disabled aria-label="Switch to dark mode">${icon('moon')}<span>Dark mode</span></button><div class="local-status">STORED ON THIS DEVICE</div></div></aside>
 <div class="workspace"><header class="topbar"><div class="breadcrumb">Workspace / <strong id="page-name">Dashboard</strong></div>
@@ -75,7 +76,7 @@ const move = moveWorkflow(() => api, () => $<HTMLInputElement>('#operator').valu
 
 const editor = partEditor(() => api, { show: part => { currentPart = part; $('#drawer-data').innerHTML = detailHTML(part); icons(); $('#drawer-data').querySelector<HTMLElement>('[data-edit]')?.focus(); }, refresh: async () => { await Promise.all([loadParts(), loadDashboard()]); }, notice });
 
-const adjust = adjustWorkflow(() => api, () => $<HTMLInputElement>('#operator').value, async () => { await Promise.all([loadParts(), loadDashboard(), history.load()]); }, (text, summary) => { notice(text); const element = document.createElement('div'); element.className = 'stock-toast'; element.setAttribute('role', 'status'); element.innerHTML = `${icon('check')}<span>${esc(summary ?? text)}</span>`; document.body.append(element); icons(); setTimeout(() => element.remove(), 5000); });
+const adjust = adjustWorkflow(() => api, () => $<HTMLInputElement>('#operator').value, stockChanged, stockToast);
 
 // Native dialog focus can otherwise escape into the Qt browser chrome on Tab.
 for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
@@ -90,11 +91,33 @@ for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
   });
 }
 
+// The original application's Ctrl+1–9 destinations, in its order.
+const destinations: Page[] = ['dashboard', 'parts', 'bom', 'receive', 'ship', 'move', 'history', 'settings', 'adjust'];
+// Shortcut navigation focuses each page's primary input, as the original screens did.
+const primaryInputs: Partial<Record<Page, string>> = { dashboard: '#dashboard-data .attention-row [data-part]', parts: '#query', bom: '#bom-parent', receive: '#receive-part_number', ship: '#ship-part_number', move: '#move-part_number', adjust: '#adjust-part_number', history: '#history-query' };
+destinations.forEach((name, index) => {
+  const button = $(`.nav-button[data-page="${name}"]`);
+  button.setAttribute('aria-keyshortcuts', `Control+${index + 1} Meta+${index + 1}`);
+  button.insertAdjacentHTML('beforeend', `<kbd class="nav-key" aria-hidden="true">Ctrl ${index + 1}</kbd>`);
+});
+function focusPrimary(target: Page) {
+  const selector = primaryInputs[target];
+  const input = selector ? document.querySelector<HTMLInputElement>(selector) : null;
+  if (input && !input.disabled && input.getClientRects().length) { input.focus(); return; }
+  // Locked or empty pages fall back to the heading so the page change is announced.
+  const heading = $(`#${target} h1`); heading.tabIndex = -1; heading.focus();
+}
+async function jump(target: Page) {
+  await navigate(target);
+  // Like the original shortcuts, land on the primary input once the page has loaded.
+  if (page === target && !document.querySelector('dialog[open]')) focusPrimary(target);
+}
+
 function notice(text: string, error = false) {
   $('#notice').textContent = text;
   $('#notice').className = error ? 'alert error' : 'alert success';
 }
-function navigate(next: typeof page, refresh = true) {
+function navigate(next: Page, refresh = true): Promise<unknown> {
   if (page === 'history' && page !== next) history.leave();
   if (page === 'bom-explore' && page !== next) bomExplore.leave();
   if (page === 'bom' && page !== next) bom.leave();
@@ -108,7 +131,8 @@ function navigate(next: typeof page, refresh = true) {
     button.classList.toggle('active', button.dataset.page === next);
     if (button.dataset.page === next) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   });
-  if (api && refresh) { if (next === 'receive' || next === 'ship') void stock.open(next); else if (next === 'adjust') void adjust.open(); else if (next === 'bom') void bom.open(); else if (next === 'settings') void settings.open(); else if (next === 'move') void move.open(); else void (next === 'history' ? history.open() : next === 'bom-explore' ? bomExplore.open() : next === 'dashboard' ? loadDashboard() : loadParts()); }
+  if (!api || !refresh) return Promise.resolve();
+  return next === 'receive' || next === 'ship' ? stock.open(next) : next === 'adjust' ? adjust.open() : next === 'bom' ? bom.open() : next === 'settings' ? settings.open() : next === 'move' ? move.open() : next === 'history' ? history.open() : next === 'bom-explore' ? Promise.resolve(bomExplore.open()) : next === 'dashboard' ? loadDashboard() : loadParts();
 }
 async function loadDashboard(strict = false) {
   const version = ++dashboardVersion;
@@ -136,19 +160,26 @@ async function loadParts(strict = false) {
     $('#parts-data').innerHTML = parts.length ? `<div class="table-wrap"><table><thead><tr><th>Part</th><th>Description</th><th class="num">Stock</th><th class="num">Minimum</th><th>State</th></tr></thead><tbody>${parts.map(p => `<tr ${selected === p.part_number ? 'class="selected"' : ''}><td><button class="part-id" data-part="${esc(p.part_number)}">${esc(p.part_number)}</button></td><td class="description">${esc(p.description)}</td><td class="num">${p.quantity}</td><td class="num">${p.minimum_quantity}</td><td>${badges(p)}</td></tr>`).join('')}</tbody></table></div><div class="table-footer">${parts.length} parts</div>` : status('No parts match these filters. Clear filters or create a part.');
   } catch (error) { if (version === searchVersion) $('#parts-data').innerHTML = status(message(error), true); if (strict) throw error; }
 }
+// Reads the submitted Part, then waits for the operator's explicit decision.
+// A failed read withdraws any earlier decision and keeps the form locked.
 async function reconcileCreation() {
   const number = submittedNumber;
-  try {
-    const part = await read(api.part_detail(number));
-    notice(`${part.part_number} exists. Inspect it before creating another part.`);
-  } catch (error) {
-    if (!(error instanceof RequestError) || error.code !== 'NOT_FOUND') return;
-    notice('The part was not created. You can correct or resubmit the preserved form.');
-  }
-  uncertain = false;
-  $<HTMLButtonElement>('#create-submit').disabled = false;
-  $('#create-error').textContent = '';
+  $('#create-error').innerHTML = status('Completion is uncertain. Refresh the catalog to read the current part. Your entries are preserved and locked.', true);
+  let created = true;
+  try { await read(api.part_detail(number)); }
+  catch (error) { if (!(error instanceof RequestError) || error.code !== 'NOT_FOUND') return; created = false; }
+  const text = created ? `${number} was created.` : `${number} was not created. Your preserved entries can be corrected and submitted.`;
+  notice(`${text} Open New part to confirm the outcome.`);
+  $('#create-error').innerHTML = `${status(text)}<button type="button" class="btn" data-create-decision="${created ? 'created' : 'absent'}">${created ? 'Accept created part' : 'Allow resubmission'}</button>`;
 }
+$('#create-error').onclick = event => {
+  const decision = (event.target as HTMLElement).closest<HTMLElement>('[data-create-decision]')?.dataset.createDecision;
+  if (!decision) return;
+  uncertain = false; $('#create-error').textContent = ''; $<HTMLButtonElement>('#create-submit').disabled = false;
+  if (decision === 'absent') { $('#number').focus(); return; }
+  $<HTMLFormElement>('#new-part').reset(); $<HTMLDialogElement>('#create-dialog').close();
+  void openPart(submittedNumber, $('#add-part'));
+};
 function detailHTML(part: PartDetail) {
   return `<div class="dialog-body"><div class="review-part">${esc(part.part_number)}</div><p class="description">${esc(part.description)}</p><p style="margin-top:16px">${badges(part)}</p>
 ${[['Total stock', part.quantity], ['Minimum quantity', part.minimum_quantity], ['Default location', part.location]].map(([label, value]) => `<div class="detail-pair"><span>${label}</span><strong>${esc(value)}</strong></div>`).join('')}
@@ -176,7 +207,11 @@ function openCreate(trigger: HTMLElement = document.activeElement as HTMLElement
   $<HTMLDialogElement>('#create-dialog').showModal();
   $<HTMLInputElement>('#number').focus();
 }
-$<HTMLDialogElement>('#drawer').addEventListener('close', () => { ++detailVersion; editor.reset(); restoreFocus(); window.scrollTo(drawerScroll.x, drawerScroll.y); });
+// The close event is queued and can arrive after a contextual action has navigated
+// away and back; only an ordinary close returns focus and scroll to the catalog.
+let leftDrawer = false;
+const leaveDrawer = () => { leftDrawer = true; $<HTMLDialogElement>('#drawer').close(); };
+$<HTMLDialogElement>('#drawer').addEventListener('close', () => { ++detailVersion; editor.reset(); if (!leftDrawer) { restoreFocus(); window.scrollTo(drawerScroll.x, drawerScroll.y); } leftDrawer = false; });
 $('#close-drawer').onclick = async () => { if (await editor.mayClose()) $<HTMLDialogElement>('#drawer').close(); };
 $<HTMLDialogElement>('#drawer').addEventListener('cancel', event => { if (editor.active()) { event.preventDefault(); $('#close-drawer').click(); } });
 $('#add-part').onclick = () => openCreate($('#add-part'));
@@ -188,7 +223,7 @@ document.addEventListener('click', event => {
   if (!target) return;
   if (target.dataset.historyId && api) { void history.inspect(Number(target.dataset.historyId), target); }
   if (target.dataset.shipment && api) { void history.inspect(target.dataset.shipment, target); }
-  if (target.dataset.page) navigate(target.dataset.page as typeof page);
+  if (target.dataset.page) navigate(target.dataset.page as Page);
   if (target.dataset.part && api) void openPart(target.dataset.part, target);
   if (target.dataset.stock && api && !target.closest('#drawer-data')) {
     const mode = target.dataset.stock as 'receive' | 'ship' | 'move';
@@ -209,19 +244,28 @@ $('#drawer-data').onclick = event => {
   if (target?.dataset.edit) void editor.edit(currentPart!);
   if (target?.dataset.active) void editor.setActive(currentPart!, target.dataset.active === 'on');
   if (target?.dataset.partHistory && api) {
-    $<HTMLDialogElement>('#drawer').close(); navigate('history', false);
+    leaveDrawer(); navigate('history', false);
     void history.open(target.dataset.partHistory);
     $('#history-query').focus();
   }
   if (target?.dataset.stock && api) {
     const mode = target.dataset.stock as 'receive' | 'ship' | 'move';
-    $<HTMLDialogElement>('#drawer').close(); navigate(mode, false); void (mode === 'move' ? move.open(target.dataset.number) : stock.open(mode, target.dataset.number));
+    leaveDrawer(); navigate(mode, false); void (mode === 'move' ? move.open(target.dataset.number) : stock.open(mode, target.dataset.number));
   }
-  if (target?.dataset.adjust && api) { $<HTMLDialogElement>('#drawer').close(); navigate('adjust', false); void adjust.open(target.dataset.adjust); }
+  if (target?.dataset.adjust && api) { leaveDrawer(); navigate('adjust', false); void adjust.open(target.dataset.adjust); }
 };
 $('#operator').addEventListener('input', () => { stock.operatorChanged(); move.operatorChanged(); adjust.operatorChanged(); imports.forEach(item => item.operatorChanged()); });
-$('#global-search').onclick = () => { navigate('parts'); $('#query').focus(); };
-document.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open]')) { event.preventDefault(); $('#global-search').click(); } });
+// Like the original Ctrl+K, select the kept query so typing replaces it.
+$('#global-search').onclick = () => { navigate('parts'); $('#query').focus(); $<HTMLInputElement>('#query').select(); };
+document.addEventListener('keydown', event => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey || document.querySelector('dialog[open]')) return;
+  if (event.key.toLowerCase() === 'k') { event.preventDefault(); $('#global-search').click(); return; }
+  // Synthetic native key events may lack a physical code; fall back to the typed digit.
+  const digit = /^(?:Digit|Numpad)([1-9])$/.exec(event.code)?.[1] ?? (/^[1-9]$/.test(event.key) ? event.key : '');
+  if (!digit || event.shiftKey) return;
+  event.preventDefault();
+  if (api) void jump(destinations[Number(digit) - 1]!);
+});
 let debounce: ReturnType<typeof setTimeout>;
 $('#query').addEventListener('input', () => {
   search.query = $<HTMLInputElement>('#query').value; ++searchVersion;
@@ -278,7 +322,7 @@ $('#new-part').addEventListener('submit', async event => {
     await openPart(part.part_number, $('#add-part'));
   } catch (error) {
     uncertain = error instanceof RequestError && ['TRANSPORT', 'INTERNAL'].includes(error.code);
-    $('#create-error').innerHTML = status(message(error) + (uncertain ? ' Close this form and refresh the catalog to verify whether the part was created. Your entries are preserved.' : ''), true);
+    $('#create-error').innerHTML = status(message(error) + (uncertain ? ' Completion is uncertain. Close this form and refresh the catalog to read the current part. Your entries are preserved and locked.' : ''), true);
   } finally {
     form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach(field => { field.disabled = false; });
     creating = false; $<HTMLButtonElement>('#create-submit').disabled = uncertain;

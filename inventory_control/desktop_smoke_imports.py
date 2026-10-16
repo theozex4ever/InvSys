@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtWidgets import QApplication, QFileDialog
+from PySide6.QtWidgets import QApplication, QFileDialog, QLineEdit
 
 from inventory_control.desktop_smoke_ui import _GuiActions
 
@@ -39,6 +39,8 @@ class _ImportSmoke:
             raise RuntimeError(f"Desktop {self.kind} import smoke failed: {label}")
 
     def select(self, cancel: bool = False) -> None:
+        # Results render before the panel's refresh settles; a click while pending is ignored.
+        self.wait(f"!{self.el('select')}.disabled")
         self.run(f"{self.el('select')}.click()")
         deadline = time.monotonic() + 10
         selected = False
@@ -55,6 +57,10 @@ class _ImportSmoke:
                         widget.reject()
                     else:
                         widget.selectFile(str(self.path))
+                        # selectFile() leaves the name field alone once it has focus.
+                        name = widget.findChild(QLineEdit, "fileNameEdit")
+                        if name is not None:
+                            name.setText(self.path.name)
                         widget.accept()
                     # QFileDialog.accept() can leave the dialog open; retry until dismissal.
                     # Only wait for the bridge once selection really dismissed it.
@@ -65,7 +71,16 @@ class _ImportSmoke:
             self.actions.run(finish)
             time.sleep(0.1)
         if not selected:
-            raise RuntimeError("Native import file dialog did not appear.")
+            widgets: list[str] = []
+            self.actions.run(
+                lambda: widgets.extend(
+                    f"{type(w).__name__}:{w.isVisible()}" for w in QApplication.topLevelWidgets()
+                )
+            )
+            panel = self.run(
+                f"{self.el('actions')}?.innerText + ' | ' + {self.el('result')}?.innerText"
+            )
+            raise RuntimeError(f"Native import file dialog was not dismissed. {widgets} {panel}")
         self.wait(f"!{self.el('select')}.disabled")
 
     def confirm_and_commit(self) -> None:

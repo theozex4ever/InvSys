@@ -19,15 +19,15 @@ scenario, approved workload and retirement evidence gate from tickets #39/#40.
 | 1 | pywebview + typed bridge, local assets, basic Linux package proof | Complete |
 | 2 | Live Attention first dashboard and workspace links | Complete |
 | 3 | Parts search/create/details, editing and deactivation/reactivation | Complete |
-| 4 | Searchable immutable History and persisted shipment/component trace | Complete |
+| 4 | Searchable, sortable immutable History and persisted shipment/component trace | Complete |
 | 5 | Real lot receiving, drafts, refresh, and recovery | Complete |
 | 6 | Move + Adjust | Complete |
 | 7 | Standard and nested BOM review/shipment with recovery | Complete |
 | 8 | Read-only BOM explorer with pan/zoom/fit delivered; subtree focus, breadcrumbs deferred | In Progress |
-| 9 | Part search shortcut delivered; command search deferred | In Progress |
+| 9 | Ctrl+K Part search and original Ctrl+1–9 destinations delivered; command search deferred | In Progress |
 | 10 | Operator/theme, startup/manual backup, five CSV exports, folder access and Parts, Inventory receipt and BOM CSV imports delivered | In Progress |
 | 11 | PySide6 retirement | Not Started |
-| 12 | Scripted native/keyboard/layout acceptance delivered; release hardening deferred | In Progress |
+| 12 | Scripted native navigation/safety/layout acceptance and rendered contrast/name audit delivered; human screen-reader review and release hardening remain | In Progress |
 
 Update this table when a phase meaningfully changes.
 
