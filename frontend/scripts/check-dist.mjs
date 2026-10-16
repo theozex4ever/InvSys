@@ -14,7 +14,8 @@ const DIST = new URL('../dist/', import.meta.url);
 // about 4.4 KB, so 32 KB keeps bounded headroom for the expanded desktop scope.
 // Ticket #51's required parity (Ctrl+1–9 destinations, History search/sort and a
 // distinct Adjust icon for the icon-only narrow sidebar) needed 34 KB after shared
-// helpers replaced per-module copies; about 0.9 KB of headroom remains.
+// helpers replaced per-module copies; review-driven Part creation and backup
+// recovery decisions leave about 0.4 KB of headroom.
 // Further increases require a reviewed scope or asset-size decision.
 const BUDGETS = { 'app.js': 34_000, 'style.css': 8_000, 'index.html': 1_000 };
 

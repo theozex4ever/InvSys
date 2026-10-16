@@ -79,28 +79,31 @@ to select PySide6 and exercise reduced-motion behavior. The smoke also explores 
 disposable nested BOM, compares the graph with `explore_bom`, fits/zooms/selects,
 fails and refreshes a read, and checks that exploring adds no transactions.
 
-The smoke also creates a unique `DESKTOP-CREATE-*` Part through a double click and a
-lost response, keeps the form locked through a failed read-back, reconciles, and
-shows Python's duplicate rejection on resubmission. Manual backup is double-clicked
-and then loses its response; Settings reports uncertainty and re-reads the backups
-without retrying. Last, real Qt Ctrl+1–9 and Ctrl+K keys reach every numbered
+The smoke also creates Parts through a double click and a lost response, once after
+the request committed (`DESKTOP-CREATE-*`) and once before it was sent
+(`DESKTOP-UNSENT-*`). Each time the form stays locked through a failed read-back;
+a successful read offers one explicit created/not-created decision, and Python
+rejects a duplicate resubmission. Manual backup is double-clicked, then loses its
+response after and before writing. Create backup stays disabled through a failed
+read and until the operator confirms the re-read backups; nothing is retried. Last, real Qt Ctrl+1–9 and Ctrl+K (which selects existing search text) keys reach every numbered
 destination and its primary input with visible focus, are ignored behind an open
 dialog, and leave catalog filters/sort/selection, the contextual Move draft and
 History search/sort intact. History rows must match Python's order for text
 searches and column sorts. A rendered audit, first proven against a planted
 failure, checks WCAG text contrast and accessible names/labels on all ten pages and
-the Part drawer in both themes.
+the Part drawer in both themes, including SVG text over the BOM graph's node cards.
 
 Built assets load directly over `file://` with `http_server=False`. An explicit
 file URI avoids pywebview automatically starting a server for a bare local path
 ([pywebview usage](https://pywebview.flowrl.com/guide/usage.html)). The build uses
 relative local assets ([Vite build documentation](https://vite.dev/guide/build.html)).
 There is no Vite process, HTTP server, CDN, or network inventory service required.
-The complete frontend uses about 33.1 KB gzipped JavaScript (33,110 bytes). Ticket
+The complete frontend uses about 33.6 KB gzipped JavaScript (33,567 bytes). Ticket
 #51 raised the JavaScript budget from 33 KB to 34 KB as an explicit decision for
 numbered destinations, History search/sort and a distinct Adjust icon, after
-shared helpers replaced per-module copies (CSS 8 KB, HTML 1 KB unchanged). About
-0.9 KB of headroom remains; further increases need another explicit decision.
+shared helpers replaced per-module copies (CSS 8 KB, HTML 1 KB unchanged). Review
+added explicit Part creation and backup recovery decisions; about 0.4 KB of
+headroom remains; further increases need another explicit decision.
 
 ## Standalone bundle
 
@@ -270,7 +273,7 @@ writes; the form preserves input, reads and displays updated allocations, and
 requires Review shipment and confirmation again. It never retries a mutation.
 
 History filters, sorts and pages in Python, returning at most 50 records per page.
-Case-insensitive text search covers the original columns (timestamp, transaction
+Case-insensitive text search (Unicode case folding, like the catalog) covers the original columns (timestamp, transaction
 type, Part, Lot, source and destination Location, operator, reference) and Notes,
 plus generated shipment numbers and shipment references; it combines with the exact
 type filter. Sort by Time, Type, Part, Lot, Qty (signed, numeric), From, To, Operator

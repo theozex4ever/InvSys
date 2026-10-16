@@ -41,6 +41,12 @@ window.smokeAudit = root => {
     }
     return layers.reverse().reduce((base, layer) => blend(layer, base), [255, 255, 255, 1]);
   };
+  // SVG text paints with fill over its node card, not CSS color over a background.
+  const paint = e => { const s = getComputedStyle(e), c = parse(s.fill); if (c) c[3] *= Number(s.fillOpacity); return c; };
+  const svgBackground = e => {
+    const base = background(e.ownerSVGElement), card = e.parentElement?.querySelector(':scope > rect'), fill = card && paint(card);
+    return base && fill ? blend(fill, base) : base;
+  };
   const visible = e => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';
   const text = e => Array.from(e.childNodes).some(n => n.nodeType === 3 && n.textContent.trim());
   const failures = [], skipped = [];
@@ -49,13 +55,14 @@ window.smokeAudit = root => {
     if (!visible(e) || e.closest(':disabled, [aria-disabled=true]')) continue;
     if (!text(e) && !e.matches('input:not([type=checkbox]):not([type=radio]), select, textarea')) continue;
     const style = getComputedStyle(e);
-    const fg = parse(style.color), bg = background(e);
-    if (!fg || !bg) { skipped.push(e.tagName + '.' + e.className); continue; }
+    const svg = e instanceof SVGElement;
+    const fg = svg ? paint(e) : parse(style.color), bg = svg ? svgBackground(e) : background(e);
+    if (!fg || !bg) { skipped.push(e.tagName + '.' + e.getAttribute('class')); continue; }
     const size = parseFloat(style.fontSize), bold = Number(style.fontWeight) >= 700;
     const required = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
     const value = ratio(blend(fg, bg), bg);
     checked++;
-    if (value < required) failures.push(`${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${e.className} "${e.textContent.trim().slice(0, 40)}" ${value.toFixed(2)} < ${required}`);
+    if (value < required) failures.push(`${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${e.getAttribute('class')} "${e.textContent.trim().slice(0, 40)}" ${value.toFixed(2)} < ${required}`);
   }
   const name = e => (e.getAttribute('aria-label') || (e.getAttribute('aria-labelledby') || '').split(/\\s+/).map(id => document.getElementById(id)?.textContent || '').join('') || e.textContent || e.title || '').trim();
   for (const e of root.querySelectorAll('button, a[href], [role=button], [tabindex="0"]')) if (visible(e) && !name(e)) failures.push(`unnamed ${e.outerHTML.slice(0, 80)}`);
@@ -66,18 +73,9 @@ window.smokeAudit = root => {
 """
 
 
-def check_navigation(window: Any, smoke_wait: Any) -> dict[str, Any]:
+def check_navigation(window: Any, wait: Any) -> dict[str, Any]:
     """Run after every workflow smoke so all pages hold real data."""
     run = window.evaluate_js
-
-    def wait(script: str) -> None:
-        try:
-            smoke_wait(script)
-        except RuntimeError as error:
-            state = run(
-                "JSON.stringify({page: document.querySelector('[aria-current=page]')?.dataset.page, active: document.activeElement?.outerHTML.slice(0, 100), focused: document.hasFocus(), dialogs: Array.from(document.querySelectorAll('dialog[open]')).map(d => d.id)})"
-            )
-            raise RuntimeError(f"{error} [{state}]") from error
 
     app = QApplication.instance()
     if app is None:
@@ -126,8 +124,15 @@ def check_navigation(window: Any, smoke_wait: Any) -> dict[str, Any]:
             f"document.querySelector('[data-page={page}].nav-button').getAttribute('aria-keyshortcuts').startsWith('Control+')",
             f"{page} announces its shortcut",
         )
+    # Ctrl+K selects the kept query, so typing replaces it as in the original.
+    run(
+        "const q = document.querySelector('#query'); q.value = 'KEEP'; q.dispatchEvent(new Event('input')); document.querySelector('[data-page=dashboard]').click();"
+    )
     key(Qt.Key.Key_K, control)
     wait("!document.querySelector('#parts').hidden && document.activeElement.id === 'query'")
+    actions.run(lambda: QTest.keyClicks(window.native.webview.focusProxy(), "ZX"))
+    wait("document.querySelector('#query').value === 'ZX'")
+    run("document.querySelector('#clear').click()")
 
     # Shortcuts never navigate behind an open dialog.
     run("document.querySelector('#add-part').click()")
@@ -219,7 +224,7 @@ def check_navigation(window: Any, smoke_wait: Any) -> dict[str, Any]:
     run("""
         (() => {
             const probe = document.createElement('div');
-            probe.innerHTML = '<p style="color:#b0b0b0;background:#fff">Low contrast probe</p><button></button>';
+            probe.innerHTML = '<p style="color:#b0b0b0;background:#fff">Low contrast probe</p><button></button><svg width="200" height="40" style="color:#111"><g><rect width="200" height="40" fill="#fff"/><text x="5" y="25" fill="#f4f4f4">SVG probe</text></g></svg>';
             document.querySelector('main').append(probe);
             window.smokeProbe = window.smokeAudit(probe).failures; probe.remove();
         })();
@@ -227,6 +232,7 @@ def check_navigation(window: Any, smoke_wait: Any) -> dict[str, Any]:
     probe = run("window.smokeProbe")
     if not (
         any("Low contrast probe" in item for item in probe)
+        and any("SVG probe" in item for item in probe)
         and any(item.startswith("unnamed") for item in probe)
     ):
         raise RuntimeError(f"Accessibility audit missed planted failures: {probe}")

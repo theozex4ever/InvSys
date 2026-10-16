@@ -607,7 +607,7 @@ class InventoryStore:
                 statement = statement.where(
                     or_(
                         *(
-                            func.lower(column).contains(query.lower(), autoescape=True)
+                            func.py_casefold(column).contains(query.casefold(), autoescape=True)
                             for name, column in (
                                 *columns.items(),
                                 ("notes", InventoryTransactionRecord.notes),

@@ -61,8 +61,8 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 39 | Remember operator and theme | Improved | Bridge preferences/restart; original remembers operator only |
 | 40 | Keyboard destinations, focus, themes, small windows | Improved | Ctrl/Cmd+1–9 in original order with primary-input focus and Ctrl+K (#51); visible sidebar hints and `aria-keyshortcuts`. Native Qt key smoke; both themes, ten pages at four sizes and 640×480 reachability |
 | 41 | Preserve drafts during navigation and recoverable failure | Improved | Native smoke covers Receive, Ship, Move, Adjust, Part edit/create, BOM authoring and imports, including shortcut navigation (#51) |
-| 42 | Duplicate-click prevention; lock uncertain submissions | Improved | Native double-click and lost-response checks for every mutation: receipt, standard/BOM shipment, Move, Adjust, Part create/edit/active state, BOM authoring, three imports, exports and manual backup (create/backup added in #51) |
-| 43 | Authoritative recovery; failed reads retain lock | Improved | Native failed recovery reads keep the lock for receipt, BOM shipment, Move, Adjust, Part create/edit, BOM authoring and imports; reconciliation shows authoritative Stock/audit records and never retries |
+| 42 | Duplicate-click prevention; lock uncertain submissions | Improved | Native double-click and lost-response checks for every mutation: receipt, standard/BOM shipment, Move, Adjust, Part create/edit/active state, BOM authoring, three imports, exports and manual backup (create/backup added in #51); exports report uncertainty without a lock |
+| 43 | Authoritative recovery; failed reads retain lock | Improved | Native failed recovery reads keep the lock for receipt, BOM shipment, Move, Adjust, Part create/edit, BOM authoring, imports and manual backup; reconciliation shows authoritative Stock/audit/Part/backup records, needs an explicit operator decision and never retries (Part creation and backup decisions added in #51) |
 | 44 | Readable validation/stale/file/database errors | Equivalent | Bridge returns readable `VALIDATION`/`STALE`/`PLAN_CHANGED`/`FILE_ERROR` messages and logs safe `INTERNAL` failures (`test_bridge*.py`, utilities/export/import real-file tests); native smoke shows file, stale and failed-read errors without fabricated success |
 | 45 | Offline standalone Windows/Linux/macOS bundles | Missing | Linux delivered (ticket #52): repeatable build, twice-run package smoke, CI job and recorded evidence in [packaging.md](packaging.md); Windows and macOS Missing |
 | 46 | Explicit packaged database; source defaults preserved | Equivalent | `test_desktop_launcher.py` and the Linux package smoke (explicit database, readable missing-asset/inaccessible-path failures); Windows/macOS package evidence Missing |
@@ -148,8 +148,9 @@ and permits ascending/descending sorting on all nine columns: Time, Type, Part,
 Lot, Qty, From, To, Operator and Reference; signed Qty sorts numerically.
 Replacement adds paging and exact record/shipment drawers, persisted consumption
 and context links. Since #51 its Python text search also covers Notes, both
-Locations, timestamp and transaction-type text beside the exact-type filter, and a
-Sort/Descending control orders all nine original columns before paging (A16/A17).
+Locations, timestamp and transaction-type text beside the exact-type filter, with
+Unicode case folding like the catalog (`État` matches `ÉTAT`, `straße` matches
+`STRASSE`), and a Sort/Descending control orders all nine original columns before paging (A16/A17).
 Settings selects Parts/Inventory/BOM CSV, ordinary cancel makes no mutation;
 preview shows row/level/field/message, blocks invalid input, then confirms import
 (default No), revalidates and backs up before writes. Preserve actual per-kind
@@ -247,7 +248,7 @@ and platform bundle commands are in [desktop.md](desktop.md).
 | A10 | Export all five kinds, retain headers/Lot/trace. Select all three import kinds: valid, invalid, warning, cancel, changed input before commit, commit-time stale state; confirm backup exists before write; inspect actual per-kind failure outcome and refresh | Export replacement delivered: public bridge real-file tests and native CSV acceptance; Parts, Inventory receipt and BOM import replacements delivered (bridge tests and native smoke); real-file service regressions retained |
 | A11 | Manual backup/status/retention; open selected DB's export/backup folders; failed file/backup reports error, no fabricated success; source default/INVSYS_HOME and override; standalone requires explicit DB | Backup/folder replacement delivered (bridge tests, native smoke); real file-manager evidence on three platforms Missing; launcher regressions retained |
 | A12 | Navigate with Ctrl+1–9/Ctrl+K and contextual links; all dialogs keyboard-only; visible focus, both themes, reduced motion, 640×480 actions reachable by scrolling; screen-reader labels and non-color status/contrast review | Native Qt shortcuts, contextual state, dialogs, focus, themes, reduced motion, reachability and rendered contrast/name audit delivered (#51, [record](#accessibility-review-record)); human screen-reader review Missing (#57) |
-| A13 | Double-click each mutation; simulated committed/lost response and unsent response preserve draft/lock. Failed recovery read remains locked; authoritative reads show exact Lot/operator/metadata; explicit completion/absence decision only; never auto-retry | Delivered for every mutation (stories 42/43); Part creation and manual backup added in #51 |
+| A13 | Double-click each mutation; simulated committed/lost response and unsent response preserve draft/lock. Failed recovery read remains locked; authoritative reads show exact Lot/operator/metadata; explicit completion/absence decision only; never auto-retry | Delivered for every mutation (stories 42/43). #51 added Part creation (committed and unsent responses, failed read-back kept locked, explicit created/not-created decision) and manual backup (Create backup stays disabled until a successful backup read and an explicit decision); exports report uncertainty and refresh without locking because a repeated export only writes another file |
 | A14 | Rehearse upgrade on a copy of representative pre-migration DB; compare Parts/Lots/balances/ledger/shipments/BOM snapshots before/after launch and restart; closed-app backup restore on a separate copy; record reconciled rollback | Copied-data/operator evidence Missing |
 | A15 | Each platform's standalone offline bundle, selected DB, two native runs, no HTTP/dev server, correct assets, startup backup, retained metadata/restart; all performance scenarios below | Linux package evidence delivered (`scripts/package_bundle.py smoke`, [packaging.md](packaging.md)); Windows/macOS and performance scenarios Missing |
 | A16 | On a fresh workflow fixture, History text search `Disposable baseline` returns 8 receipt records; `Shipping Bench` returns both Move records; `MOVE_` matches MOVE_OUT and MOVE_IN without selecting a type; the baseline timestamp date matches all 15 records. Verify case-insensitive matching, source/destination Location searches, combination with exact-type filter and Clear filters; all records remain immutable | Delivered (#51): `test_history_text_search_covers_every_original_column` returns 8/2/2/15 and keeps Part/Lot/operator/reference/shipment search; native smoke matches Python's rendered results and Clear filters |
@@ -298,7 +299,7 @@ screen-reader session or operator sign-off that retirement still requires.
 
 | Check | Method | Result |
 | --- | --- | --- |
-| Text contrast (WCAG 2.2 SC 1.4.3) | Native smoke renders all ten pages and the Part drawer in both themes and computes each visible text element's and enabled control value's colour against its composited background; the audit must first flag a planted low-contrast probe | 0 failures (counts in the #51 evidence below); disabled controls exempt |
+| Text contrast (WCAG 2.2 SC 1.4.3) | Native smoke renders all ten pages and the Part drawer in both themes and computes each visible text element's and enabled control value's colour against its composited background; SVG text is measured against its fill over the node card. The audit must first flag planted low-contrast HTML and SVG probes | 0 failures (counts in the #51 evidence below); disabled controls exempt |
 | Theme tokens | Computed ratios, light / dark: text on surface 15.73 / 14.99; secondary on background 5.04 / 8.03; accent on accent-soft 4.98 / 5.81; success, warning, danger on their soft tints 5.53, 5.59, 4.56 / 7.06, 7.71, 6.14; white on primary 5.75 | Pass 4.5:1. `--muted` (2.65:1 light) is unused |
 | Non-text contrast (SC 1.4.11) | Focus ring cyan on background/surface 3.38–3.68 light, 9.04–10.29 dark; control borders 3.41 / 3.49 | Pass 3:1 |
 | Placeholders | Browser default placeholder grey was about 2.3:1 on white | Fixed: placeholders use `--secondary` (5.50:1 light) |
@@ -424,10 +425,11 @@ Linux development workstation (Python 3.12.3, locked toolchain, PySide6/Qt WebEn
 
 - Public bridge tests against real temporary SQLite: A16 (8/2/2/15 text-search
   counts, both Locations, type text with the exact filter) and A17 (all nine columns
-  in both directions, -9/+30 signed Qty, unchanged records across restart).
-- Full randomized `python -m pytest --cov`: 704 passed in 458 s; coverage 87.56%
+  in both directions, -9/+30 signed Qty, unchanged records across restart), plus
+  Unicode case-folded search.
+- Full randomized `python -m pytest --cov`: 705 passed in 456 s; coverage 87.57%
   against the unchanged 85% floor. Ruff lint/format, strict mypy, `tsc`, production
-  build and `check:dist` passed (33,110 B of the 34,000 B JavaScript budget; see
+  build and `check:dist` passed (33,567 B of the 34,000 B JavaScript budget; see
   [desktop.md](desktop.md) for the explicit budget decision).
 - Native source smoke under Xvfb with `QTWEBENGINE_DISABLE_SANDBOX=1` (this
   container cannot create Chromium sandbox namespaces) and forced reduced motion,
@@ -436,9 +438,16 @@ Linux development workstation (Python 3.12.3, locked toolchain, PySide6/Qt WebEn
   restart persistence and 114 captures. Each run audited 2,670–2,802 rendered
   elements with no contrast or naming failure. Earlier iterations exposed and fixed
   a lost Ctrl+2 key (no window-focus wait), non-deterministic shortcut focus and a
-  smoke Part that pushed the imported Part out of the dashboard's top five. Two
-  earlier runs timed out waiting for a native import file dialog (one under full
-  test-suite load); six unchanged `main` runs did not, so the cause is unproven.
-  Diagnostics now report the widgets and panel state if it recurs.
+  smoke Part that pushed the imported Part out of the dashboard's top five.
+- After review round 1 (Part creation/backup decisions, SVG contrast, Ctrl+K
+  selection, Unicode search) three further pairs passed (6/6), e.g.
+  `/tmp/invsys-acceptance-5azhloe8/fixture/inventory.db`. Runs under load found and
+  fixed two app focus bugs (a late drawer close event and a Settings re-render each
+  stole focus after navigation) and two smoke races: the import file dialog ignored
+  `selectFile()` once its name field had focus (also present on `main`; the smoke
+  now sets the field), and backup clicks landed before the previous request's
+  follow-up read re-enabled the button. With every CPU saturated, 5 of 6 runs passed;
+  the sixth stopped at the unchanged Move lost-response step with its confirmation
+  dialog still open. The cause is unproven and was not reproduced at normal load.
 - Not established: human screen-reader review, Windows/macOS behavior, package
   acceptance, performance and operator sign-off (#53–#57).

@@ -171,6 +171,21 @@ def test_history_sorts_every_original_column_without_changing_records(tmp_path):
     reopened.engine.dispose()
 
 
+def test_history_search_folds_unicode_case_like_the_catalog(tmp_path):
+    store = InventoryStore(tmp_path / "inventory.db", seed=False)
+    store.add_part("A", "Bearing")
+    store.receive("A", 1, "Stock", "L", "Pat", notes="État vérifié")
+    store.receive("A", 1, "Stock", "L", "Pat", reference="STRASSE-9", notes="Other")
+    bridge = InventoryBridge(store)
+    for query in ("État", "état", "ÉTAT VÉRIFIÉ"):
+        assert [r["notes"] for r in bridge.history({"query": query})["data"]["records"]] == [
+            "État vérifié"
+        ]
+    # Full case folding, not just lowercase: "ß" folds to "ss".
+    assert len(bridge.history({"query": "straße"})["data"]["records"]) == 1
+    store.engine.dispose()
+
+
 def test_history_search_treats_wildcards_as_literal_text(tmp_path):
     store = InventoryStore(tmp_path / "inventory.db", seed=False)
     store.add_part("A", "Bearing")

@@ -10,16 +10,22 @@ const exportLabels: Record<ExportKind, string> = { parts: 'Parts', inventory: 'I
 export function settingsWorkflow(getAPI: () => API) {
   let version = 0;
   let pending = false;
+  // An uncertain backup locks Create backup until a successful read and an explicit decision.
+  let backupUncertain = false;
   const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
   $('main').insertAdjacentHTML('beforeend', `<section id="settings" hidden><div class="page-heading"><div><h1>Settings</h1><p>CSV exports, backups and folders for the inventory selected at launch.</p></div><button id="settings-refresh" class="btn" disabled>Refresh</button></div><div id="settings-result" aria-live="polite"></div><div id="settings-data">${status('Connecting to the desktop…')}</div></section>`);
 
   function render(context: UtilityContext) {
     const latest = context.latest_backup;
+    // A late read must not drop keyboard focus: return it to the same action after re-rendering.
+    const active = document.activeElement;
+    const kept = active && $('#settings-data').contains(active) ? Array.from(active.attributes).filter(a => a.name.startsWith('data-')).map(a => `[${a.name}="${a.value}"]`).join('') : '';
     $('#settings-data').innerHTML = `<div class="panel"><div class="panel-head"><div><h2>Inventory location</h2><p>Backups, exports and logs stay beside the selected database.</p></div></div><div class="panel-body">${pair('Database', context.database)}${pair('Backups folder', context.backup_dir)}${pair('Exports folder', context.export_dir)}${pair('Logs folder', context.log_dir)}</div></div>
-<div class="panel settings-panel"><div class="panel-head"><div><h2>Backup</h2><p>The latest ${context.backup_retention} backups are kept. A startup backup is also written each launch.</p></div><button class="btn primary" data-backup-create ${context.database_exists ? '' : 'disabled'}>Create backup</button></div><div class="panel-body">${context.database_exists ? '' : status(`No database file was found at ${context.database}. A backup cannot be created.`, true)}${context.backup_error ? status(context.backup_error, true) : pair('Latest backup', latest ? describe(latest) : 'No backup found yet')}${pair('Backups on disk', context.backup_error ? '' : String(context.backup_count))}</div></div>
+<div class="panel settings-panel"><div class="panel-head"><div><h2>Backup</h2><p>The latest ${context.backup_retention} backups are kept. A startup backup is also written each launch.</p></div>${backupUncertain ? '<button class="btn" data-backup-resolve>Backups checked — allow another</button>' : ''}<button class="btn primary" data-backup-create ${context.database_exists && !backupUncertain ? '' : 'disabled'}>Create backup</button></div><div class="panel-body">${backupUncertain ? status('The last backup request may have completed. Compare the latest backup below before allowing another.', true) : ''}${context.database_exists ? '' : status(`No database file was found at ${context.database}. A backup cannot be created.`, true)}${context.backup_error ? status(context.backup_error, true) : pair('Latest backup', latest ? describe(latest) : 'No backup found yet')}${pair('Backups on disk', context.backup_error ? '' : String(context.backup_count))}</div></div>
 <div class="panel settings-panel"><div class="panel-head"><div><h2>CSV exports</h2><p>Export one CSV from this inventory. Inventory and audit files retain Lot trace.</p></div></div><div class="panel-body">${pair('Destination', context.export_dir)}<div class="settings-actions">${Object.entries(exportLabels).map(([kind, label]) => `<button class="btn" data-export-kind="${kind}">Export ${label}</button>`).join('')}</div></div></div>
 <div class="panel settings-panel"><div class="panel-head"><div><h2>Folders</h2><p>Open a folder in your system file manager.</p></div><div class="settings-actions"><button class="btn" data-open-folder="backups">Open backups folder</button><button class="btn" data-open-folder="exports">Open exports folder</button></div></div></div>`;
     if (pending) lockControls();
+    if (kept) document.querySelector<HTMLElement>(`#settings-data ${kept}`)?.focus();
   }
   function lockControls() {
     document.querySelectorAll<HTMLButtonElement>('#settings-data button, #settings-refresh').forEach(button => { button.disabled = true; });
@@ -45,17 +51,19 @@ export function settingsWorkflow(getAPI: () => API) {
     catch (error) {
       const uncertain = error instanceof RequestError && ['TRANSPORT', 'INTERNAL'].includes(error.code);
       $('#settings-result').innerHTML = status(message(error) + (uncertain ? ` Completion is uncertain. ${recovery}` : ''), true);
+      if (uncertain && trigger === '[data-backup-create]') backupUncertain = true;
     }
     finally {
       pending = false; $<HTMLButtonElement>('#settings-refresh').disabled = false;
       await load();
-      if (!$('#settings').hidden) document.querySelector<HTMLElement>(trigger)?.focus();
+      if (!$('#settings').hidden) (document.querySelector<HTMLElement>(`${trigger}:not(:disabled)`) ?? document.querySelector<HTMLElement>('[data-backup-resolve]'))?.focus();
     }
   }
   $('#settings').addEventListener('click', event => {
     const target = (event.target as HTMLElement).closest<HTMLElement>('button');
     if (!target || pending) return;
     if (target.hasAttribute('data-settings-retry') || target.id === 'settings-refresh') { $('#settings-result').innerHTML = ''; void load(); }
+    if (target.hasAttribute('data-backup-resolve')) { backupUncertain = false; $('#settings-result').innerHTML = ''; void load(); }
     if (target.hasAttribute('data-backup-create')) {
       void perform('[data-backup-create]', 'Creating backup', () => read(getAPI().create_backup()), result => `Backup created: ${describe(result.created)}`);
     }

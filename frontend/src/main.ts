@@ -160,19 +160,26 @@ async function loadParts(strict = false) {
     $('#parts-data').innerHTML = parts.length ? `<div class="table-wrap"><table><thead><tr><th>Part</th><th>Description</th><th class="num">Stock</th><th class="num">Minimum</th><th>State</th></tr></thead><tbody>${parts.map(p => `<tr ${selected === p.part_number ? 'class="selected"' : ''}><td><button class="part-id" data-part="${esc(p.part_number)}">${esc(p.part_number)}</button></td><td class="description">${esc(p.description)}</td><td class="num">${p.quantity}</td><td class="num">${p.minimum_quantity}</td><td>${badges(p)}</td></tr>`).join('')}</tbody></table></div><div class="table-footer">${parts.length} parts</div>` : status('No parts match these filters. Clear filters or create a part.');
   } catch (error) { if (version === searchVersion) $('#parts-data').innerHTML = status(message(error), true); if (strict) throw error; }
 }
+// Reads the submitted Part, then waits for the operator's explicit decision.
+// A failed read withdraws any earlier decision and keeps the form locked.
 async function reconcileCreation() {
   const number = submittedNumber;
-  try {
-    const part = await read(api.part_detail(number));
-    notice(`${part.part_number} exists. Inspect it before creating another part.`);
-  } catch (error) {
-    if (!(error instanceof RequestError) || error.code !== 'NOT_FOUND') return;
-    notice('The part was not created. You can correct or resubmit the preserved form.');
-  }
-  uncertain = false;
-  $<HTMLButtonElement>('#create-submit').disabled = false;
-  $('#create-error').textContent = '';
+  $('#create-error').innerHTML = status('Completion is uncertain. Refresh the catalog to read the current part. Your entries are preserved and locked.', true);
+  let created = true;
+  try { await read(api.part_detail(number)); }
+  catch (error) { if (!(error instanceof RequestError) || error.code !== 'NOT_FOUND') return; created = false; }
+  const text = created ? `${number} was created.` : `${number} was not created. Your preserved entries can be corrected and submitted.`;
+  notice(`${text} Open New part to confirm the outcome.`);
+  $('#create-error').innerHTML = `${status(text)}<button type="button" class="btn" data-create-decision="${created ? 'created' : 'absent'}">${created ? 'Accept created part' : 'Allow resubmission'}</button>`;
 }
+$('#create-error').onclick = event => {
+  const decision = (event.target as HTMLElement).closest<HTMLElement>('[data-create-decision]')?.dataset.createDecision;
+  if (!decision) return;
+  uncertain = false; $('#create-error').textContent = ''; $<HTMLButtonElement>('#create-submit').disabled = false;
+  if (decision === 'absent') { $('#number').focus(); return; }
+  $<HTMLFormElement>('#new-part').reset(); $<HTMLDialogElement>('#create-dialog').close();
+  void openPart(submittedNumber, $('#add-part'));
+};
 function detailHTML(part: PartDetail) {
   return `<div class="dialog-body"><div class="review-part">${esc(part.part_number)}</div><p class="description">${esc(part.description)}</p><p style="margin-top:16px">${badges(part)}</p>
 ${[['Total stock', part.quantity], ['Minimum quantity', part.minimum_quantity], ['Default location', part.location]].map(([label, value]) => `<div class="detail-pair"><span>${label}</span><strong>${esc(value)}</strong></div>`).join('')}
@@ -200,7 +207,11 @@ function openCreate(trigger: HTMLElement = document.activeElement as HTMLElement
   $<HTMLDialogElement>('#create-dialog').showModal();
   $<HTMLInputElement>('#number').focus();
 }
-$<HTMLDialogElement>('#drawer').addEventListener('close', () => { ++detailVersion; editor.reset(); restoreFocus(); window.scrollTo(drawerScroll.x, drawerScroll.y); });
+// The close event is queued and can arrive after a contextual action has navigated
+// away and back; only an ordinary close returns focus and scroll to the catalog.
+let leftDrawer = false;
+const leaveDrawer = () => { leftDrawer = true; $<HTMLDialogElement>('#drawer').close(); };
+$<HTMLDialogElement>('#drawer').addEventListener('close', () => { ++detailVersion; editor.reset(); if (!leftDrawer) { restoreFocus(); window.scrollTo(drawerScroll.x, drawerScroll.y); } leftDrawer = false; });
 $('#close-drawer').onclick = async () => { if (await editor.mayClose()) $<HTMLDialogElement>('#drawer').close(); };
 $<HTMLDialogElement>('#drawer').addEventListener('cancel', event => { if (editor.active()) { event.preventDefault(); $('#close-drawer').click(); } });
 $('#add-part').onclick = () => openCreate($('#add-part'));
@@ -233,18 +244,19 @@ $('#drawer-data').onclick = event => {
   if (target?.dataset.edit) void editor.edit(currentPart!);
   if (target?.dataset.active) void editor.setActive(currentPart!, target.dataset.active === 'on');
   if (target?.dataset.partHistory && api) {
-    $<HTMLDialogElement>('#drawer').close(); navigate('history', false);
+    leaveDrawer(); navigate('history', false);
     void history.open(target.dataset.partHistory);
     $('#history-query').focus();
   }
   if (target?.dataset.stock && api) {
     const mode = target.dataset.stock as 'receive' | 'ship' | 'move';
-    $<HTMLDialogElement>('#drawer').close(); navigate(mode, false); void (mode === 'move' ? move.open(target.dataset.number) : stock.open(mode, target.dataset.number));
+    leaveDrawer(); navigate(mode, false); void (mode === 'move' ? move.open(target.dataset.number) : stock.open(mode, target.dataset.number));
   }
-  if (target?.dataset.adjust && api) { $<HTMLDialogElement>('#drawer').close(); navigate('adjust', false); void adjust.open(target.dataset.adjust); }
+  if (target?.dataset.adjust && api) { leaveDrawer(); navigate('adjust', false); void adjust.open(target.dataset.adjust); }
 };
 $('#operator').addEventListener('input', () => { stock.operatorChanged(); move.operatorChanged(); adjust.operatorChanged(); imports.forEach(item => item.operatorChanged()); });
-$('#global-search').onclick = () => { navigate('parts'); $('#query').focus(); };
+// Like the original Ctrl+K, select the kept query so typing replaces it.
+$('#global-search').onclick = () => { navigate('parts'); $('#query').focus(); $<HTMLInputElement>('#query').select(); };
 document.addEventListener('keydown', event => {
   if (!(event.ctrlKey || event.metaKey) || event.altKey || document.querySelector('dialog[open]')) return;
   if (event.key.toLowerCase() === 'k') { event.preventDefault(); $('#global-search').click(); return; }
@@ -310,7 +322,7 @@ $('#new-part').addEventListener('submit', async event => {
     await openPart(part.part_number, $('#add-part'));
   } catch (error) {
     uncertain = error instanceof RequestError && ['TRANSPORT', 'INTERNAL'].includes(error.code);
-    $('#create-error').innerHTML = status(message(error) + (uncertain ? ' Close this form and refresh the catalog to verify whether the part was created. Your entries are preserved.' : ''), true);
+    $('#create-error').innerHTML = status(message(error) + (uncertain ? ' Completion is uncertain. Close this form and refresh the catalog to read the current part. Your entries are preserved and locked.' : ''), true);
   } finally {
     form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach(field => { field.disabled = false; });
     creating = false; $<HTMLButtonElement>('#create-submit').disabled = uncertain;

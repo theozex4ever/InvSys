@@ -33,7 +33,11 @@ class DesktopSmoke:
                 if window.evaluate_js(script):
                     return
                 time.sleep(0.1)
-            raise RuntimeError(f"Desktop smoke timed out: {script}")
+            # Report where the page and keyboard focus were, so timeouts explain themselves.
+            state = window.evaluate_js(
+                "JSON.stringify({page: document.querySelector('[aria-current=page]')?.dataset.page, theme: document.documentElement.dataset.theme, size: innerWidth + 'x' + innerHeight, active: document.activeElement?.outerHTML.slice(0, 120), focused: document.hasFocus(), dialogs: Array.from(document.querySelectorAll('dialog[open]')).map(d => d.id)})"
+            )
+            raise RuntimeError(f"Desktop smoke timed out: {script} {state}")
 
         try:
             if not window.events.loaded.wait(20):
@@ -178,26 +182,49 @@ class DesktopSmoke:
         ):
             raise RuntimeError("A failed folder request was not reported as an error.")
         run("window.smokeAPI.open_folder = window.smokeOpenFolder")
-        # A lost backup response is reported as uncertain and Settings re-reads the backups.
-        run("""
-            window.smokeAPI.create_backup = async () => { window.smokeBackupCalls++; await window.smokeBackup(); throw new Error('Lost response'); };
-            document.querySelector('[data-backup-create]').click();
-        """)
-        wait(
-            f"document.querySelector('#settings-result').textContent.includes('Completion is uncertain') && {idle}"
-        )
-        run(
-            "window.smokeAPI.create_backup = window.smokeBackup; window.smokeSettings = null; window.smokeAPI.utility_context().then(r => { window.smokeSettings = r.data; })"
-        )
-        wait("window.smokeSettings")
-        if not run(
-            "window.smokeBackupCalls === 2 && !document.querySelector('#settings-result').textContent.includes('Backup created') && document.querySelector('#settings-data').textContent.includes(window.smokeSettings.latest_backup.name)"
-        ):
-            raise RuntimeError(
-                "An uncertain backup was retried or not reconciled with the backups."
+        # Lost (committed) and unsent backup responses lock Create backup until a
+        # successful read and an explicit decision; a failed read keeps the lock.
+        locked = "!!document.querySelector('[data-backup-create]:disabled')"
+        for committed in (True, False):
+            send = "await window.smokeBackup(); " if committed else ""
+            # The previous request re-enables actions only after its follow-up read.
+            wait("!!document.querySelector('[data-backup-create]:not(:disabled)')")
+            run(f"""
+                window.smokeAPI.create_backup = async () => {{ window.smokeBackupCalls++; {send}throw new Error('Lost response'); }};
+                document.querySelector('[data-backup-create]').click(); document.querySelector('[data-backup-create]').click();
+            """)
+            wait(
+                f"document.querySelector('#settings-result').textContent.includes('Completion is uncertain') && !!document.querySelector('[data-backup-resolve]') && {locked}"
             )
+            run("""
+                window.smokeAPI.create_backup = window.smokeBackup;
+                window.smokeContext = window.smokeAPI.utility_context;
+                window.smokeAPI.utility_context = async () => ({ok:false, error:{code:'INTERNAL', message:'Backup read unavailable'}});
+                document.querySelector('#settings-refresh').click();
+            """)
+            wait(
+                "document.querySelector('#settings-data').textContent.includes('Backup read unavailable')"
+            )
+            if run(
+                "!!document.querySelector('[data-backup-resolve]') || !!document.querySelector('[data-backup-create]:not(:disabled)')"
+            ):
+                raise RuntimeError("A failed backup recovery read released the lock.")
+            run(
+                "window.smokeAPI.utility_context = window.smokeContext; window.smokeSettings = null; window.smokeAPI.utility_context().then(r => { window.smokeSettings = r.data; }); document.querySelector('[data-settings-retry]').click();"
+            )
+            wait(
+                f"window.smokeSettings && !!document.querySelector('[data-backup-resolve]') && {locked}"
+            )
+            if not run(
+                "document.querySelector('#settings-data').textContent.includes(window.smokeSettings.latest_backup.name)"
+            ):
+                raise RuntimeError("Backup reconciliation did not show the authoritative backups.")
+            run("document.querySelector('[data-backup-resolve]').click()")
+            wait("!!document.querySelector('[data-backup-create]:not(:disabled)')")
+        if run("window.smokeBackupCalls") != 3:
+            raise RuntimeError("An uncertain backup was retried or double-submitted.")
         print(
-            "Desktop smoke: manual backup with duplicate click and lost response, latest-backup status and folder access passed.",
+            "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed recovery read and explicit decision, latest-backup status and folder access passed.",
             flush=True,
         )
 

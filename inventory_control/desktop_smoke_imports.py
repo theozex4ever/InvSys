@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtWidgets import QApplication, QFileDialog
+from PySide6.QtWidgets import QApplication, QFileDialog, QLineEdit
 
 from inventory_control.desktop_smoke_ui import _GuiActions
 
@@ -57,6 +57,10 @@ class _ImportSmoke:
                         widget.reject()
                     else:
                         widget.selectFile(str(self.path))
+                        # selectFile() leaves the name field alone once it has focus.
+                        name = widget.findChild(QLineEdit, "fileNameEdit")
+                        if name is not None:
+                            name.setText(self.path.name)
                         widget.accept()
                     # QFileDialog.accept() can leave the dialog open; retry until dismissal.
                     # Only wait for the bridge once selection really dismissed it.
@@ -76,7 +80,7 @@ class _ImportSmoke:
             panel = self.run(
                 f"{self.el('actions')}?.innerText + ' | ' + {self.el('result')}?.innerText"
             )
-            raise RuntimeError(f"Native import file dialog did not appear. {widgets} {panel}")
+            raise RuntimeError(f"Native import file dialog was not dismissed. {widgets} {panel}")
         self.wait(f"!{self.el('select')}.disabled")
 
     def confirm_and_commit(self) -> None:
