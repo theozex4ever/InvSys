@@ -248,7 +248,7 @@ and platform bundle commands are in [desktop.md](desktop.md).
 | A10 | Export all five kinds, retain headers/Lot/trace. Select all three import kinds: valid, invalid, warning, cancel, changed input before commit, commit-time stale state; confirm backup exists before write; inspect actual per-kind failure outcome and refresh | Export replacement delivered: public bridge real-file tests and native CSV acceptance; Parts, Inventory receipt and BOM import replacements delivered (bridge tests and native smoke); real-file service regressions retained |
 | A11 | Manual backup/status/retention; open selected DB's export/backup folders; failed file/backup reports error, no fabricated success; source default/INVSYS_HOME and override; standalone requires explicit DB | Backup/folder replacement delivered (bridge tests, native smoke); real file-manager evidence on three platforms Missing; launcher regressions retained |
 | A12 | Navigate with Ctrl+1–9/Ctrl+K and contextual links; all dialogs keyboard-only; visible focus, both themes, reduced motion, 640×480 actions reachable by scrolling; screen-reader labels and non-color status/contrast review | Native Qt shortcuts, contextual state, dialogs, focus, themes, reduced motion, reachability and rendered contrast/name audit delivered (#51, [record](#accessibility-review-record)); human screen-reader review Missing (#57) |
-| A13 | Double-click each mutation; simulated committed/lost response and unsent response preserve draft/lock. Failed recovery read remains locked; authoritative reads show exact Lot/operator/metadata; explicit completion/absence decision only; never auto-retry | Delivered for every mutation (stories 42/43). #51 added Part creation (committed and unsent responses, failed read-back kept locked, explicit created/not-created decision) and manual backup (Create backup stays disabled until a successful backup read and an explicit decision); exports report uncertainty and refresh without locking because a repeated export only writes another file |
+| A13 | Double-click each mutation; simulated committed/lost response and unsent response preserve draft/lock. Failed recovery read remains locked; authoritative reads show exact Lot/operator/metadata; explicit completion/absence decision only; never auto-retry | Delivered for every mutation (stories 42/43). #51 added Part creation (committed and unsent responses, failed read-back kept locked, explicit created/not-created decision) and manual backup (Create backup stays disabled through failed reads and reads reporting `backup_error`, until the backups are listed and the operator decides); exports report uncertainty and refresh without locking because a repeated export only writes another file |
 | A14 | Rehearse upgrade on a copy of representative pre-migration DB; compare Parts/Lots/balances/ledger/shipments/BOM snapshots before/after launch and restart; closed-app backup restore on a separate copy; record reconciled rollback | Copied-data/operator evidence Missing |
 | A15 | Each platform's standalone offline bundle, selected DB, two native runs, no HTTP/dev server, correct assets, startup backup, retained metadata/restart; all performance scenarios below | Linux package evidence delivered (`scripts/package_bundle.py smoke`, [packaging.md](packaging.md)); Windows/macOS and performance scenarios Missing |
 | A16 | On a fresh workflow fixture, History text search `Disposable baseline` returns 8 receipt records; `Shipping Bench` returns both Move records; `MOVE_` matches MOVE_OUT and MOVE_IN without selecting a type; the baseline timestamp date matches all 15 records. Verify case-insensitive matching, source/destination Location searches, combination with exact-type filter and Clear filters; all records remain immutable | Delivered (#51): `test_history_text_search_covers_every_original_column` returns 8/2/2/15 and keeps Part/Lot/operator/reference/shipment search; native smoke matches Python's rendered results and Clear filters |
@@ -427,9 +427,9 @@ Linux development workstation (Python 3.12.3, locked toolchain, PySide6/Qt WebEn
   counts, both Locations, type text with the exact filter) and A17 (all nine columns
   in both directions, -9/+30 signed Qty, unchanged records across restart), plus
   Unicode case-folded search.
-- Full randomized `python -m pytest --cov`: 705 passed in 456 s; coverage 87.57%
+- Full randomized `python -m pytest --cov`: 705 passed in 483 s; coverage 87.57%
   against the unchanged 85% floor. Ruff lint/format, strict mypy, `tsc`, production
-  build and `check:dist` passed (33,567 B of the 34,000 B JavaScript budget; see
+  build and `check:dist` passed (33,609 B of the 34,000 B JavaScript budget; see
   [desktop.md](desktop.md) for the explicit budget decision).
 - Native source smoke under Xvfb with `QTWEBENGINE_DISABLE_SANDBOX=1` (this
   container cannot create Chromium sandbox namespaces) and forced reduced motion,
@@ -441,7 +441,8 @@ Linux development workstation (Python 3.12.3, locked toolchain, PySide6/Qt WebEn
   smoke Part that pushed the imported Part out of the dashboard's top five.
 - After review round 1 (Part creation/backup decisions, SVG contrast, Ctrl+K
   selection, Unicode search) three further pairs passed (6/6), e.g.
-  `/tmp/invsys-acceptance-5azhloe8/fixture/inventory.db`. Runs under load found and
+  `/tmp/invsys-acceptance-5azhloe8/fixture/inventory.db`, and three more after
+  round 2 kept backup recovery locked when the backups cannot be listed. Runs under load found and
   fixed two app focus bugs (a late drawer close event and a Settings re-render each
   stole focus after navigation) and two smoke races: the import file dialog ignored
   `selectFile()` once its name field had focus (also present on `main`; the smoke
