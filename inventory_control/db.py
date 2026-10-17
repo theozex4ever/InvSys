@@ -30,8 +30,14 @@ def create_inventory_engine(db_path: str | Path | None = None) -> Engine:
         if url != "sqlite:///:memory:":
             cursor.execute("PRAGMA journal_mode=WAL")
         cursor.close()
+        # SQLite's lower() folds ASCII only; searches use Python's Unicode case folding.
+        dbapi_connection.create_function("py_casefold", 1, _casefold, deterministic=True)
 
     return engine
+
+
+def _casefold(value: object) -> str | None:
+    return None if value is None else str(value).casefold()
 
 
 def create_session_factory(engine: Engine) -> sessionmaker[Session]:

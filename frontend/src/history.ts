@@ -1,16 +1,19 @@
 import { message, optionalPair as pair, $, esc, status } from './presentation';
-import { read, type ready, type HistoryRecord, type ShipmentDetail } from './bridge';
+import { read, type ready, type HistoryRecord, type HistorySearch, type ShipmentDetail } from './bridge';
 
 type API = Awaited<ReturnType<typeof ready>>;
+// Python sorts and pages; these labels name the original History columns.
+const sorts: Record<HistorySearch['sort'], string> = { timestamp: 'Time', tx_type: 'Type', part_number: 'Part', lot_number: 'Lot', quantity_change: 'Qty', location_from: 'From', location_to: 'To', operator: 'Operator', reference: 'Reference' };
+const defaults = (): HistorySearch => ({ query: '', tx_type: '', page: 0, sort: 'timestamp', descending: true });
 
 export function historyWorkflow(getAPI: () => API) {
-  const search = { query: '', tx_type: '', page: 0 };
+  const search = defaults();
   let version = 0, detailVersion = 0, selected: number | null = null;
   let returnFocus: HTMLElement | null = null;
   let detailID: number | string | null = null;
   let pagePosition = { x: 0, y: 0, tableX: 0 };
   let position = { x: 0, y: 0, tableX: 0 };
-  $('main').insertAdjacentHTML('beforeend', `<section id="history" hidden><div class="page-heading"><div><h1>History</h1><p>Immutable inventory changes and shipment traceability.</p></div><button id="history-refresh" class="btn" disabled>Refresh</button></div><div class="panel"><div class="toolbar"><label class="search-input"><span class="sr-only">Search part, lot, operator, or shipment reference</span><input id="history-query" placeholder="Search part, lot, operator, or shipment reference"></label><label>Type <select id="history-type" class="select-input"><option value="">All types</option></select></label><button id="history-clear" class="btn small">Clear filters</button></div><div id="history-filters" class="filter-chips" role="status"></div><div id="history-data">${status('Connecting to the desktop…')}</div></div></section>`);
+  $('main').insertAdjacentHTML('beforeend', `<section id="history" hidden><div class="page-heading"><div><h1>History</h1><p>Immutable inventory changes and shipment traceability.</p></div><button id="history-refresh" class="btn" disabled>Refresh</button></div><div class="panel"><div class="toolbar"><label class="search-input"><span class="sr-only">Search time, type, part, lot, location, operator, reference, notes or shipment</span><input id="history-query" placeholder="Search time, type, part, lot, location, operator, reference, notes or shipment"></label><label>Type <select id="history-type" class="select-input"><option value="">All types</option></select></label><label>Sort <select id="history-sort" class="select-input">${Object.entries(sorts).map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}</select></label><label><input id="history-descending" type="checkbox" checked>Descending</label><button id="history-clear" class="btn small">Clear filters</button></div><div id="history-filters" class="filter-chips" role="status"></div><div id="history-data">${status('Connecting to the desktop…')}</div></div></section>`);
   $('#app').insertAdjacentHTML('afterend', `<dialog id="history-drawer" class="drawer" aria-labelledby="history-title"><div class="dialog-heading"><h2 id="history-title">History details</h2><button id="history-close" class="btn" aria-label="Close History details">Close</button></div><div id="history-detail" class="dialog-body"></div></dialog>`);
   const dialog = () => $<HTMLDialogElement>('#history-drawer');
   const remember = () => ({ x: scrollX, y: scrollY, tableX: $('#history-data .table-wrap')?.scrollLeft ?? 0 });
@@ -37,7 +40,14 @@ export function historyWorkflow(getAPI: () => API) {
   });
   $<HTMLInputElement>('#history-query').addEventListener('input', event => { search.query = (event.target as HTMLInputElement).value; search.page = 0; void load(); });
   $<HTMLSelectElement>('#history-type').onchange = event => { search.tx_type = (event.target as HTMLSelectElement).value; search.page = 0; void load(); };
-  $('#history-clear').onclick = () => { search.query = ''; search.tx_type = ''; search.page = 0; $<HTMLInputElement>('#history-query').value = ''; $<HTMLSelectElement>('#history-type').value = ''; void load(); };
+  $<HTMLSelectElement>('#history-sort').onchange = event => { search.sort = (event.target as HTMLSelectElement).value as HistorySearch['sort']; search.page = 0; void load(); };
+  $<HTMLInputElement>('#history-descending').onchange = event => { search.descending = (event.target as HTMLInputElement).checked; search.page = 0; void load(); };
+  function reset() {
+    Object.assign(search, defaults());
+    $<HTMLInputElement>('#history-query').value = ''; $<HTMLSelectElement>('#history-type').value = '';
+    $<HTMLSelectElement>('#history-sort').value = search.sort; $<HTMLInputElement>('#history-descending').checked = search.descending;
+  }
+  $('#history-clear').onclick = () => { reset(); void load(); };
   $('#history-refresh').onclick = () => { void load(); };
   $('#history-data').addEventListener('click', event => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-history-page]');
@@ -53,7 +63,7 @@ export function historyWorkflow(getAPI: () => API) {
   // `strict` rejects unless current History rendered, for callers that must reconcile.
   async function load(savedPosition?: typeof position, strict = false) {
     const current = ++version; const saved = savedPosition ?? ($('#history').hidden ? pagePosition : remember());
-    $('#history-filters').textContent = `Search: ${search.query || 'Any'} · Type: ${search.tx_type || 'All types'} · Page: ${search.page + 1}`;
+    $('#history-filters').textContent = `Search: ${search.query || 'Any'} · Type: ${search.tx_type || 'All types'} · Sort: ${sorts[search.sort]} ${search.descending ? 'descending' : 'ascending'} · Page: ${search.page + 1}`;
     $('#history-data').innerHTML = status('Loading History…');
     try {
       const result = await read(getAPI().history({ ...search }));
@@ -82,8 +92,7 @@ export function historyWorkflow(getAPI: () => API) {
   }
   return { load, inspect, open: (partNumber?: string) => {
     if (partNumber) {
-      search.query = partNumber; search.tx_type = ''; search.page = 0;
-      $<HTMLInputElement>('#history-query').value = partNumber; $<HTMLSelectElement>('#history-type').value = '';
+      reset(); search.query = partNumber; $<HTMLInputElement>('#history-query').value = partNumber;
       pagePosition = { x: 0, y: 0, tableX: 0 };
     }
     return load(pagePosition);

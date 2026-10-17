@@ -10,7 +10,10 @@ export interface Activity {
   reference: string; notes: string;
 }
 export interface HistoryRecord extends Activity { transaction_id: number; shipment_number: string }
-export interface HistorySearch { query: string; tx_type: string; page: number }
+export interface HistorySearch {
+  query: string; tx_type: string; page: number;
+  sort: 'timestamp' | 'tx_type' | 'part_number' | 'lot_number' | 'quantity_change' | 'location_from' | 'location_to' | 'operator' | 'reference'; descending: boolean;
+}
 export interface HistoryResults { records: HistoryRecord[]; types: string[]; total: number; matching: number; page: number }
 export interface Consumption { part_number: string; lot_number: string; location: string; quantity: number }
 export interface ShipmentDetail extends Shipment { reference: string; consumed_components: Consumption[]; transactions: HistoryRecord[] }

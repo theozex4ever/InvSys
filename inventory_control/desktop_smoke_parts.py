@@ -335,3 +335,107 @@ def check_part_editing(window: Any, smoke_wait: Any) -> None:
         "Desktop smoke: part edit in both themes, unsaved-edit confirmation, stocked deactivation, reactivation, duplicate clicks and lost-response recovery passed.",
         flush=True,
     )
+
+
+def check_part_creation_recovery(window: Any, wait: Any) -> str:
+    """Committed and unsent lost responses lock creation until read-back and a decision."""
+    run = window.evaluate_js
+    suffix = time.time_ns()
+    created, unsent = f"DESKTOP-CREATE-{suffix}", f"DESKTOP-UNSENT-{suffix}"
+
+    def require(script: str, label: str) -> None:
+        if not run(script):
+            raise RuntimeError(f"Part creation smoke failed: {label}")
+
+    def submit_lost(number: str, committed: bool) -> None:
+        send = "await window.smokeCreate(part); " if committed else ""
+        run("document.querySelector('#add-part').click()")
+        wait("document.querySelector('#create-dialog').open")
+        run(f"""
+            document.querySelector('#number').value = '{number}';
+            document.querySelector('#description').value = 'Disposable creation recovery';
+            // Minimum 0 keeps this probe out of Low stock and the dashboard's top five.
+            document.querySelector('#minimum').value = '0';
+            window.smokeAPI.create_part = async part => {{ window.smokeCreateCalls++; {send}throw new Error('Lost response'); }};
+            document.querySelector('#new-part').requestSubmit(); document.querySelector('#new-part').requestSubmit();
+        """)
+        wait("document.querySelector('#create-error').textContent.includes('preserved and locked')")
+        require(
+            f"document.querySelector('#create-submit').disabled && document.querySelector('#number').value === '{number}'",
+            "lost response locks one submission and preserves the form",
+        )
+        # A failed recovery read keeps the lock and offers no decision.
+        run("""
+            window.smokeAPI.create_part = window.smokeCreate;
+            window.smokeAPI.part_detail = async () => ({ok:false, error:{code:'INTERNAL', message:'Read unavailable'}});
+            document.querySelector('#close-create').click();
+            document.querySelector('#parts .refresh').click();
+        """)
+        wait("!document.querySelector('#parts-data').textContent.includes('Loading')")
+        run("document.querySelector('#add-part').click()")
+        wait("document.querySelector('#create-dialog').open")
+        require(
+            f"document.querySelector('#create-submit').disabled && !document.querySelector('[data-create-decision]') && document.querySelector('#number').value === '{number}'",
+            "failed recovery read keeps the creation lock",
+        )
+        run("""
+            window.smokeAPI.part_detail = window.smokePartRead;
+            document.querySelector('#close-create').click();
+            document.querySelector('#parts .refresh').click();
+        """)
+        outcome = "was created" if committed else "was not created"
+        wait(f"document.querySelector('#notice').textContent.includes('{number} {outcome}')")
+        run("document.querySelector('#add-part').click()")
+        wait("document.querySelector('#create-dialog').open")
+        require(
+            f"document.querySelector('#create-submit').disabled && document.querySelector('[data-create-decision={'created' if committed else 'absent'}]')",
+            "authoritative read offers only the matching decision while locked",
+        )
+
+    run("""
+        window.smokeCreate = window.smokeAPI.create_part; window.smokeCreateCalls = 0;
+        window.smokePartRead = window.smokeAPI.part_detail;
+        document.querySelector('[data-page=parts]').click();
+    """)
+    submit_lost(created, committed=True)
+    run("document.querySelector('[data-create-decision=created]').click()")
+    wait(
+        f"!document.querySelector('#create-dialog').open && document.querySelector('#drawer-data').textContent.includes('{created}')"
+    )
+    run("document.querySelector('#close-drawer').click()")
+    wait("!document.querySelector('#drawer').open")
+    submit_lost(unsent, committed=False)
+    run("document.querySelector('[data-create-decision=absent]').click()")
+    require(
+        f"!document.querySelector('#create-submit').disabled && document.querySelector('#number').value === '{unsent}'",
+        "explicit absence decision unlocks the preserved form",
+    )
+    run("document.querySelector('#new-part').requestSubmit()")
+    wait(f"document.querySelector('#drawer-data').textContent.includes('{unsent}')")
+    run("document.querySelector('#close-drawer').click()")
+    wait("!document.querySelector('#drawer').open")
+    run(
+        f"window.smokeCreated = null; Promise.all(['{created}', '{unsent}'].map(n => window.smokeAPI.search_parts({{query:n, status:'all', low_stock:false, sort:'part_number', descending:false}}))).then(r => {{ window.smokeCreated = r.map(x => x.data.length); }})"
+    )
+    wait("window.smokeCreated")
+    require(
+        "JSON.stringify(window.smokeCreated) === '[1,1]' && window.smokeCreateCalls === 2",
+        "each Part persisted exactly once without automatic retries",
+    )
+    # Resubmitting an existing number is rejected by Python rather than duplicated.
+    run("document.querySelector('#add-part').click()")
+    wait("document.querySelector('#create-dialog').open")
+    run(f"""
+        document.querySelector('#number').value = '{created}';
+        document.querySelector('#description').value = 'Duplicate';
+        document.querySelector('#new-part').requestSubmit();
+    """)
+    wait("document.querySelector('#create-error').textContent.includes('Part already exists')")
+    run(
+        "document.querySelector('#new-part').reset(); document.querySelector('#create-error').textContent = ''; document.querySelector('#close-create').click()"
+    )
+    print(
+        "Desktop smoke: Part creation duplicate click, committed and unsent lost responses, failed recovery read, explicit decisions and duplicate rejection passed.",
+        flush=True,
+    )
+    return created

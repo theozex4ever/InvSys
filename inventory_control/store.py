@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy import Select, desc, func, or_, select
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, joinedload, sessionmaker
+from sqlalchemy.orm import Session, aliased, joinedload, sessionmaker
 
 from inventory_control import ledger
 from inventory_control.db import create_inventory_engine, create_session_factory
@@ -554,39 +554,79 @@ class InventoryStore:
                 query = query.limit(limit)
             return [self._history_record(row, number) for row, number in session.execute(query)]
 
-    def search_history(self, query: str, tx_type: str, page: int) -> dict[str, Any]:
-        """Filter before paging so older matches stay accessible without unbounded DTOs."""
+    # Sortable History columns, matching the original screen's nine columns.
+    HISTORY_SORTS = (
+        "timestamp",
+        "tx_type",
+        "part_number",
+        "lot_number",
+        "quantity_change",
+        "location_from",
+        "location_to",
+        "operator",
+        "reference",
+    )
+
+    def search_history(
+        self,
+        query: str,
+        tx_type: str,
+        page: int,
+        sort: str = "timestamp",
+        descending: bool = True,
+    ) -> dict[str, Any]:
+        """Filter and sort before paging so older matches stay accessible without unbounded DTOs."""
+        if sort not in self.HISTORY_SORTS:
+            raise ValueError("Choose a History column to sort by.")
+        source = aliased(LocationRecord)
+        destination = aliased(LocationRecord)
         with self.session_factory() as session:
             statement = (
                 select(InventoryTransactionRecord, ShipmentRecord.shipment_number)
                 .join(PartRecord, InventoryTransactionRecord.part_id == PartRecord.id)
                 .outerjoin(LotRecord, InventoryTransactionRecord.lot_id == LotRecord.id)
+                .outerjoin(source, InventoryTransactionRecord.location_from_id == source.id)
+                .outerjoin(destination, InventoryTransactionRecord.location_to_id == destination.id)
                 .outerjoin(
                     ShipmentRecord,
                     InventoryTransactionRecord.shipment_id == ShipmentRecord.id,
                 )
             )
+            columns = {
+                "timestamp": InventoryTransactionRecord.timestamp,
+                "tx_type": InventoryTransactionRecord.tx_type,
+                "part_number": PartRecord.part_number,
+                "lot_number": func.coalesce(LotRecord.lot_number, ""),
+                "quantity_change": InventoryTransactionRecord.quantity_change,
+                "location_from": func.coalesce(source.name, ""),
+                "location_to": func.coalesce(destination.name, ""),
+                "operator": InventoryTransactionRecord.operator,
+                "reference": InventoryTransactionRecord.reference,
+            }
             if query:
                 statement = statement.where(
                     or_(
                         *(
-                            func.lower(column).contains(query.lower(), autoescape=True)
-                            for column in (
-                                PartRecord.part_number,
-                                LotRecord.lot_number,
-                                InventoryTransactionRecord.operator,
-                                InventoryTransactionRecord.reference,
-                                ShipmentRecord.shipment_number,
-                                ShipmentRecord.reference,
+                            func.py_casefold(column).contains(query.casefold(), autoescape=True)
+                            for name, column in (
+                                *columns.items(),
+                                ("notes", InventoryTransactionRecord.notes),
+                                ("shipment_number", ShipmentRecord.shipment_number),
+                                ("shipment_reference", ShipmentRecord.reference),
                             )
+                            if name != "quantity_change"
                         )
                     )
                 )
             if tx_type:
                 statement = statement.where(InventoryTransactionRecord.tx_type == tx_type)
             matching = session.scalar(select(func.count()).select_from(statement.subquery()))
+            # The record ID keeps equal values in a stable order across pages.
+            order = (columns[sort], InventoryTransactionRecord.id)
             records = session.execute(
-                statement.order_by(desc(InventoryTransactionRecord.id)).offset(page * 50).limit(50)
+                statement.order_by(*(desc(column) if descending else column for column in order))
+                .offset(page * 50)
+                .limit(50)
             )
             return {
                 "records": [self._history_record(row, number) for row, number in records],
