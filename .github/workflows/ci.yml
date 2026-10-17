@@ -406,6 +406,19 @@ jobs:
           mkdir -p "$RUNNER_TEMP/bundle-installed"
           tar -xzf "$RUNNER_TEMP"/bundle-dist/invsys-desktop-*.tar.gz -C "$RUNNER_TEMP/bundle-installed"
           test -d "$RUNNER_TEMP/bundle-installed/$BUNDLE"
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          dist = Path(os.environ['RUNNER_TEMP']) / 'bundle-dist'
+          lines = []
+          for archive in sorted(dist.glob('*.tar.gz')):
+              with archive.open('rb') as stream:
+                  digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+              lines.append(f'{digest}  {archive.name}\n')
+          (dist / 'SHA256SUMS').write_text(''.join(lines), encoding='utf-8')
+          PY
 
       - name: Build left the checkout untouched
         run: |
@@ -467,12 +480,26 @@ jobs:
             ${{ runner.temp }}/package-evidence.json
             ${{ runner.temp }}/package-build.log
             ${{ runner.temp }}/package-smoke.log
+            ${{ runner.temp }}/bundle-dist/SHA256SUMS
             ${{ runner.temp }}/bundle-dist/invsys-desktop/bundle-manifest.json
             ${{ runner.temp }}/bundle-dist/invsys-desktop.app/Contents/Resources/bundle-manifest.json
             ${{ runner.temp }}/invsys-package-smoke/inventory/smoke-captures/
             ${{ runner.temp }}/invsys-package-smoke/inventory/logs/
           retention-days: 90
           if-no-files-found: warn
+
+      # A CI artifact for native-panel acceptance, not a published release.
+      # Keep the tar intact: uploading the .app directly would lose its symlinks/modes.
+      - name: Upload macOS acceptance bundle
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-standalone-bundle
+          path: |
+            ${{ runner.temp }}/bundle-dist/*.tar.gz
+            ${{ runner.temp }}/bundle-dist/SHA256SUMS
+          retention-days: 7
+          if-no-files-found: error
 
   dependency-audit:
     name: Dependency audit

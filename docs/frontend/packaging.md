@@ -255,8 +255,11 @@ into a fresh installation directory, checks the checkout stayed clean and runs t
 extracted package smoke: under Xvfb in an empty network
 namespace on Linux, in the runner's logged-in session on macOS. It uploads
 `package-evidence.json`, the manifest, build/smoke output, captures and application
-logs for 90 days, including output from failed build/smoke steps. Archives are
-not uploaded (about 260 MB each). Both legs are part of **CI gate**.
+logs and archive checksums for 90 days, including output from failed build/smoke
+steps. A passing macOS job also uploads the intact archive and `SHA256SUMS` as
+`macos-standalone-bundle` for seven days so native-panel acceptance can use the
+exact tested bundle. This is a CI artifact, not a release publication. Linux
+archives are not uploaded. Both legs are part of **CI gate**.
 
 ## Extending to Windows
 
@@ -324,7 +327,8 @@ until the following records are retained:
    startup failure results, both native runs, restart persistence, startup backup
    and application-seal verification. Keep the build/smoke logs with the run.
 2. Native file-panel and Finder acceptance on a Mac using the same extracted
-   archive. CI selects files through Qt's scriptable dialog; that does not prove
+   archive from the run's `macos-standalone-bundle` artifact. Verify it with
+   `shasum -a 256 -c SHA256SUMS` before extraction. CI selects files through Qt's scriptable dialog; that does not prove
    the Cocoa panel or a real Finder window works. Use a fresh disposable folder
    from `mktemp -d /tmp/invsys-macos-acceptance.XXXXXX` and launch the bundle with
    `--database <that-folder>/inventory.db`, without `--smoke-check`. In Settings,
