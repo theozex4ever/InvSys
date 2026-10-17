@@ -2,8 +2,11 @@
 
 `scripts/package_bundle.py` turns the built frontend and the pywebview launcher into
 a self-contained, one-directory bundle that runs without Python, Node, a frontend
-development server, a CDN or any inventory HTTP service. Linux (ticket #52) and
-macOS (ticket #54) are delivered. The Windows ticket extends the same script, lock
+development server, a CDN or any inventory HTTP service. Linux (ticket #52) has
+retained package evidence. macOS build support
+(ticket #54) is implemented; native/package acceptance remains pending until the
+[macOS evidence](#recorded-macos-evidence) below is completed. The Windows ticket
+extends the same script, lock
 file and CI job; it does not add a second build path. Full installers, Developer ID
 signing, notarization, auto-update and release publication are out of scope.
 
@@ -97,9 +100,10 @@ and logs live beside the selected database, never in the bundle.
 Prerequisites on the operator's Mac:
 
 - macOS 13 Ventura or later: the bundled PySide6 6.11.2 (Qt 6.11) wheels are
-  built for macOS 13 and newer. **Verified target:** only the GitHub-hosted
-  `macos-15` runner (macOS 15, Apple silicon virtual machine) recorded
-  [below](#recorded-macos-evidence). Other macOS versions are untested.
+  built for macOS 13 and newer. **CI target:** the GitHub-hosted
+  `macos-15` runner (macOS 15, Apple silicon virtual machine). A successful
+  macOS run has not yet been retained; see [evidence status](#recorded-macos-evidence).
+  macOS 13/14 and Intel Macs have not been tested.
 - Apple silicon (arm64). The bundle holds one architecture, the build machine's;
   an Intel Mac needs a bundle built on an Intel Mac, which is untested.
 - A logged-in desktop session. Nothing else to install: the bundle carries
@@ -129,8 +133,9 @@ launch with "Cannot open the inventory database ... Operation not permitted".
 
 The application carries only an ad-hoc signature: no Developer ID, no
 notarization. Its seal is intact (the build and the smoke check it), but Gatekeeper
-does not trust it: the package smoke records `spctl --assess` rejecting the
-application. What that means for operators:
+does not trust it: the package smoke records the actual `spctl --assess`
+verdict rather than treating an ad-hoc signature as distribution approval.
+What that means for operators:
 
 - A copy that arrived through a browser, mail, AirDrop or a messaging app is
   quarantined, and macOS refuses its first launch ("Apple could not verify ...").
@@ -171,7 +176,8 @@ location):
 | database folder unusable (smoke-tested: a file where the folder belongs; also unwritable or full) | exit 1, "Cannot open the inventory database <path>: <reason>" |
 | file that is not SQLite, or a directory (both smoke-tested) | exit 1, same message with the reason |
 
-The messages and exit statuses are the same on Linux and macOS.
+These messages and exit statuses are enforced by the package smoke on each
+platform; macOS execution remains pending as recorded below.
 
 ## Package smoke
 
@@ -244,10 +250,12 @@ parity acceptance is ticket 18 and is not claimed here.
 
 The `package-smoke` job (matrix over runners: `ubuntu-24.04` and `macos-15`)
 runs after the `frontend` job: it installs the package lock, downloads the exact
-`frontend-dist` artifact the other jobs tested, builds the bundle, checks the
-checkout stayed clean and runs the package smoke: under Xvfb in an empty network
+`frontend-dist` artifact the other jobs tested, builds and extracts the archive
+into a fresh installation directory, checks the checkout stayed clean and runs the
+extracted package smoke: under Xvfb in an empty network
 namespace on Linux, in the runner's logged-in session on macOS. It uploads
-`package-evidence.json`, the manifest, captures and logs for 14 days. Archives are
+`package-evidence.json`, the manifest, build/smoke output, captures and application
+logs for 90 days, including output from failed build/smoke steps. Archives are
 not uploaded (about 260 MB each). Both legs are part of **CI gate**.
 
 ## Extending to Windows
@@ -261,7 +269,8 @@ launcher contract (explicit `--database`, `--smoke-check`) is unchanged.
 
 ## Limitations and evidence
 
-See the recorded Linux and macOS runs below. Not established by these tickets:
+See the recorded Linux run and pending macOS acceptance below. Not established
+by these tickets:
 Windows bundles, Linux distributions and macOS versions other than the recorded
 ones, Intel Macs, the glibc compatibility matrix, Gatekeeper approval of a
 quarantined download, performance targets (P05 packaged launch time), human
@@ -300,3 +309,34 @@ Not exercised: the Xvfb path and the CI job locally (no Xvfb on the reference
 machine), distributions other than CachyOS, X11-only sessions, the file-manager
 launch (`xdg-open`) beyond the smoke's recording host, performance targets, and
 operator acceptance.
+
+## Recorded macOS evidence
+
+**Pending.** No macOS build/runtime evidence has been retained for this tree yet.
+The `package-smoke` matrix defines the check; its presence does not establish
+that a Mac has successfully built or launched the bundle. Issue #54 remains open
+until the following records are retained:
+
+1. A passing `package-smoke (macos-15)` CI run against the integrated commit,
+   with `package-evidence-macos-15` downloaded from the run's Artifacts. Commit
+   its `package-evidence.json` under `docs/frontend/evidence/` and link the run
+   here. The JSON must identify the source commit, exact asset hashes, OS/CPU/RAM,
+   startup failure results, both native runs, restart persistence, startup backup
+   and application-seal verification. Keep the build/smoke logs with the run.
+2. Native file-panel and Finder acceptance on a Mac using the same extracted
+   archive. CI selects files through Qt's scriptable dialog; that does not prove
+   the Cocoa panel or a real Finder window works. Use a fresh disposable folder
+   from `mktemp -d /tmp/invsys-macos-acceptance.XXXXXX` and launch the bundle with
+   `--database <that-folder>/inventory.db`, without `--smoke-check`. In Settings,
+   select and cancel a Parts CSV in the Cocoa panel, then preview and explicitly
+   import `part_number,description` / `MACOS-ACCEPTANCE,Disposable part`. Export
+   Parts and open the exports folder in Finder; create a backup and open its
+   folder. Restart with the same database and verify the Part and startup backup.
+   Record the tester, date, machine/OS, source commit, archive SHA-256, selected
+   disposable path and the result of each action alongside the CI JSON. Never
+   substitute an operational inventory for this fixture.
+
+Gatekeeper approval of a quarantined download remains separately unverified;
+unsigned-distribution instructions describe the expected restrictions, not an
+executed approval test. Full parity, performance and operator sign-off remain
+ticket 18 gates.

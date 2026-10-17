@@ -395,6 +395,17 @@ jobs:
           --assets frontend/dist
           --dist "$RUNNER_TEMP/bundle-dist"
           --work "$RUNNER_TEMP/bundle-work"
+          2>&1 | tee "$RUNNER_TEMP/package-build.log"
+
+      # Smoke the installed archive, including its symlinks and executable modes,
+      # rather than only the directory PyInstaller left behind.
+      - name: Extract standalone archive
+        env:
+          BUNDLE: ${{ matrix.bundle }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/bundle-installed"
+          tar -xzf "$RUNNER_TEMP"/bundle-dist/invsys-desktop-*.tar.gz -C "$RUNNER_TEMP/bundle-installed"
+          test -d "$RUNNER_TEMP/bundle-installed/$BUNDLE"
 
       - name: Build left the checkout untouched
         run: |
@@ -413,11 +424,12 @@ jobs:
         run: >-
           xvfb-run -a -s "-screen 0 1920x1080x24"
           python scripts/package_bundle.py smoke
-          --bundle "$RUNNER_TEMP/bundle-dist/invsys-desktop"
+          --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
           --assets frontend/dist
           --workdir "$RUNNER_TEMP/invsys-package-smoke"
           --evidence "$RUNNER_TEMP/package-evidence.json"
           --isolate-network
+          2>&1 | tee "$RUNNER_TEMP/package-smoke.log"
 
       # The runner's logged-in session is the display. macOS has no unprivileged
       # network namespace, so offline rests on the smoke's file:// and
@@ -428,10 +440,11 @@ jobs:
           BUNDLE: ${{ matrix.bundle }}
         run: >-
           python scripts/package_bundle.py smoke
-          --bundle "$RUNNER_TEMP/bundle-dist/$BUNDLE"
+          --bundle "$RUNNER_TEMP/bundle-installed/$BUNDLE"
           --assets frontend/dist
           --workdir "$RUNNER_TEMP/invsys-package-smoke"
           --evidence "$RUNNER_TEMP/package-evidence.json"
+          2>&1 | tee "$RUNNER_TEMP/package-smoke.log"
 
       - name: Package evidence summary
         if: ${{ !cancelled() }}
@@ -452,11 +465,13 @@ jobs:
           name: package-evidence-${{ matrix.os }}
           path: |
             ${{ runner.temp }}/package-evidence.json
+            ${{ runner.temp }}/package-build.log
+            ${{ runner.temp }}/package-smoke.log
             ${{ runner.temp }}/bundle-dist/invsys-desktop/bundle-manifest.json
             ${{ runner.temp }}/bundle-dist/invsys-desktop.app/Contents/Resources/bundle-manifest.json
             ${{ runner.temp }}/invsys-package-smoke/inventory/smoke-captures/
             ${{ runner.temp }}/invsys-package-smoke/inventory/logs/
-          retention-days: 14
+          retention-days: 90
           if-no-files-found: warn
 
   dependency-audit:
