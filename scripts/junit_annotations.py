@@ -27,7 +27,8 @@ def annotations(report: str) -> list[str]:
             problem = case.find("error")
         if problem is None:
             continue
-        file = case.get("file", "")
+        # Windows legs report paths with backslashes; GitHub and pytest node ids use "/".
+        file = case.get("file", "").replace("\\", "/")
         text = problem.text or ""
         properties = f"file={_escape_property(file)}" if file else ""
         line = _failing_line(file, text, case.get("line"))
@@ -53,7 +54,10 @@ def _node_id(case: ET.Element, file: str) -> str:
 def _failing_line(file: str, text: str, definition: str | None) -> int | None:
     """Prefer the last traceback frame in the test file; fall back to the definition."""
     if file:
-        frames = re.findall(rf"(?:^|/){re.escape(file)}:(\d+)", text, re.MULTILINE)
+        # Traceback frames keep the platform separator.
+        separator = r"[/\\]"
+        path = separator.join(re.escape(part) for part in file.split("/"))
+        frames = re.findall(rf"(?:^|{separator}){path}:(\d+)", text, re.MULTILINE)
         if frames:
             return int(frames[-1])
     if definition is not None and definition.isdigit():

@@ -27,7 +27,8 @@ the run (several minutes; background it if your shell times out) and prints one
 line per job, one annotation per failing test and the tail of each failed log.
 Cite that run when reporting results. Run the full suite or the native smoke
 locally only to reproduce a CI failure (`--randomly-seed` from the run's
-pytest header) or when CI is unavailable. The full gate, as CI runs it:
+pytest header) or when CI is unavailable. The full local gate (CI runs the same
+checks, measuring coverage on one leg):
 
 ```bash
 ruff check . && ruff format --check . && mypy

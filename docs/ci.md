@@ -11,7 +11,7 @@ to make every failure explain itself.
 ```text
 pull_request / push main / merge_group / weekly
 │
-├─ Workflow lint ─────────── actionlint + shellcheck, zizmor (pedantic)
+├─ Workflow lint ─────────── actionlint + shellcheck (workflows, scripts/*.sh), zizmor (pedantic)
 ├─ Python static analysis ── ruff lint, ruff format, mypy --strict, lock freshness
 ├─ Tests ×5 ──────────────── Ubuntu 3.12 · 3.13 · 3.14 (+coverage), Windows 3.12, macOS 3.12
 ├─ Frontend build ─────────► dist artifact ─┬─► Desktop E2E (native smoke, Xvfb)
@@ -38,7 +38,7 @@ pytest step times: Ubuntu 3.14 3.0 min, macOS 4.7, Ubuntu 3.13 5.5, Ubuntu 3.12
 | **mypy --strict** on the domain core | type errors in store, ledger, bridge, ORM, import/export, backup, launchers | The core owns every inventory invariant. The Qt widget layer is excluded (PySide6 enum stubs are noisy); that list may only shrink. |
 | **Lock freshness** | `scripts/lock.sh` would change a lock file | Manifest edits cannot merge without the matching lock; hand-edited locks are rejected. |
 | **pytest**, random order | a failing or order-dependent test | The seed is derived from the commit SHA, so every leg and every re-run of one commit use the same order while each new commit is shuffled differently. The header prints it; rerun locally with `--randomly-seed=<seed>`. |
-| **Failing-test annotations** | — (reporting only) | One `::error` annotation per failing test, from the JUnit report (`scripts/junit_annotations.py`). `gh run view <id>` lists them, so a red run is readable without the full log. |
+| **Failing-test annotations** | — (reporting only) | One `::error` annotation per failing test, from the JUnit report (`scripts/junit_annotations.py`). `gh run view <id>` lists them, so a red run is readable without the full log. GitHub keeps the first 10 per step; the log's short test summary has every failure. |
 | **Warnings are errors** | any warning, e.g. `ResourceWarning` | This is how a real leak was found: `with sqlite3.connect()` never closes, which locks backup files on Windows. |
 | **Coverage floor** (85 % branch) | coverage drops below the floor | A ratchet: raise it as coverage grows, never lower it to pass. Measured on the Ubuntu 3.14 leg only, where `sys.monitoring` makes branch tracing cheap; under the older Pythons' tracer it roughly doubled each leg's runtime. |
 | **Per-test timeout** (60 s) | a hung Qt event loop | Fails one test fast instead of burning the 20-minute job. |
@@ -93,8 +93,10 @@ failure, the last lines of each failed job's log up to its first error, without
 colour codes or timestamps. It exits non-zero when the run fails.
 
 A new push to a PR cancels that PR's older run, and a new dispatch cancels the
-older dispatch on the same branch. Runs on `main`, merge-queue and scheduled
-runs are never cancelled.
+older dispatch on the same branch. A PR run and a dispatch run are separate, so
+dispatch only on branches without a PR. Any run on `main`, merge-queue and
+scheduled runs are never cancelled. Without `--dispatch`, `ci_wait.sh` waits for
+the push or PR run and ignores manual runs of the same commit.
 
 ## One required check
 

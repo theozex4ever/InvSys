@@ -20,16 +20,19 @@ on:
 permissions: {}
 
 # A new push to a PR supersedes that PR's previous run, and a new manual dispatch
-# supersedes the previous one on the same branch (agents dispatch CI on branches
-# without a PR). Every other event gets its own group (run_id), so no commit on
-# main is ever cancelled or skipped.
+# supersedes the previous one on the same non-main branch (agents dispatch CI on
+# branches without a PR). Every other event, including any run on main, gets its
+# own group (run_id), so no run on main is ever cancelled or skipped.
 concurrency:
   group: >-
     ${{ github.workflow }}-${{
     github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)
-    || github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.ref)
+    || github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+    && format('dispatch-{0}', github.ref)
     || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+  cancel-in-progress: >-
+    ${{ github.event_name == 'pull_request'
+    || github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
 
 env:
   PYTHONDONTWRITEBYTECODE: "1"
@@ -72,6 +75,11 @@ jobs:
 
       - name: actionlint (syntax, expressions, embedded shell)
         run: actionlint -color
+
+      # actionlint only sees `run:` blocks; the repository's own shell scripts
+      # are checked with the runner image's shellcheck.
+      - name: shellcheck (scripts)
+        run: shellcheck scripts/*.sh
 
       - name: zizmor (workflow security)
         env:
@@ -191,7 +199,8 @@ jobs:
             -o junit_family=xunit1 --junitxml="$RUNNER_TEMP/junit.xml"
 
       # One annotation per failing test: `gh run view <id>` lists them under
-      # the jobs, so a failure is readable without downloading the log.
+      # the jobs, so a failure is readable without downloading the log. GitHub
+      # keeps the first 10 errors per step; the log's summary has the rest.
       - name: Annotate failing tests
         if: ${{ failure() }}
         run: python scripts/junit_annotations.py "$RUNNER_TEMP/junit.xml"

@@ -108,3 +108,25 @@ def test_main_warns_when_the_report_is_missing_or_unreadable(tmp_path, capsys, c
 
     assert junit_annotations.main([str(path)]) == 0
     assert capsys.readouterr().out.startswith("::warning::")
+
+
+def test_windows_paths_are_reported_with_forward_slashes():
+    failure = (
+        '<testcase classname="tests.test_p.TestK" name="test_w" file="tests\\test_p.py" line="2">'
+        '<failure message="boom">tests\\test_p.py:7: AssertionError</failure></testcase>'
+    )
+
+    assert junit_annotations.annotations(report(failure)) == [
+        "::error file=tests/test_p.py,line=7::tests/test_p.py::TestK::test_w - boom"
+    ]
+
+
+def test_backslashes_inside_the_failure_message_are_kept():
+    failure = (
+        '<testcase classname="tests.test_p" name="test_b" file="tests/test_p.py" line="0">'
+        "<failure message=\"assert 'a\\nb' == 'a'\">tests/test_p.py:1: AssertionError</failure></testcase>"
+    )
+
+    assert junit_annotations.annotations(report(failure)) == [
+        "::error file=tests/test_p.py,line=1::tests/test_p.py::test_b - assert 'a\\nb' == 'a'"
+    ]

@@ -16,6 +16,10 @@ case "${1:-}" in
 esac
 
 branch="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$branch" = HEAD ]; then
+  echo "Detached HEAD: check out the branch whose CI run you want." >&2
+  exit 2
+fi
 sha="$(git rev-parse HEAD)"
 remote_sha="$(git ls-remote origin "refs/heads/$branch" | cut -f1)"
 if [ "$remote_sha" != "$sha" ]; then
@@ -23,15 +27,17 @@ if [ "$remote_sha" != "$sha" ]; then
   exit 2
 fi
 
-# Newest CI run id for this commit, of event $1 (empty: any) and newer than id $2.
+# Newest CI run id for this commit, of event $1 (empty: push or PR) and newer than
+# id $2.
 # Run ids grow monotonically, so $2 excludes runs that existed before a dispatch.
 newest_run() {
-  local filter="true"
+  local filter='.event != "workflow_dispatch"'
   [ -n "$1" ] && filter=".event == \"$1\""
   gh run list --workflow ci.yml --commit "$sha" --limit 20 --json databaseId,event \
     --jq "[.[] | select($filter) | select(.databaseId > $2)][0].databaseId // empty"
 }
 
+# Without --dispatch, wait for the push/PR run, never an older manual one.
 event="" floor=0
 if $dispatch; then
   event=workflow_dispatch
@@ -57,10 +63,12 @@ gh run watch "$run_id" --exit-status --interval 20 > /dev/null 2>&1 || status=$?
 gh run view "$run_id"
 if [ "$status" -ne 0 ]; then
   # The tail of each failed job's log up to its first error, without colour codes
-  # (gh prints ESC as a literal "^[") or timestamps. The gate only repeats them.
+  # (gh prints ESC as a literal "^[") or timestamps. The "CI gate" job (named in
+  # ci.yml) only repeats the other jobs' results.
   echo
   echo "LAST LINES OF EACH FAILED JOB"
-  gh run view "$run_id" --log-failed 2> /dev/null \
+  # Logs can lag behind the verdict; a missing tail must not hide the hint below.
+  { gh run view "$run_id" --log-failed 2> /dev/null || true; } \
     | sed -E -e $'s/\x1b\\[[0-9;]*m//g' -e 's/\^\[\[[0-9;]*m//g' \
     | awk -F'\t' -v keep=15 -v width=300 '
         $1 == "CI gate" { next }
@@ -76,7 +84,7 @@ if [ "$status" -ne 0 ]; then
             first = count[job] > keep ? count[job] - keep + 1 : 1
             for (i = first; i <= count[job]; i++) print line[job, i]
           }
-        }'
+        }' || true
   echo "Full log: gh run view $run_id --log-failed"
 fi
 exit "$status"
