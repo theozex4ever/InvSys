@@ -24,10 +24,20 @@ pull_request / push main / merge_group / weekly
 CodeQL (separate workflow) ── python, JS/TS, actions · its own required check
 ```
 
-Independent jobs run in parallel. The Windows test leg is the critical path.
-Before coverage moved to a single leg, a run took about 10 minutes, with these
-pytest step times: Ubuntu 3.14 3.0 min, macOS 4.7, Ubuntu 3.13 5.5, Ubuntu 3.12
-6.3, Windows 9.1. Frontend → desktop E2E and package smoke finish within five.
+Independent jobs run in parallel; the Windows test leg is the critical path.
+Pytest step times, before and after coverage moved to the Ubuntu 3.14 leg only
+(runs 38837840486 and 39145405683):
+
+| Leg | Every leg traced | One leg traced |
+| --- | --- | --- |
+| Ubuntu 3.12 | 6.3 min | 3.3 min |
+| Ubuntu 3.13 | 5.5 min | 2.2 min |
+| Ubuntu 3.14 (coverage) | 3.0 min | 3.3 min |
+| macOS 3.12 | 4.7 min | 2.3 min |
+| Windows 3.12 | 9.1 min | 5.6 min |
+| Whole run | about 10 min | 6.7 min |
+
+Desktop E2E takes about 3 minutes and package smoke about 5.
 
 ## The gates and what each one catches
 
