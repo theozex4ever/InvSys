@@ -13,7 +13,7 @@ pull_request / push main / merge_group / weekly
 │
 ├─ Workflow lint ─────────── actionlint + shellcheck, zizmor (pedantic)
 ├─ Python static analysis ── ruff lint, ruff format, mypy --strict, lock freshness
-├─ Tests ×5 ──────────────── Ubuntu 3.12 · 3.13 · 3.14, Windows 3.12, macOS 3.12
+├─ Tests ×5 ──────────────── Ubuntu 3.12 · 3.13 · 3.14 (+coverage), Windows 3.12, macOS 3.12
 ├─ Frontend build ─────────► dist artifact ─┬─► Desktop E2E (native smoke, Xvfb)
 │                                          └─► Package smoke (frozen bundle, twice, offline)
 ├─ Dependency audit ──────── pip-audit (hash-locked set), npm audit
@@ -24,9 +24,10 @@ pull_request / push main / merge_group / weekly
 CodeQL (separate workflow) ── python, JS/TS, actions · its own required check
 ```
 
-Independent jobs run in parallel. Measured on this PR: the Windows test leg is
-the slowest (about 2.5 minutes), frontend → desktop E2E takes under two, and the
-whole run reports in under three minutes.
+Independent jobs run in parallel. The Windows test leg is the critical path.
+Before coverage moved to a single leg, a run took about 10 minutes, with these
+pytest step times: Ubuntu 3.14 3.0 min, macOS 4.7, Ubuntu 3.13 5.5, Ubuntu 3.12
+6.3, Windows 9.1. Frontend → desktop E2E and package smoke finish within five.
 
 ## The gates and what each one catches
 
@@ -36,9 +37,10 @@ whole run reports in under three minutes.
 | **ruff format** | unformatted code | No style review in PRs. The one-time reformat is in `.git-blame-ignore-revs`. |
 | **mypy --strict** on the domain core | type errors in store, ledger, bridge, ORM, import/export, backup, launchers | The core owns every inventory invariant. The Qt widget layer is excluded (PySide6 enum stubs are noisy); that list may only shrink. |
 | **Lock freshness** | `scripts/lock.sh` would change a lock file | Manifest edits cannot merge without the matching lock; hand-edited locks are rejected. |
-| **pytest**, random order | a failing or order-dependent test | `pytest-randomly` prints its seed in the header; rerun with `--randomly-seed=<seed>` to reproduce an ordering. |
+| **pytest**, random order | a failing or order-dependent test | The seed is derived from the commit SHA, so every leg and every re-run of one commit use the same order while each new commit is shuffled differently. The header prints it; rerun locally with `--randomly-seed=<seed>`. |
+| **Failing-test annotations** | — (reporting only) | One `::error` annotation per failing test, from the JUnit report (`scripts/junit_annotations.py`). `gh run view <id>` lists them, so a red run is readable without the full log. |
 | **Warnings are errors** | any warning, e.g. `ResourceWarning` | This is how a real leak was found: `with sqlite3.connect()` never closes, which locks backup files on Windows. |
-| **Coverage floor** (85 % branch) | coverage drops below the floor | A ratchet: raise it as coverage grows, never lower it to pass. |
+| **Coverage floor** (85 % branch) | coverage drops below the floor | A ratchet: raise it as coverage grows, never lower it to pass. Measured on the Ubuntu 3.14 leg only, where `sys.monitoring` makes branch tracing cheap; under the older Pythons' tracer it roughly doubled each leg's runtime. |
 | **Per-test timeout** (60 s) | a hung Qt event loop | Fails one test fast instead of burning the 20-minute job. |
 | **Hermetic tests** | the run writes anything into the checkout | Tests once created `data/inventory.db`, the *operational* database path. `INVSYS_HOME` now points them at a throwaway directory. |
 | **OS matrix** | Windows/macOS-only failures | It is a desktop app; operators are unlikely to run Ubuntu. |
@@ -73,6 +75,26 @@ whole run reports in under three minutes.
   usually yanked within days.
 - **Chromium sandbox kept on** in the E2E job: the job re-enables unprivileged
   user namespaces on Ubuntu 24.04 rather than passing `--no-sandbox`.
+
+## CI as the test runner
+
+Agents and the maintainer treat CI as the place the full gate runs; locally they
+run only the checks a change touches (see `CLAUDE.md`). The loop is:
+
+```bash
+git push                      # a PR push starts CI on its own
+scripts/ci_wait.sh            # wait for this commit's run, print a compact verdict
+scripts/ci_wait.sh --dispatch # on a branch without a PR: start a run, then wait
+```
+
+`ci_wait.sh` refuses to wait for a commit that origin does not have, then prints
+`gh run view` (one line per job, one annotation per failing test) and, on
+failure, the last lines of each failed job's log up to its first error, without
+colour codes or timestamps. It exits non-zero when the run fails.
+
+A new push to a PR cancels that PR's older run, and a new dispatch cancels the
+older dispatch on the same branch. Runs on `main`, merge-queue and scheduled
+runs are never cancelled.
 
 ## One required check
 

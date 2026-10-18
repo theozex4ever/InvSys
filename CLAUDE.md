@@ -15,9 +15,19 @@ See `docs/frontend/desktop.md` for smoke commands, platform requirements, the
 bridge contract, and packaging limits; `docs/frontend/roadmap.md` for remaining
 migration phases and rules.
 
+GitHub CI is the test runner: it runs the full gate below on five OS/Python
+legs plus the native desktop and package smoke checks (see `docs/ci.md`).
 Install the locked toolchain with
-`pip install --require-hashes -r requirements.lock.txt`. Run the automated gate
-from the repository root; CI enforces the same checks (see `docs/ci.md`):
+`pip install --require-hashes -r requirements.lock.txt`. While iterating, run
+only what the change touches: `ruff check . && ruff format --check . && mypy`,
+the affected test files (`python -m pytest tests/test_x.py -q`), and
+`npm run check --prefix frontend` after frontend edits. Then push and run
+`scripts/ci_wait.sh` (add `--dispatch` on a branch without a PR). It waits for
+the run (several minutes; background it if your shell times out) and prints one
+line per job, one annotation per failing test and the tail of each failed log.
+Cite that run when reporting results. Run the full suite or the native smoke
+locally only to reproduce a CI failure (`--randomly-seed` from the run's
+pytest header) or when CI is unavailable. The full gate, as CI runs it:
 
 ```bash
 ruff check . && ruff format --check . && mypy

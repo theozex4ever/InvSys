@@ -19,11 +19,17 @@ on:
 # Deny everything by default; each job asks for exactly what it needs.
 permissions: {}
 
-# A new push to a PR supersedes that PR's previous run. Every other event gets
-# its own group (run_id), so no commit on main is ever cancelled or skipped.
+# A new push to a PR supersedes that PR's previous run, and a new manual dispatch
+# supersedes the previous one on the same branch (agents dispatch CI on branches
+# without a PR). Every other event gets its own group (run_id), so no commit on
+# main is ever cancelled or skipped.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: >-
+    ${{ github.workflow }}-${{
+    github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)
+    || github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.ref)
+    || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
 
 env:
   PYTHONDONTWRITEBYTECODE: "1"
@@ -138,6 +144,10 @@ jobs:
             python: "3.12"
     env:
       QT_QPA_PLATFORM: offscreen
+      # Coverage is measured on one leg only. Python 3.14 traces branches with
+      # sys.monitoring, so this leg runs at near full speed; the older-Python
+      # legs would roughly double their runtime under coverage tracing.
+      MEASURE_COVERAGE: ${{ matrix.os == 'ubuntu-24.04' && matrix.python == '3.14' }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -161,18 +171,30 @@ jobs:
       - name: Install dependencies (hash-locked)
         run: python -m pip install --require-hashes -r requirements.lock.txt
 
-      # Random order (pytest-randomly, seed printed in the header), warnings as
-      # errors, 60 s per-test timeout and the coverage floor all come from
-      # pyproject.toml, so a local `python -m pytest --cov` enforces the same.
+      # Random order (pytest-randomly), warnings as errors, 60 s per-test timeout
+      # and the coverage floor all come from pyproject.toml, so a local
+      # `python -m pytest --cov` enforces the same. The order seed is derived
+      # from the commit, so every leg and every re-run of one commit runs the
+      # same order; reproduce locally with the seed printed in the header.
       - name: Run tests
         env:
           # Reports go to the runner's temp dir so the checkout must stay clean.
           COVERAGE_FILE: ${{ runner.temp }}/.coverage
-        run: >-
-          python -m pytest
-          --cov --cov-report=term
-          --cov-report=xml:"$RUNNER_TEMP/coverage.xml"
-          --junitxml="$RUNNER_TEMP/junit.xml"
+        run: |
+          cov_args=()
+          if [ "$MEASURE_COVERAGE" = true ]; then
+            cov_args=(--cov --cov-report=term --cov-report=xml:"$RUNNER_TEMP/coverage.xml")
+          fi
+          # xunit1 records each test's file and line for the annotations step.
+          python -m pytest "${cov_args[@]}" \
+            --randomly-seed="$((16#${GITHUB_SHA:0:8}))" \
+            -o junit_family=xunit1 --junitxml="$RUNNER_TEMP/junit.xml"
+
+      # One annotation per failing test: `gh run view <id>` lists them under
+      # the jobs, so a failure is readable without downloading the log.
+      - name: Annotate failing tests
+        if: ${{ failure() }}
+        run: python scripts/junit_annotations.py "$RUNNER_TEMP/junit.xml"
 
       - name: Tests left the checkout untouched
         run: |
@@ -187,7 +209,7 @@ jobs:
           fi
 
       - name: Coverage summary
-        if: ${{ !cancelled() && matrix.os == 'ubuntu-24.04' && matrix.python == '3.12' }}
+        if: ${{ !cancelled() && env.MEASURE_COVERAGE == 'true' }}
         env:
           COVERAGE_FILE: ${{ runner.temp }}/.coverage
         run: |
