@@ -51,14 +51,15 @@ def _hold_failure_on_screen(failed: bool) -> None:
             input("Press Enter to close this window.")
 
 
-def _owns_console() -> bool:
+def _owns_console(platform: str = sys.platform) -> bool:
     """True when this Windows process is the only one attached to its console window."""
-    if sys.platform != "win32":
+    if platform != "win32":
         return False
     import ctypes
 
     processes = (ctypes.c_ulong * 2)()
-    return int(ctypes.windll.kernel32.GetConsoleProcessList(processes, 2)) == 1
+    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined,unused-ignore]  # Windows-only API; mypy runs on Linux
+    return int(kernel32.GetConsoleProcessList(processes, 2)) == 1
 
 
 def _launch() -> int:

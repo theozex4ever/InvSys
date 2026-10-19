@@ -149,9 +149,9 @@ def test_failures_in_a_shared_terminal_or_from_source_do_not_wait(
     capsys.readouterr()
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="Windows consoles are checked natively")
-def test_only_a_windows_process_can_own_a_closing_console():
-    assert OWNS_CONSOLE() is False
+@pytest.mark.parametrize("platform", ["linux", "darwin"])
+def test_only_a_windows_process_can_own_a_closing_console(platform):
+    assert OWNS_CONSOLE(platform) is False
 
 
 def test_an_unexpected_failure_is_shown_before_the_bundle_waits(monkeypatch, capsys):

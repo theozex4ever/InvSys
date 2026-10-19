@@ -436,7 +436,10 @@ def test_a_refused_firewall_change_is_a_readable_packaging_error(tmp_path, capsy
     bundle, _, _ = windows_bundle(tmp_path)
 
     def refused(command: list[str]) -> str:
-        raise PackagingError("netsh refused: run from an elevated prompt")
+        state = firewall_state(command)
+        if state is None:
+            raise PackagingError("netsh refused: run from an elevated prompt")
+        return state
 
     with (
         pytest.raises(PackagingError, match="elevated"),
