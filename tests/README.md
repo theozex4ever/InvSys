@@ -1,9 +1,10 @@
 # Manual PySide6 smoke checks
 
-The automated gate is documented in [CI guidance](../docs/ci.md), the repository
-`CLAUDE.md`, and README. Run `python -m pytest --cov` from the repository root
-with `pyproject.toml` configuration. After UI changes to the original application,
-also check:
+CI executes the automated tests with `pyproject.toml` configuration. Follow
+[AGENTS.md](../AGENTS.md) to push and wait for green CI; local test execution
+is optional. See [CI guidance](../docs/ci.md) for failure reporting and optional
+local commands. When manual verification of the original application is requested,
+check:
 
 - Add Part success shows a readable toast.
 - Adding the same part again shows a duplicate-part error toast.

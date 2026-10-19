@@ -88,14 +88,22 @@ Desktop E2E takes about 3 minutes and package smoke about 5.
 
 ## CI as the test runner
 
-Agents and the maintainer treat CI as the place the full gate runs; locally they
-run only the checks a change touches (see `CLAUDE.md`). The loop is:
+The agent validation policy is in [`AGENTS.md`](../AGENTS.md): CI executes the
+tests and checks, and agents wait for a green result on their latest pushed
+commit. There is no local test prerequisite, including affected test files.
+Agents still add and maintain tests; CI runs them. The loop is:
 
 ```bash
 git push                      # a PR push starts CI on its own
 scripts/ci_wait.sh            # wait for this commit's run, print a compact verdict
 scripts/ci_wait.sh --dispatch # on a branch without a PR: start a run, then wait
 ```
+
+When the environment provides a PR watcher, use it to wait instead of running
+another watcher. On failure, read the annotations and failed-job logs, fix the
+cause, push again, and wait for the new commit's result. Completion requires
+**CI gate** and the PR's other required checks to be green; cite the run link.
+Cancelled, superseded, missing, or unavailable CI is not a green result.
 
 `ci_wait.sh` refuses to wait for a commit that origin does not have, then prints
 `gh run view` (one line per job, one annotation per failing test) and, on
@@ -106,7 +114,9 @@ A new push to a PR cancels that PR's older run, and a new dispatch cancels the
 older dispatch on the same branch. A PR run and a dispatch run are separate, so
 dispatch only on branches without a PR. Any run on `main`, merge-queue and
 scheduled runs are never cancelled. Without `--dispatch`, `ci_wait.sh` waits for
-the push or PR run and ignores manual runs of the same commit.
+the push or PR run for the current branch and commit, ignoring manual,
+scheduled and merge-queue runs. Dispatch mode also restricts selection to the
+current branch, so another branch sharing the same commit cannot supply its verdict.
 
 ## One required check
 
@@ -163,6 +173,9 @@ reporting (used by [`SECURITY.md`](../SECURITY.md)).
   steps for `ledger.py`, the single writer of balances and transactions.
 
 ## Running the gates locally
+
+These commands are optional references for explicit local debugging requests.
+Agents use the CI workflow above for validation.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate

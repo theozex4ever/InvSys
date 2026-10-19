@@ -15,27 +15,11 @@ See `docs/frontend/desktop.md` for smoke commands, platform requirements, the
 bridge contract, and packaging limits; `docs/frontend/roadmap.md` for remaining
 migration phases and rules.
 
-GitHub CI is the test runner: it runs the full gate below on five OS/Python
-legs plus the native desktop and package smoke checks (see `docs/ci.md`).
-Install the locked toolchain with
-`pip install --require-hashes -r requirements.lock.txt`. While iterating, run
-only what the change touches: `ruff check . && ruff format --check . && mypy`,
-the affected test files (`python -m pytest tests/test_x.py -q`), and
-`npm run check --prefix frontend` after frontend edits. Then push and run
-`scripts/ci_wait.sh` (add `--dispatch` on a branch without a PR). It waits for
-the run (several minutes; background it if your shell times out) and prints one
-line per job, one annotation per failing test and the tail of each failed log.
-Cite that run when reporting results. Run the full suite or the native smoke
-locally only to reproduce a CI failure (`--randomly-seed` from the run's
-pytest header) or when CI is unavailable. The full local gate (CI runs the same
-checks, measuring coverage on one leg):
-
-```bash
-ruff check . && ruff format --check . && mypy
-python -m pytest --cov
-npm run check --prefix frontend
-npm run build:assets --prefix frontend && npm run check:dist --prefix frontend
-```
+Follow `AGENTS.md` for validation: push the change and wait for green CI on
+the latest commit before reporting completion. CI executes the tests, including
+the five OS/Python legs and native desktop and package smoke checks.
+See `docs/ci.md` for the wait helper, failure reporting, and optional local
+debugging commands.
 
 The standalone Linux bundle is built and smoke-tested with
 `scripts/package_bundle.py` (locked `requirements-package.lock.txt`); see

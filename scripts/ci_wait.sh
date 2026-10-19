@@ -27,13 +27,13 @@ if [ "$remote_sha" != "$sha" ]; then
   exit 2
 fi
 
-# Newest CI run id for this commit, of event $1 (empty: push or PR) and newer than
-# id $2.
+# Newest CI run id for this branch and commit, of event $1 (empty: push or PR)
+# and newer than id $2.
 # Run ids grow monotonically, so $2 excludes runs that existed before a dispatch.
 newest_run() {
-  local filter='.event != "workflow_dispatch"'
+  local filter='.event == "push" or .event == "pull_request"'
   [ -n "$1" ] && filter=".event == \"$1\""
-  gh run list --workflow ci.yml --commit "$sha" --limit 20 --json databaseId,event \
+  gh run list --workflow ci.yml --branch "$branch" --commit "$sha" --limit 20 --json databaseId,event \
     --jq "[.[] | select($filter) | select(.databaseId > $2)][0].databaseId // empty"
 }
 

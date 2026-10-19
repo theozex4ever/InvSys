@@ -191,15 +191,13 @@ universal lock files.
 **[docs/ci.md](docs/ci.md)** explains each gate, the supply-chain hardening,
 the branch ruleset, the trade-offs, and how to run every gate locally.
 
-Quick local check from the repository root:
+Agent validation follows [AGENTS.md](AGENTS.md): push and wait for green CI
+on the latest commit. CI runs the tests; local test execution is optional.
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-python -m pip install --require-hashes -r requirements.lock.txt
-ruff check . && ruff format --check . && mypy
-python -m pytest --cov
-npm ci --ignore-scripts --prefix frontend
-npm run build --prefix frontend && npm run check:dist --prefix frontend
+git push
+scripts/ci_wait.sh             # existing PR
+# scripts/ci_wait.sh --dispatch # branch without a PR
 ```
 
 On Ubuntu, Qt needs a few shared libraries; the list is `QT_APT_PACKAGES` in
