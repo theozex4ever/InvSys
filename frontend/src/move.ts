@@ -33,6 +33,8 @@ export function moveWorkflow(getAPI: () => API, operator: () => string, changed:
   document.querySelector<HTMLButtonElement>('#move-cancel')!.onclick = () => dialog().close();
   dialog().addEventListener('cancel', event => { if (state.pending) event.preventDefault(); });
   dialog().addEventListener('close', () => {
+    // A queued close event can arrive after the dialog has already reopened for a new review.
+    if (dialog().open) return;
     preview = null;
     (state.uncertain ? control<HTMLElement>('recovery').querySelector<HTMLButtonElement>('[data-recovery=read]') : control<HTMLButtonElement>('submit'))?.focus();
   });

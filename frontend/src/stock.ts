@@ -61,6 +61,8 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
   document.querySelector<HTMLButtonElement>('#ship-cancel')!.onclick = () => dialog().close();
   dialog().addEventListener('cancel', event => { if (states.ship.pending) event.preventDefault(); });
   dialog().addEventListener('close', () => {
+    // A queued close event can arrive after the dialog has already reopened for a new review.
+    if (dialog().open) return;
     preview = null;
     const focus = states.ship.completed ? control<HTMLElement>('ship', 'result').querySelector<HTMLButtonElement>('[data-another]') : states.ship.uncertain ? control<HTMLElement>('ship', 'recovery').querySelector<HTMLButtonElement>('[data-recovery=read]') : control<HTMLButtonElement>('ship', 'submit');
     focus?.focus();
