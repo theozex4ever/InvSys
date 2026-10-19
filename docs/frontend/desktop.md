@@ -108,14 +108,14 @@ headroom remains; further increases need another explicit decision.
 
 ## Standalone bundle
 
-A repeatable offline Linux bundle (PyInstaller one-directory, exact built assets,
-Qt WebEngine) is built and smoke-tested with `scripts/package_bundle.py`; see
+Repeatable offline Linux and Windows bundles (PyInstaller one-directory, exact built
+assets, Qt WebEngine) is built and smoke-tested with `scripts/package_bundle.py`; see
 [standalone offline bundle](packaging.md) for build, install, prerequisites, data
 selection, readable failures, the twice-run package smoke, CI and recorded
 evidence. Packaged launch requires `--database` explicitly, so it cannot silently
 open an inventory file inside a bundle or temporary extraction directory. `--assets`
 overrides the built asset directory for local review; it is not needed for bundled
-assets. Windows/macOS bundles, installers, signing and release publication remain
+assets. A macOS bundle, installers, signing and release publication remain
 outstanding.
 
 ## Scope and contract
@@ -512,7 +512,7 @@ The shell directs operators to the original application for
 location administration. Backup restoration requires closing the app as described above.
 Global search is part search only.
 
-Not yet validated: Windows/macOS packages and installers (Linux: [packaging](packaging.md)), human screen-reader review,
+Not yet validated: a macOS package and installers (Linux and Windows: [packaging](packaging.md)), human screen-reader review,
 human operator acceptance, and performance/release hardening. The native smoke is
 scripted desktop acceptance, including a rendered contrast/name audit, not an
 exhaustive accessibility review (see the [accessibility record](acceptance.md#accessibility-review-record)). Mutation

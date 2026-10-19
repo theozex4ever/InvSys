@@ -83,5 +83,5 @@ code only when nothing required is Missing and packaging works.
 
 Performance with large catalogs, histories, and BOMs; screen-reader and contrast
 review; failure cases (database errors, missing files, failed imports, bridge
-errors, stale state); Windows/macOS packaging and installers; human operator
+errors, stale state); macOS packaging and installers; human operator
 acceptance.
