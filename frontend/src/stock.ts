@@ -21,11 +21,16 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     const element = control<HTMLElement>(mode, 'error');
     element.textContent = text; element.className = error ? 'status error' : 'status';
   };
+  // A confirmation dialog must never outlive the review it shows: Confirm would do nothing.
+  const dropReview = () => {
+    preview = null; bomReview = null;
+    if (dialog().open && !states.ship.pending) { dialog().close(); feedback('ship', 'The shipment review is no longer current. Review the shipment again.', true); }
+  };
   const field = (mode: Mode, name: string, label: string, required = false, select = false, number = false) => `<div class="field ${name === 'part_number' || name === 'lot_number' || name === 'recipient' || name === 'notes' ? 'full' : ''}"><label for="${mode}-${name}">${label}${required ? ' <span class="required">*</span>' : ''}</label>${select ? `<select id="${mode}-${name}" name="${name}" ${required ? 'required' : ''}><option value="">Select…</option></select>` : `<input id="${mode}-${name}" name="${name}" ${required ? 'required' : ''} ${number ? 'type="number" min="1" max="2147483647" step="1"' : ''}>`}</div>`;
   for (const mode of ['receive', 'ship'] as const) {
     document.querySelector('main')!.insertAdjacentHTML('beforeend', `<section id="${mode}" hidden><div class="page-heading"><div><h1>${mode === 'receive' ? 'Receive' : 'Ship'} stock</h1><p>${mode === 'receive' ? 'Record a receipt. Keep every lot traceable.' : 'Review stock or component lot allocations before inventory leaves.'}</p></div><button class="btn" id="${mode}-refresh" disabled>Refresh availability</button></div><div id="${mode}-result" role="status" aria-live="polite"></div><div class="stock-layout"><form id="${mode}-form" class="panel panel-body"><h2>Select inventory</h2><div class="form-grid">${field(mode, 'part_number', 'Part', true, true)}${field(mode, 'location', mode === 'receive' ? 'Receive into' : 'Ship from', true, true)}${field(mode, 'quantity', 'Quantity', true, false, true)}${field(mode, 'lot_number', 'Lot number', true, mode === 'ship')}</div><h2>${mode === 'receive' ? 'Receipt' : 'Shipment'} details</h2><div class="form-grid">${mode === 'receive' ? field(mode, 'reference', 'Reference') + field(mode, 'notes', 'Notes') : field(mode, 'recipient', 'Recipient / project', true) + field(mode, 'carrier', 'Carrier') + field(mode, 'tracking', 'Tracking number') + field(mode, 'reference', 'Reference')}</div><p class="help">Operator identity comes from the visible header. Enter your name before submitting.</p><div id="${mode}-error" role="alert" aria-live="polite"></div><button id="${mode}-submit" class="btn primary" disabled>${mode === 'receive' ? 'Receive stock' : 'Review shipment'}</button></form><div class="panel"><div class="panel-head"><h2>Current stock and review</h2></div><div id="${mode}-review" class="panel-body">Select a part to read current inventory.</div><div id="${mode}-recovery" class="panel-body" hidden></div></div></div></section>`);
     form(mode).addEventListener('submit', event => { event.preventDefault(); void submit(mode); });
-    const edited = () => { if (mode === 'ship') { preview = null; bomReview = null; } renderReview(mode); };
+    const edited = () => { if (mode === 'ship') dropReview(); renderReview(mode); };
     form(mode).addEventListener('input', edited); form(mode).addEventListener('change', edited);
     control<HTMLSelectElement>(mode, 'part_number').addEventListener('change', () => { void refresh(mode, true); });
     control<HTMLSelectElement>(mode, 'location').addEventListener('change', () => { renderLots(mode); renderReview(mode); });
@@ -110,7 +115,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
   async function refresh(mode: Mode, adoptLocation = false) {
     const state = states[mode];
     if (state.pending || state.uncertain) return;
-    const version = ++state.version; preview = null; bomReview = null;
+    const version = ++state.version; dropReview();
     state.context = null; lock(mode);
     control<HTMLElement>(mode, 'review').textContent = 'Reading current stock…';
     try {
@@ -199,7 +204,8 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
   }
   async function confirmShipment() {
     const state = states.ship;
-    if (state.pending || state.uncertain || state.completed || !preview) return;
+    if (state.pending || state.uncertain || state.completed) return;
+    if (!preview) { dropReview(); return; }
     if (operator().trim() !== preview.request.operator) {
       dialog().close(); feedback('ship', 'Operator changed. Review the shipment again.', true); return;
     }
