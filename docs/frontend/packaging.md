@@ -151,6 +151,7 @@ failures, and after an unexpected error (its traceback is printed first).
 | bundled assets missing | exit 2, "This bundle is incomplete ... Extract the bundle again" |
 | database folder unusable (smoke-tested: a file where the folder belongs; also unwritable or full) | exit 1, "Cannot open the inventory database <path>: <reason>" |
 | file that is not SQLite, or a directory (both smoke-tested) | exit 1, same message with the reason |
+| Windows: a drive letter nothing is mapped to (smoke-tested on Windows) | exit 1, same message with the reason |
 
 ## Package smoke
 
@@ -200,7 +201,11 @@ touches operational data. It:
 
 On Windows the import step of the native smoke selects its CSV files through the real
 Windows file dialog (typing the path and pressing Open or Cancel), and the Settings
-folder buttons are recorded rather than opening Explorer windows, as on Linux.
+folder buttons are recorded rather than opening Explorer windows, as on Linux, so the
+Windows shell call behind them (`os.startfile`) is not exercised by the smoke. The
+Windows smoke also launches against a drive letter nothing is mapped to. It needs
+English `netsh` output to read the firewall profile states and refuses to run
+isolated otherwise.
 
 It exits non-zero on any failure and writes a JSON evidence record: reference
 machine (OS, kernel, glibc, CPU, memory, session), bundle size, file count,

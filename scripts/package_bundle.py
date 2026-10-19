@@ -398,10 +398,15 @@ def network_isolation(
     programs = sorted(str(path) for path in bundle.rglob("*.exe"))
     base = ["netsh", "advfirewall", "firewall"]
     profiles = firewall_profiles(netsh(["netsh", "advfirewall", "show", "allprofiles", "state"]))
-    if not profiles or any(state != "ON" for state in profiles):
+    if not profiles:
+        raise PackagingError(
+            "Cannot read the Windows Firewall profile states from `netsh advfirewall show "
+            "allprofiles state` (English output expected); the smoke would not be offline."
+        )
+    if any(state != "ON" for state in profiles):
         # Block rules on a disabled profile are ignored: the smoke would not be offline.
         raise PackagingError(
-            f"Windows Firewall is off (profile states: {', '.join(profiles) or 'none listed'}), "
+            f"Windows Firewall is off (profile states: {', '.join(profiles)}), "
             "so outbound block rules would not isolate the smoke. Enable it with "
             "`Set-NetFirewallProfile -All -Enabled True` from an elevated prompt."
         )
@@ -476,6 +481,18 @@ def hardlinked_copy(bundle: Path, target: Path) -> None:
     shutil.copytree(bundle, target, symlinks=True, copy_function=link)
 
 
+def unused_drive(exists: Callable[[Path], bool] = Path.exists) -> Path | None:
+    """Root of a Windows drive letter nothing is mapped to, searched from Z: down."""
+    return next(
+        (
+            Path(f"{letter}:\\")
+            for letter in "ZYXWVUTSRQPONMLKJIHGFED"
+            if not exists(Path(f"{letter}:\\"))
+        ),
+        None,
+    )
+
+
 def failure_checks(
     bundle: Path, workdir: Path, env: dict[str, str], isolate_network: bool
 ) -> list[dict[str, Any]]:
@@ -525,6 +542,18 @@ def failure_checks(
             bundle,
         ),
     ]
+    drive = unused_drive() if sys.platform == "win32" else None
+    if drive is not None:
+        # A drive letter that is not mapped, e.g. a removed USB stick or network share.
+        checks.append(
+            (
+                "database-drive-does-not-exist",
+                1,
+                "Cannot open the inventory database",
+                ["--database", str(drive / "invsys" / "inventory.db")],
+                bundle,
+            )
+        )
     results = []
     for name, code, message, args, target in checks:
         run = run_bundle(target, args, cwd, env, isolate_network)
@@ -723,7 +752,7 @@ def run_checks(
         and first_ids <= ids
         and record["runs"][1]["database"].get("integrity_check") == "ok"
     )
-    unexpected = workdir / "unexpected-home"
+    unexpected = Path(env["INVSYS_HOME"])
     record["restart_persistence"] = {"passed": persisted}
     record["no_writes_outside_selected_inventory"] = {"passed": not unexpected.exists()}
     return ok and persisted and not unexpected.exists()

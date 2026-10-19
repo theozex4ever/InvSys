@@ -470,3 +470,18 @@ def test_a_launched_bundle_never_waits_for_an_operator_at_its_console(tmp_path):
     run = package_bundle.run_bundle(bundle, [], tmp_path, {})
     assert run["exit_code"] == 0
     assert run["stdout"].strip() == "''"
+
+
+def test_the_unmapped_drive_check_picks_a_letter_nothing_is_mapped_to():
+    mapped = {"Z:\\", "Y:\\"}
+    assert str(package_bundle.unused_drive(lambda root: str(root) in mapped)) == str(Path("X:\\"))
+    assert package_bundle.unused_drive(lambda _root: True) is None
+
+
+def test_unreadable_firewall_states_refuse_the_isolation(tmp_path):
+    bundle, _, _ = windows_bundle(tmp_path)
+    with (
+        pytest.raises(PackagingError, match="Cannot read the Windows Firewall profile states"),
+        package_bundle.network_isolation(bundle, True, "win32", lambda _command: "Zustand EIN\n"),
+    ):
+        pytest.fail("unknown firewall state must not count as offline")
