@@ -21,7 +21,7 @@ the five OS/Python legs and native desktop and package smoke checks.
 See `docs/ci.md` for the wait helper, failure reporting, and optional local
 debugging commands.
 
-The standalone Linux bundle is built and smoke-tested with
+The standalone Linux and Windows bundles are built and smoke-tested with
 `scripts/package_bundle.py` (locked `requirements-package.lock.txt`); see
 `docs/frontend/packaging.md`. CI runs it as `package-smoke`.
 

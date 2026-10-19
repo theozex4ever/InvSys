@@ -109,7 +109,7 @@ headroom remains; further increases need another explicit decision.
 ## Standalone bundle
 
 Repeatable offline Linux and Windows bundles (PyInstaller one-directory, exact built
-assets, Qt WebEngine) is built and smoke-tested with `scripts/package_bundle.py`; see
+assets, Qt WebEngine) are built and smoke-tested with `scripts/package_bundle.py`; see
 [standalone offline bundle](packaging.md) for build, install, prerequisites, data
 selection, readable failures, the twice-run package smoke, CI and recorded
 evidence. Packaged launch requires `--database` explicitly, so it cannot silently
