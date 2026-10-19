@@ -37,7 +37,7 @@ Pytest step times, before and after coverage moved to the Ubuntu 3.14 leg only
 | Windows 3.12 | 9.1 min | 5.6 min |
 | Whole run | about 10 min | 6.7 min |
 
-Desktop E2E takes about 3 minutes and package smoke about 5.
+Desktop E2E takes about 3 minutes, package smoke about 5 on Linux and 6.5 on Windows.
 
 ## The gates and what each one catches
 

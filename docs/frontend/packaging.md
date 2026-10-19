@@ -277,3 +277,38 @@ Not exercised: the Xvfb path and the CI job locally (no Xvfb on the reference
 machine), distributions other than CachyOS, X11-only sessions, the file-manager
 launch (`xdg-open`) beyond the smoke's recording host, performance targets, and
 operator acceptance.
+
+## Recorded Windows evidence
+
+Recorded 2026-10-19 (UTC) by the `package-smoke` CI job, [run
+39190637774](https://github.com/theozex4ever/InvSys/actions/runs/39190637774)
+attempt 1, from a clean checkout of commit `827bf0a` (`uncommitted_changes: false`).
+No physical Windows reference machine was available; the GitHub-hosted runner below
+is the reference machine.
+
+| Item | Value |
+| --- | --- |
+| Reference machine | GitHub `windows-2025` runner: Windows Server 2025 Datacenter 10.0.26100, AMD EPYC 7763 (4 logical CPUs), 16 GB RAM, no GPU, interactive desktop session |
+| Toolchain | Python 3.12.10, PyInstaller 6.22.3, pyinstaller-hooks-contrib 2026.8, PySide6 6.11.2, pywebview 6.2.1, QtPy 2.4.3 (from `requirements-package.lock.txt`) |
+| Bundle | 3,026 files, 593,940,677 bytes; `invsys-desktop.exe` SHA-256 `03ad3e0f…a3e9fa82` |
+| Archive | `invsys-desktop-win32-amd64.zip`, 226,534,236 bytes, SHA-256 `910cbe04…dac19676`; the smoke ran on the archive extracted with `Expand-Archive` |
+| Assets | `index.html`, `app.js`, `style.css` byte-identical to `frontend/dist` |
+| Failure checks | no database, missing bundled assets, database folder that is a file, database path that is a directory, non-SQLite file, unmapped drive letter: all exit as documented with readable messages, no traceback, no inventory created |
+| Native smoke, run 1 and 2 | both exit 0 (about 99 s and 106 s); run 1 took no startup backup; run 2 took one holding exactly run 1's 42 ledger rows |
+| Persistence | SQLite integrity `ok`; all 42 ledger rows of run 1 present after run 2 (82 total), parts 18 → 32, shipments 6 → 12; nothing written to `INVSYS_HOME` |
+| Offline | all three firewall profiles on; outbound blocked for `invsys-desktop.exe` and `QtWebEngineProcess.exe`; no HTTP server; native reduced-motion check passed |
+
+[`evidence/windows-package-2026-10-19.json`](evidence/windows-package-2026-10-19.json)
+holds the full record. Earlier runs of this ticket's tree failed the second native
+run intermittently: a confirmation dialog's queued `close` event arrived after the
+next review had reopened it and discarded that review, so Confirm did nothing. The
+smoke's event trace showed it, and Ship, Move and Adjust now ignore a close event
+that arrives while their dialog is open again (History already did). Attempt 2 of the same run (a
+re-run of the Windows job) passed as well. Qt WebEngine
+logs harmless `SharedImageManager::ProduceMemory` errors on stderr with software
+rendering.
+
+Not exercised: Windows 10/11 desktop editions, a physical machine or GPU, non-English
+Windows, Explorer launches by double-click (the Enter prompt is covered by unit
+tests only), the Settings folder buttons' `os.startfile`, performance targets, and
+operator acceptance.
