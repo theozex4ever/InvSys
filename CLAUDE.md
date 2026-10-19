@@ -15,16 +15,11 @@ See `docs/frontend/desktop.md` for smoke commands, platform requirements, the
 bridge contract, and packaging limits; `docs/frontend/roadmap.md` for remaining
 migration phases and rules.
 
-Install the locked toolchain with
-`pip install --require-hashes -r requirements.lock.txt`. Run the automated gate
-from the repository root; CI enforces the same checks (see `docs/ci.md`):
-
-```bash
-ruff check . && ruff format --check . && mypy
-python -m pytest --cov
-npm run check --prefix frontend
-npm run build:assets --prefix frontend && npm run check:dist --prefix frontend
-```
+Follow `AGENTS.md` for validation: push the change and wait for green CI on
+the latest commit before reporting completion. CI executes the tests, including
+the five OS/Python legs and native desktop and package smoke checks.
+See `docs/ci.md` for the wait helper, failure reporting, and optional local
+debugging commands.
 
 The standalone Linux bundle is built and smoke-tested with
 `scripts/package_bundle.py` (locked `requirements-package.lock.txt`); see

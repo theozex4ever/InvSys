@@ -65,6 +65,8 @@ ignore = [
 # The bundle tool is a CLI that reports progress on stdout and drives subprocesses
 # built from fixed arguments (annotated per call).
 "scripts/package_bundle.py" = ["T201"]
+# Workflow commands (annotations) are written to stdout by design.
+"scripts/junit_annotations.py" = ["T201"]
 
 [lint.flake8-pytest-style]
 parametrize-names-type = "csv"

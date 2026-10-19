@@ -42,6 +42,7 @@ files = [
     "inventory_control",
     "inventory_desktop.py",
     "inventory_visualizer.py",
+    "scripts/junit_annotations.py",
     "scripts/package_bundle.py",
 ]
 strict = true

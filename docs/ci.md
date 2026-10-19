@@ -11,9 +11,9 @@ to make every failure explain itself.
 ```text
 pull_request / push main / merge_group / weekly
 │
-├─ Workflow lint ─────────── actionlint + shellcheck, zizmor (pedantic)
+├─ Workflow lint ─────────── actionlint + shellcheck (workflows, scripts/*.sh), zizmor (pedantic)
 ├─ Python static analysis ── ruff lint, ruff format, mypy --strict, lock freshness
-├─ Tests ×5 ──────────────── Ubuntu 3.12 · 3.13 · 3.14, Windows 3.12, macOS 3.12
+├─ Tests ×5 ──────────────── Ubuntu 3.12 · 3.13 · 3.14 (+coverage), Windows 3.12, macOS 3.12
 ├─ Frontend build ─────────► dist artifact ─┬─► Desktop E2E (native smoke, Xvfb)
 │                                          └─► Package smoke (frozen bundle, twice, offline)
 ├─ Dependency audit ──────── pip-audit (hash-locked set), npm audit
@@ -24,9 +24,20 @@ pull_request / push main / merge_group / weekly
 CodeQL (separate workflow) ── python, JS/TS, actions · its own required check
 ```
 
-Independent jobs run in parallel. Measured on this PR: the Windows test leg is
-the slowest (about 2.5 minutes), frontend → desktop E2E takes under two, and the
-whole run reports in under three minutes.
+Independent jobs run in parallel; the Windows test leg is the critical path.
+Pytest step times, before and after coverage moved to the Ubuntu 3.14 leg only
+(runs 38837840486 and 39145405683):
+
+| Leg | Every leg traced | One leg traced |
+| --- | --- | --- |
+| Ubuntu 3.12 | 6.3 min | 3.3 min |
+| Ubuntu 3.13 | 5.5 min | 2.2 min |
+| Ubuntu 3.14 (coverage) | 3.0 min | 3.3 min |
+| macOS 3.12 | 4.7 min | 2.3 min |
+| Windows 3.12 | 9.1 min | 5.6 min |
+| Whole run | about 10 min | 6.7 min |
+
+Desktop E2E takes about 3 minutes and package smoke about 5.
 
 ## The gates and what each one catches
 
@@ -36,9 +47,10 @@ whole run reports in under three minutes.
 | **ruff format** | unformatted code | No style review in PRs. The one-time reformat is in `.git-blame-ignore-revs`. |
 | **mypy --strict** on the domain core | type errors in store, ledger, bridge, ORM, import/export, backup, launchers | The core owns every inventory invariant. The Qt widget layer is excluded (PySide6 enum stubs are noisy); that list may only shrink. |
 | **Lock freshness** | `scripts/lock.sh` would change a lock file | Manifest edits cannot merge without the matching lock; hand-edited locks are rejected. |
-| **pytest**, random order | a failing or order-dependent test | `pytest-randomly` prints its seed in the header; rerun with `--randomly-seed=<seed>` to reproduce an ordering. |
+| **pytest**, random order | a failing or order-dependent test | The seed is derived from the commit SHA, so every leg and every re-run of one commit use the same order while each new commit is shuffled differently. The header prints it; rerun locally with `--randomly-seed=<seed>`. |
+| **Failing-test annotations** | — (reporting only) | One `::error` annotation per failing test, from the JUnit report (`scripts/junit_annotations.py`). `gh run view <id>` lists them, so a red run is readable without the full log. GitHub keeps the first 10 per step; the log's short test summary has every failure. |
 | **Warnings are errors** | any warning, e.g. `ResourceWarning` | This is how a real leak was found: `with sqlite3.connect()` never closes, which locks backup files on Windows. |
-| **Coverage floor** (85 % branch) | coverage drops below the floor | A ratchet: raise it as coverage grows, never lower it to pass. |
+| **Coverage floor** (85 % branch) | coverage drops below the floor | A ratchet: raise it as coverage grows, never lower it to pass. Measured on the Ubuntu 3.14 leg only, where `sys.monitoring` makes branch tracing cheap; under the older Pythons' tracer it roughly doubled each leg's runtime. |
 | **Per-test timeout** (60 s) | a hung Qt event loop | Fails one test fast instead of burning the 20-minute job. |
 | **Hermetic tests** | the run writes anything into the checkout | Tests once created `data/inventory.db`, the *operational* database path. `INVSYS_HOME` now points them at a throwaway directory. |
 | **OS matrix** | Windows/macOS-only failures | It is a desktop app; operators are unlikely to run Ubuntu. |
@@ -73,6 +85,38 @@ whole run reports in under three minutes.
   usually yanked within days.
 - **Chromium sandbox kept on** in the E2E job: the job re-enables unprivileged
   user namespaces on Ubuntu 24.04 rather than passing `--no-sandbox`.
+
+## CI as the test runner
+
+The agent validation policy is in [`AGENTS.md`](../AGENTS.md): CI executes the
+tests and checks, and agents wait for a green result on their latest pushed
+commit. There is no local test prerequisite, including affected test files.
+Agents still add and maintain tests; CI runs them. The loop is:
+
+```bash
+git push                      # a PR push starts CI on its own
+scripts/ci_wait.sh            # wait for this commit's run, print a compact verdict
+scripts/ci_wait.sh --dispatch # on a branch without a PR: start a run, then wait
+```
+
+When the environment provides a PR watcher, use it to wait instead of running
+another watcher. On failure, read the annotations and failed-job logs, fix the
+cause, push again, and wait for the new commit's result. Completion requires
+**CI gate** and the PR's other required checks to be green; cite the run link.
+Cancelled, superseded, missing, or unavailable CI is not a green result.
+
+`ci_wait.sh` refuses to wait for a commit that origin does not have, then prints
+`gh run view` (one line per job, one annotation per failing test) and, on
+failure, the last lines of each failed job's log up to its first error, without
+colour codes or timestamps. It exits non-zero when the run fails.
+
+A new push to a PR cancels that PR's older run, and a new dispatch cancels the
+older dispatch on the same branch. A PR run and a dispatch run are separate, so
+dispatch only on branches without a PR. Any run on `main`, merge-queue and
+scheduled runs are never cancelled. Without `--dispatch`, `ci_wait.sh` waits for
+the push or PR run for the current branch and commit, ignoring manual,
+scheduled and merge-queue runs. Dispatch mode also restricts selection to the
+current branch, so another branch sharing the same commit cannot supply its verdict.
 
 ## One required check
 
@@ -129,6 +173,9 @@ reporting (used by [`SECURITY.md`](../SECURITY.md)).
   steps for `ledger.py`, the single writer of balances and transactions.
 
 ## Running the gates locally
+
+These commands are optional references for explicit local debugging requests.
+Agents use the CI workflow above for validation.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
