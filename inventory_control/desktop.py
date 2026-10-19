@@ -6,7 +6,8 @@ import logging
 import os
 import sqlite3
 import sys
-from contextlib import closing
+import traceback
+from contextlib import closing, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -26,6 +27,41 @@ REQUIRED_ASSETS = ("index.html", "app.js", "style.css")
 
 
 def main() -> int:
+    try:
+        status = _launch()
+    except SystemExit as exc:
+        _hold_failure_on_screen(exc.code not in (0, None))
+        raise
+    except Exception as exc:
+        # Shown before the wait, so the operator can read what went wrong.
+        traceback.print_exc()
+        _hold_failure_on_screen(failed=True)
+        raise SystemExit(1) from exc
+    _hold_failure_on_screen(status != 0)
+    return status
+
+
+def _hold_failure_on_screen(failed: bool) -> None:
+    """Started from Explorer, a bundle's console closes on exit: keep a failure readable.
+
+    Without an operator (the package smoke, pipes) stdin is closed and this returns at once.
+    """
+    if failed and getattr(sys, "frozen", False) and _owns_console():
+        with suppress(EOFError):
+            input("Press Enter to close this window.")
+
+
+def _owns_console() -> bool:
+    """True when this Windows process is the only one attached to its console window."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+
+    processes = (ctypes.c_ulong * 2)()
+    return int(ctypes.windll.kernel32.GetConsoleProcessList(processes, 2)) == 1
+
+
+def _launch() -> int:
     parser = argparse.ArgumentParser(description="InvSys desktop (built assets, no HTTP server)")
     parser.add_argument(
         "--database",

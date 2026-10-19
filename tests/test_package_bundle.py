@@ -341,16 +341,30 @@ def windows_bundle(root: Path) -> tuple[Path, Path, Path]:
     return bundle, launcher, helper
 
 
+def firewall_profiles(*states: str) -> str:
+    """Output of `netsh advfirewall show allprofiles state` (Domain, Private, Public)."""
+    return "".join(
+        f"{profile} Profile Settings:\n{'-' * 70}\nState                                 {state}\n\n"
+        for profile, state in zip(("Domain", "Private", "Public"), states, strict=True)
+    )
+
+
+def firewall_state(command: list[str]) -> str | None:
+    """The state query answered for an enabled firewall; None for other commands."""
+    return firewall_profiles("ON", "ON", "ON") if command[2:4] == ["show", "allprofiles"] else None
+
+
 def test_windows_isolation_blocks_outbound_traffic_of_every_bundled_program(tmp_path):
     bundle, launcher, helper = windows_bundle(tmp_path)
     commands: list[list[str]] = []
 
     def fake_netsh(command: list[str]) -> str:
         commands.append(command)
-        return "Rule Name: invsys-package-smoke\n" * 2
+        return firewall_state(command) or "Rule Name: invsys-package-smoke\n" * 2
 
     with package_bundle.network_isolation(bundle, True, "win32", fake_netsh) as record:
         assert record["mechanism"] == "windows-firewall-outbound-block"
+        assert record["firewall_profiles"] == ["ON", "ON", "ON"]
         assert record["blocked_programs"] == sorted([str(launcher), str(helper)])
         added = [command for command in commands if "add" in command]
         assert sorted(command[-1] for command in added) == [
@@ -376,7 +390,7 @@ def test_windows_isolation_removes_its_rules_when_the_smoke_fails(tmp_path):
 
     def fake_netsh(command: list[str]) -> str:
         commands.append(command)
-        return "Rule Name: x\n" * 2
+        return firewall_state(command) or "Rule Name: x\n" * 2
 
     with (
         pytest.raises(RuntimeError, match="boom"),
@@ -390,7 +404,7 @@ def test_a_rule_that_windows_does_not_list_fails_the_isolation(tmp_path, capsys)
     bundle, _, _ = windows_bundle(tmp_path)
 
     def one_rule_listed(command: list[str]) -> str:
-        return "Rule Name: x\n"
+        return firewall_state(command) or "Rule Name: x\n"
 
     with (
         pytest.raises(PackagingError, match="Expected 2 outbound block rules"),
@@ -398,6 +412,24 @@ def test_a_rule_that_windows_does_not_list_fails_the_isolation(tmp_path, capsys)
     ):
         pytest.fail("the isolation was not verified")
     assert capsys.readouterr().err == ""
+
+
+def test_a_disabled_firewall_profile_cannot_isolate_the_smoke(tmp_path):
+    bundle, _, _ = windows_bundle(tmp_path)
+    commands: list[list[str]] = []
+
+    def public_off(command: list[str]) -> str:
+        commands.append(command)
+        if command[2:4] == ["show", "allprofiles"]:
+            return firewall_profiles("ON", "ON", "OFF")
+        return ""
+
+    with (
+        pytest.raises(PackagingError, match=r"Windows Firewall is off.*Set-NetFirewallProfile"),
+        package_bundle.network_isolation(bundle, True, "win32", public_off),
+    ):
+        pytest.fail("block rules on a disabled firewall would prove nothing")
+    assert not any("add" in command for command in commands)
 
 
 def test_a_refused_firewall_change_is_a_readable_packaging_error(tmp_path, capsys):
@@ -424,3 +456,17 @@ def test_netsh_failures_name_the_command_and_the_elevation_requirement(monkeypat
     monkeypatch.setattr(package_bundle.subprocess, "run", lambda *_args, **_kwargs: Result())
     with pytest.raises(PackagingError, match=r"Access is denied.*administrator"):
         package_bundle.run_netsh(["netsh", "advfirewall", "firewall", "add", "rule"])
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the stand-in launcher is a POSIX script")
+def test_a_launched_bundle_never_waits_for_an_operator_at_its_console(tmp_path):
+    bundle = tmp_path / "invsys-desktop"
+    bundle.mkdir()
+    launcher = bundle / "invsys-desktop"
+    launcher.write_text(
+        f"#!{sys.executable}\nimport sys\nprint(repr(sys.stdin.read()))\n", encoding="utf-8"
+    )
+    launcher.chmod(0o755)
+    run = package_bundle.run_bundle(bundle, [], tmp_path, {})
+    assert run["exit_code"] == 0
+    assert run["stdout"].strip() == "''"

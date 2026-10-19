@@ -1,7 +1,8 @@
 """Argument guards of the pywebview desktop launcher.
 
 These run without a display or pywebview window: every case exits during
-argument validation, before any database is opened or GUI is started.
+argument validation, before any database is opened or GUI is started, or
+replaces the launch to check how a packaged failure stays readable.
 """
 
 import sys
@@ -9,6 +10,14 @@ import sys
 import pytest
 
 from inventory_control import desktop
+
+OWNS_CONSOLE = desktop._owns_console
+
+
+@pytest.fixture(autouse=True)
+def shared_console(monkeypatch):
+    """The test process shares its console, as a bundle started from a terminal does."""
+    monkeypatch.setattr(desktop, "_owns_console", lambda: False)
 
 
 def run_launcher(monkeypatch, *args):
@@ -104,3 +113,66 @@ def test_database_path_that_is_a_directory_is_reported_readably(monkeypatch, cap
     code = run_launcher(monkeypatch, "--database", str(database), "--assets", str(tmp_path))
     assert code == 1
     assert "Cannot open the inventory database" in capsys.readouterr().err
+
+
+def test_a_bundle_started_from_explorer_keeps_its_failure_on_screen(monkeypatch, capsys):
+    # Double-clicked on Windows, the bundle owns its console, which closes on exit.
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(desktop, "_owns_console", lambda: True)
+    prompts = []
+    monkeypatch.setattr("builtins.input", prompts.append)
+    assert run_launcher(monkeypatch) == 2
+    assert "Packaged launch requires --database" in capsys.readouterr().err
+    assert prompts == ["Press Enter to close this window."]
+
+
+def test_a_bundle_without_an_operator_at_its_console_exits_at_once(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(desktop, "_owns_console", lambda: True)
+
+    def no_input(_prompt):
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", no_input)
+    assert run_launcher(monkeypatch) == 2
+    assert "Packaged launch requires --database" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("frozen, owns_console", [(True, False), (False, True)])
+def test_failures_in_a_shared_terminal_or_from_source_do_not_wait(
+    monkeypatch, capsys, frozen, owns_console
+):
+    monkeypatch.setattr(sys, "frozen", frozen, raising=False)
+    monkeypatch.setattr(desktop, "_owns_console", lambda: owns_console)
+    monkeypatch.setattr("builtins.input", lambda _prompt: pytest.fail("waited for Enter"))
+    assert run_launcher(monkeypatch, "--smoke-check") == 2
+    capsys.readouterr()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows consoles are checked natively")
+def test_only_a_windows_process_can_own_a_closing_console():
+    assert OWNS_CONSOLE() is False
+
+
+def test_an_unexpected_failure_is_shown_before_the_bundle_waits(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(desktop, "_owns_console", lambda: True)
+
+    def broken():
+        raise RuntimeError("Qt WebEngine could not start")
+
+    monkeypatch.setattr(desktop, "_launch", broken)
+    shown = []
+    monkeypatch.setattr("builtins.input", lambda _prompt: shown.append(capsys.readouterr().err))
+    with pytest.raises(SystemExit) as exit_info:
+        desktop.main()
+    assert exit_info.value.code == 1
+    assert "RuntimeError: Qt WebEngine could not start" in shown[0]
+
+
+def test_a_successful_launch_returns_its_status_without_waiting(monkeypatch):
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(desktop, "_owns_console", lambda: True)
+    monkeypatch.setattr(desktop, "_launch", lambda: 0)
+    monkeypatch.setattr("builtins.input", lambda _prompt: pytest.fail("waited for Enter"))
+    assert desktop.main() == 0

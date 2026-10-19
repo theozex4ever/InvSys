@@ -61,7 +61,9 @@ class _ImportSmoke:
                         raise RuntimeError(
                             "Import dialog opened outside the selected database folder."
                         )
-                    if sys.platform == "win32":
+                    if sys.platform == "win32" and not widget.testOption(
+                        QFileDialog.Option.DontUseNativeDialog
+                    ):
                         # The widget is only a shell around the system dialog: press its buttons.
                         pressed = desktop_smoke_windows.press(None if cancel else self.path)
                         return

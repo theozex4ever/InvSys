@@ -314,6 +314,8 @@ def run_bundle(
             command,
             cwd=cwd,
             env=env,
+            # No operator: a failed launch must not wait for Enter at its console.
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             # The launcher's own messages; Windows consoles would otherwise decode as cp1252.
             text=True,
@@ -366,6 +368,11 @@ def run_netsh(command: list[str]) -> str:
     return result.stdout
 
 
+def firewall_profiles(output: str) -> list[str]:
+    """Profile states (Domain, Private, Public) from ``netsh advfirewall show ... state``."""
+    return [line.split()[-1].upper() for line in output.splitlines() if line.startswith("State ")]
+
+
 @contextmanager
 def network_isolation(
     bundle: Path,
@@ -390,6 +397,14 @@ def network_isolation(
         raise PackagingError(f"--isolate-network is not available on {platform_name}.")
     programs = sorted(str(path) for path in bundle.rglob("*.exe"))
     base = ["netsh", "advfirewall", "firewall"]
+    profiles = firewall_profiles(netsh(["netsh", "advfirewall", "show", "allprofiles", "state"]))
+    if not profiles or any(state != "ON" for state in profiles):
+        # Block rules on a disabled profile are ignored: the smoke would not be offline.
+        raise PackagingError(
+            f"Windows Firewall is off (profile states: {', '.join(profiles) or 'none listed'}), "
+            "so outbound block rules would not isolate the smoke. Enable it with "
+            "`Set-NetFirewallProfile -All -Enabled True` from an elevated prompt."
+        )
     try:
         for program in programs:
             netsh(
@@ -414,6 +429,7 @@ def network_isolation(
         yield {
             "enabled": True,
             "mechanism": "windows-firewall-outbound-block",
+            "firewall_profiles": profiles,
             "blocked_programs": programs,
         }
     finally:
