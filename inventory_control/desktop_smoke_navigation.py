@@ -163,10 +163,25 @@ def check_navigation(window: Any, wait: Any) -> dict[str, Any]:
     wait("document.hasFocus()")
     key(Qt.Key.Key_2, control)
     wait("!document.querySelector('#parts').hidden && document.activeElement.id === 'query'")
-    require(
-        "document.querySelector('#query').value === 'DESKTOP-SMOKE' && document.querySelector('#filter-status').value === 'active' && document.querySelector('#sort').value === 'quantity' && document.querySelector('#descending').checked && document.querySelector('#parts-data tr.selected [data-part=DESKTOP-SMOKE]')",
-        "catalog filters, sort and selected Part survive contextual navigation",
+    # A query debounce can refresh the catalog after shortcut focus is restored.
+    # Hold that read to exercise the loading interval, then assert the completed
+    # catalog state rather than taking a snapshot of the loading placeholder.
+    run("""
+        window.smokeCatalogSearch = window.smokeAPI.search_parts;
+        window.smokeCatalogRelease = null;
+        window.smokeAPI.search_parts = request => new Promise(resolve => {
+            window.smokeCatalogRelease = () => resolve(window.smokeCatalogSearch(request));
+        });
+        document.querySelector('#query').dispatchEvent(new Event('input'));
+    """)
+    wait(
+        "typeof window.smokeCatalogRelease === 'function' && document.querySelector('#parts-data').textContent.includes('Loading')"
     )
+    run("setTimeout(window.smokeCatalogRelease, 200)")
+    wait(
+        "document.querySelector('#query').value === 'DESKTOP-SMOKE' && document.querySelector('#filter-status').value === 'active' && document.querySelector('#sort').value === 'quantity' && document.querySelector('#descending').checked && document.querySelector('#parts-data tr.selected [data-part=DESKTOP-SMOKE]')",
+    )
+    run("window.smokeAPI.search_parts = window.smokeCatalogSearch")
     key(Qt.Key.Key_6, control)
     wait(
         "!document.querySelector('#move').hidden && document.activeElement.id === 'move-part_number'"
