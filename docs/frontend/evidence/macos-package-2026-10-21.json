@@ -1,0 +1,204 @@
+{
+  "recorded_at": "2026-10-21T03:35:35+00:00",
+  "machine": {
+    "platform": "macOS-15.7.9-arm64-arm-64bit",
+    "machine": "arm64",
+    "kernel": "24.6.0",
+    "logical_cpus": 3,
+    "display": "macOS window server (logged-in session)",
+    "os": "macOS 15.7.9",
+    "cpu": "Apple M1 (Virtual)",
+    "memory": "7516192768 bytes"
+  },
+  "bundle": {
+    "directory": "invsys-desktop.app",
+    "file_count": 3314,
+    "size_bytes": 534907509,
+    "executable_sha256": "36239efb1e192915e2673d89771f0952f10f3ae5dc0a2e81825ec7be5fbfdd9e",
+    "manifest": {
+      "app": "invsys-desktop",
+      "source": {
+        "commit": "a8ab7e35b43f838f8f4f17fe660bda303f6b07aa",
+        "uncommitted_changes": false
+      },
+      "python": "3.12.10",
+      "platform": "darwin-arm64",
+      "packages": {
+        "pyinstaller": "6.22.3",
+        "pyinstaller-hooks-contrib": "2026.8",
+        "PySide6": "6.11.2",
+        "pywebview": "6.2.1",
+        "QtPy": "2.4.3"
+      },
+      "assets": {
+        "app.js": "81dace67a72842710a5b245fc90c39b24e8e16f4e18590a62cc7ff17e115facc",
+        "index.html": "9311ff079756f70d629845d224fdbb60d4b01d3cdfb4020a123628123f57ea2c",
+        "style.css": "b2893d3cfaf92d32def62ab97ff3ef730584cf95bfce614ce7ca4b2a19039eb6"
+      }
+    }
+  },
+  "assets_verified": {
+    "app.js": "81dace67a72842710a5b245fc90c39b24e8e16f4e18590a62cc7ff17e115facc",
+    "index.html": "9311ff079756f70d629845d224fdbb60d4b01d3cdfb4020a123628123f57ea2c",
+    "style.css": "b2893d3cfaf92d32def62ab97ff3ef730584cf95bfce614ce7ca4b2a19039eb6"
+  },
+  "network_isolated": false,
+  "failure_checks": [
+    {
+      "name": "no-database-argument",
+      "expected_exit_code": 2,
+      "exit_code": 2,
+      "stderr": [
+        "usage: invsys-desktop [-h] [--database DATABASE] [--assets ASSETS]",
+        "                      [--smoke-check]",
+        "invsys-desktop: error: Packaged launch requires --database to choose the intended inventory file explicitly."
+      ],
+      "passed": true
+    },
+    {
+      "name": "missing-bundled-assets",
+      "expected_exit_code": 2,
+      "exit_code": 2,
+      "stderr": [
+        "usage: invsys-desktop [-h] [--database DATABASE] [--assets ASSETS]",
+        "                      [--smoke-check]",
+        "invsys-desktop: error: This bundle is incomplete: the frontend assets are missing from /Users/runner/work/_temp/invsys-package-smoke/incomplete-bundle/invsys-desktop.app/Contents/Resources/frontend/dist. Extract the bundle again from its archive."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-folder-is-a-file",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database /Users/runner/work/_temp/invsys-package-smoke/not-a-folder/inventory.db: Not a directory",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-path-is-a-directory",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database /Users/runner/work/_temp/invsys-package-smoke/directory/inventory.db: Is a directory",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-is-not-sqlite",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database /Users/runner/work/_temp/invsys-package-smoke/garbage/inventory.db: file is not a database",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "failed-launches-wrote-no-inventory",
+      "passed": true
+    }
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "exit_code": 0,
+      "seconds": 112.1,
+      "stdout": [
+        "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
+        "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
+        "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
+        "Desktop smoke: five real CSV files, Lot/audit/component trace, destination, duplicate clicks, navigation and export failures passed.",
+        "Desktop smoke: native reduced-motion preference passed.",
+        "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
+        "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
+        "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
+        "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2470 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
+        "Desktop smoke: restart persistence and backup content passed; no HTTP server."
+      ],
+      "stderr": [
+        "qt.qpa.window: Window position QRect(-171,-16 1366x768) outside any known screen, using primary screen"
+      ],
+      "startup_backups": [],
+      "startup_backup_transactions": null,
+      "database": {
+        "integrity_check": "ok",
+        "parts": 18,
+        "inventory_transactions": 42,
+        "shipments": 6
+      },
+      "passed": true
+    },
+    {
+      "run": 2,
+      "exit_code": 0,
+      "seconds": 117.1,
+      "stdout": [
+        "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
+        "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
+        "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
+        "Desktop smoke: five real CSV files, Lot/audit/component trace, destination, duplicate clicks, navigation and export failures passed.",
+        "Desktop smoke: native reduced-motion preference passed.",
+        "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
+        "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
+        "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
+        "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2753 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
+        "Desktop smoke: restart persistence and backup content passed; no HTTP server."
+      ],
+      "stderr": [
+        "qt.qpa.window: Window position QRect(-171,-16 1366x768) outside any known screen, using primary screen"
+      ],
+      "startup_backups": [
+        "inventory-20261021-033732-startup.db"
+      ],
+      "startup_backup_transactions": 42,
+      "database": {
+        "integrity_check": "ok",
+        "parts": 32,
+        "inventory_transactions": 82,
+        "shipments": 12
+      },
+      "passed": true
+    }
+  ],
+  "restart_persistence": {
+    "passed": true
+  },
+  "no_writes_outside_selected_inventory": {
+    "passed": true
+  },
+  "application_seal": {
+    "verify": [
+      "--prepared:/Users/runner/work/_temp/bundle-installed/invsys-desktop.app/Contents/Frameworks/AppKit/_AppKit.cpython-312-darwin.so",
+      "--validated:/Users/runner/work/_temp/bundle-installed/invsys-desktop.app/Contents/Frameworks/AppKit/_AppKit.cpython-312-darwin.so",
+      "--prepared:/Users/runner/work/_temp/bundle-installed/invsys-desktop.app/Contents/Frameworks/objc/_machsignals.cpython-312-darwin.so",
+      "--validated:/Users/runner/work/_temp/bundle-installed/invsys-desktop.app/Contents/Frameworks/objc/_machsignals.cpython-312-darwin.so",
+      "--prepared:/Users/runner/work/_temp/bundle-installed/invsys-desktop.app/Contents/Frameworks/CoreFoundation/_inlines.cpython-312-darwin.so",
+      "--validated:/Users/runner/work/_temp/bundle-installed/invsys-desktop.app/Contents/Frameworks/CoreFoundation/_inlines.cpython-312-darwin.so",
+      "--prepared:/Users/runner/work/_temp/bundle-installed/invsys-desktop.app/Contents/Frameworks/CoreFoundation/_CoreFoundation.cpython-312-darwin.so",
+      "--validated:/Users/runner/work/_temp/bundle-installed/invsys-desktop.app/Contents/Frameworks/CoreFoundation/_CoreFoundation.cpython-312-darwin.so",
+      "--prepared:/Users/runner/work/_temp/bundle-installed/invsys-desktop.app/Contents/Frameworks/objc/_objc.cpython-312-darwin.so",
+      "--validated:/Users/runner/work/_temp/bundle-installed/invsys-desktop.app/Contents/Frameworks/objc/_objc.cpython-312-darwin.so",
+      "/Users/runner/work/_temp/bundle-installed/invsys-desktop.app: valid on disk",
+      "/Users/runner/work/_temp/bundle-installed/invsys-desktop.app: satisfies its Designated Requirement"
+    ],
+    "signature": [
+      "Identifier=io.github.theozex4ever.invsys",
+      "Format=app bundle with Mach-O thin (arm64)",
+      "Signature=adhoc",
+      "TeamIdentifier=not set",
+      "Sealed Resources version=2 rules=13 files=4287"
+    ],
+    "gatekeeper": [
+      "/Users/runner/work/_temp/bundle-installed/invsys-desktop.app: rejected"
+    ],
+    "passed": true
+  },
+  "result": "passed"
+}
