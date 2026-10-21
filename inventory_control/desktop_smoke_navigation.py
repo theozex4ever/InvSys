@@ -87,6 +87,15 @@ def check_navigation(window: Any, wait: Any) -> dict[str, Any]:
         if not run(script):
             raise RuntimeError(f"Desktop navigation smoke failed: {label}")
 
+    def click_catalog_part(selector: str) -> None:
+        # A pending debounce can replace rows between separate wait/click calls.
+        wait(f"""(() => {{
+            const part = document.querySelector({json.dumps(selector)});
+            if (!part) return false;
+            part.click();
+            return true;
+        }})()""")
+
     def activate() -> None:
         window.native.raise_()
         window.native.activateWindow()
@@ -151,8 +160,7 @@ def check_navigation(window: Any, wait: Any) -> dict[str, Any]:
         const set = (id, value) => { const e = document.querySelector(id); if (e.type === 'checkbox') e.checked = value; else e.value = value; e.dispatchEvent(new Event(e.tagName === 'INPUT' && e.type !== 'checkbox' ? 'input' : 'change')); };
         set('#query', 'DESKTOP-SMOKE'); set('#filter-status', 'active'); set('#sort', 'quantity'); set('#descending', true);
     """)
-    wait("document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]')")
-    run("document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]').click()")
+    click_catalog_part("#parts-data [data-part=DESKTOP-SMOKE]")
     wait("document.querySelector('#drawer-data [data-stock=move]')")
     run("document.querySelector('#drawer-data [data-stock=move]').click()")
     wait(
@@ -266,8 +274,7 @@ def check_navigation(window: Any, wait: Any) -> dict[str, Any]:
             audited += result["checked"]
             skipped.update(result["skipped"])
         run("document.querySelector('[data-page=parts]').click()")
-        wait("document.querySelector('#parts-data [data-part]')")
-        run("document.querySelector('#parts-data [data-part]').click()")
+        click_catalog_part("#parts-data [data-part]")
         wait("document.querySelector('#drawer-data [data-edit]')")
         result = run("window.smokeAudit(document.querySelector('#drawer'))")
         if result["failures"]:
