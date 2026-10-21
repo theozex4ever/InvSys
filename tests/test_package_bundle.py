@@ -44,6 +44,7 @@ def write_assets(directory: Path, assets: dict[str, str] | None = None) -> Path:
 def make_bundle(root: Path, assets: dict[str, str] | None = None) -> Path:
     bundle = root / "invsys-desktop"
     write_assets(bundle / "_internal" / "frontend" / "dist", assets)
+    package_bundle.executable_path(bundle).parent.mkdir(parents=True, exist_ok=True)
     # Unrelated web content inside bundled packages must not be mistaken for the assets.
     other = bundle / "_internal" / "webview" / "js"
     other.mkdir(parents=True)
@@ -306,9 +307,8 @@ def test_database_evidence_reports_integrity_counts_and_startup_backups(tmp_path
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the stand-in launcher is a POSIX script")
 def test_run_bundle_reports_exit_code_and_output_of_the_launcher(tmp_path):
-    bundle = tmp_path / "invsys-desktop"
-    bundle.mkdir()
-    launcher = bundle / "invsys-desktop"
+    bundle = make_bundle(tmp_path)
+    launcher = package_bundle.executable_path(bundle)
     launcher.write_text(
         f'#!{sys.executable}\nimport os, sys\nprint("home", os.environ["INVSYS_HOME"])\n'
         'print("args", *sys.argv[1:], file=sys.stderr)\nsys.exit(3)\n',
@@ -385,9 +385,8 @@ def test_relative_smoke_paths_launch_from_another_cwd_and_retain_failure_evidenc
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the stand-in launcher is a POSIX script")
 def test_a_hung_launcher_is_a_failed_run_with_a_record(tmp_path, monkeypatch):
-    bundle = tmp_path / "invsys-desktop"
-    bundle.mkdir()
-    launcher = bundle / "invsys-desktop"
+    bundle = make_bundle(tmp_path)
+    launcher = package_bundle.executable_path(bundle)
     launcher.write_text("#!/bin/sh\necho started\nexec sleep 30\n", encoding="utf-8")
     launcher.chmod(0o755)
     monkeypatch.setattr(package_bundle, "RUN_TIMEOUT_SECONDS", 1)

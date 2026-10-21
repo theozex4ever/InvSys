@@ -402,7 +402,9 @@ def failure_checks(
     directory = workdir / "directory" / "inventory.db"
     directory.mkdir(parents=True)
     missing_db = workdir / "missing-assets" / "inventory.db"
-    incomplete = workdir / "incomplete-bundle"
+    # PyInstaller recognizes macOS applications by the literal .app/Contents/MacOS
+    # suffix. Keep the bundle name so the damaged copy still finds its Python runtime.
+    incomplete = workdir / "incomplete-bundle" / bundle.name
     hardlinked_copy(bundle, incomplete)
     shutil.rmtree(find_bundled_assets(incomplete))
 
