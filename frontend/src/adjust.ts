@@ -44,7 +44,8 @@ export function adjustWorkflow(getAPI: () => API, operator: () => string, change
   };
   document.querySelector<HTMLButtonElement>('#adjust-cancel')!.onclick = () => dialog().close();
   dialog().addEventListener('cancel', event => { if (state.pending) event.preventDefault(); });
-  dialog().addEventListener('close', () => { if (proposal) feedback('Count correction cancelled. Nothing was recorded.'); proposal = null; (state.uncertain ? control<HTMLElement>('recovery').querySelector<HTMLButtonElement>('[data-recovery=read]') : control<HTMLButtonElement>('submit'))?.focus(); });
+  // A queued close event can arrive after the dialog has already reopened for a new review.
+  dialog().addEventListener('close', () => { if (dialog().open) return; if (proposal) feedback('Count correction cancelled. Nothing was recorded.'); proposal = null; (state.uncertain ? control<HTMLElement>('recovery').querySelector<HTMLButtonElement>('[data-recovery=read]') : control<HTMLButtonElement>('submit'))?.focus(); });
   document.querySelector<HTMLButtonElement>('#adjust-confirm-submit')!.onclick = () => { void confirm(); };
 
   const lots = () => state.context?.part.balances.filter(b => b.location === value('location')) ?? [];

@@ -9,6 +9,7 @@ from typing import Any
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QFileDialog, QLineEdit
 
+from inventory_control import desktop_smoke_windows
 from inventory_control.desktop_smoke_ui import _GuiActions
 
 
@@ -50,7 +51,12 @@ class _ImportSmoke:
 
     def require(self, script: str, label: str) -> None:
         if not self.run(script):
-            raise RuntimeError(f"Desktop {self.kind} import smoke failed: {label}")
+            # The visible panel text is what an operator would have seen; keep it with the failure.
+            panel = self.run(
+                "['actions', 'review', 'result'].map(part => "
+                f"document.querySelector('#{self.kind}-import-' + part)?.innerText).join(' | ')"
+            )
+            raise RuntimeError(f"Desktop {self.kind} import smoke failed: {label}. Panel: {panel}")
 
     def select(self, cancel: bool = False) -> None:
         # Results render before the panel's refresh settles; a click while pending is ignored.
@@ -58,15 +64,22 @@ class _ImportSmoke:
         self.run(f"{self.el('select')}.click()")
         deadline = time.monotonic() + 10
         selected = False
+        pressed = False
 
         def finish() -> None:
-            nonlocal selected
+            nonlocal selected, pressed
             for widget in QApplication.topLevelWidgets():
                 if isinstance(widget, QFileDialog) and widget.isVisible():
                     if Path(widget.directory().absolutePath()) != self.directory:
                         raise RuntimeError(
                             "Import dialog opened outside the selected database folder."
                         )
+                    if sys.platform == "win32" and not widget.testOption(
+                        QFileDialog.Option.DontUseNativeDialog
+                    ):
+                        # The widget is only a shell around the system dialog: press its buttons.
+                        pressed = desktop_smoke_windows.press(None if cancel else self.path)
+                        return
                     if cancel:
                         widget.reject()
                     else:
@@ -81,8 +94,14 @@ class _ImportSmoke:
                     selected = not widget.isVisible()
                     return
 
+        def system_dialog_closed() -> None:
+            nonlocal selected
+            selected = desktop_smoke_windows.find_file_dialog() is None
+
         while not selected and time.monotonic() < deadline:
             self.actions.run(finish)
+            if pressed:
+                self.actions.run(system_dialog_closed)
             time.sleep(0.1)
         if not selected:
             widgets: list[str] = []

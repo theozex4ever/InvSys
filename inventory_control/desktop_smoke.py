@@ -27,20 +27,20 @@ class DesktopSmoke:
         self.created_part = ""
 
     def run(self, window: Any) -> None:
-        def wait(script: str) -> None:
-            deadline = time.monotonic() + 20
+        def wait(script: str, timeout: float = 20) -> None:
+            deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
                 if window.evaluate_js(script):
                     return
                 time.sleep(0.1)
             # Report where the page and keyboard focus were, so timeouts explain themselves.
             state = window.evaluate_js(
-                "JSON.stringify({page: document.querySelector('[aria-current=page]')?.dataset.page, theme: document.documentElement.dataset.theme, size: innerWidth + 'x' + innerHeight, active: document.activeElement?.outerHTML.slice(0, 120), focused: document.hasFocus(), dialogs: Array.from(document.querySelectorAll('dialog[open]')).map(d => d.id)})"
+                "JSON.stringify({page: document.querySelector('[aria-current=page]')?.dataset.page, theme: document.documentElement.dataset.theme, size: innerWidth + 'x' + innerHeight, active: document.activeElement?.outerHTML.slice(0, 120), focused: document.hasFocus(), dialogs: Array.from(document.querySelectorAll('dialog[open]')).map(d => d.id), buttons: Array.from(document.querySelectorAll('dialog[open] button')).map(b => b.id + (b.disabled ? ':disabled' : '')), settings: document.querySelector('#settings-result')?.innerText, messages: Array.from(document.querySelectorAll('[id$=-error], [id$=-result]')).filter(e => e.textContent.trim()).map(e => e.id + '=' + e.textContent.trim().slice(0, 80))})"
             )
             raise RuntimeError(f"Desktop smoke timed out: {script} {state}")
 
         try:
-            if not window.events.loaded.wait(20):
+            if not window.events.loaded.wait(60):
                 raise RuntimeError("Desktop assets failed to load.")
             wait("document.querySelector('#dashboard-data').textContent.includes('Active parts')")
             if window.evaluate_js("location.protocol") != "file:":
@@ -130,6 +130,8 @@ class DesktopSmoke:
 
     def _settings_utilities(self, window: Any, wait: Any) -> None:
         """Manual backup, latest-backup status and folder access for the selected database."""
+        from inventory_control.desktop_smoke_windows import folder_wait_seconds
+
         run = window.evaluate_js
         # Settings locks its buttons while a request runs and re-renders when it settles.
         idle = "document.querySelectorAll('#settings-data button:disabled, #settings-refresh:disabled').length === 0"
@@ -157,11 +159,13 @@ class DesktopSmoke:
         self.backup_path = Path(latest["path"])
         run("document.querySelector('[data-open-folder=backups]').click()")
         wait(
-            f"document.querySelector('#settings-result').textContent.startsWith('Opened ') && {idle}"
+            f"document.querySelector('#settings-result').textContent.startsWith('Opened ') && {idle}",
+            timeout=folder_wait_seconds(),
         )
         run("document.querySelector('[data-open-folder=exports]').click()")
         wait(
-            f"document.querySelector('#settings-result').textContent.includes(window.smokeSettings.export_dir) && {idle}"
+            f"document.querySelector('#settings-result').textContent.includes(window.smokeSettings.export_dir) && {idle}",
+            timeout=folder_wait_seconds(),
         )
         expected = [
             Path(run("window.smokeSettings.backup_dir")),

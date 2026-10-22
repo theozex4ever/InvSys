@@ -6,7 +6,8 @@ import logging
 import os
 import sqlite3
 import sys
-from contextlib import closing
+import traceback
+from contextlib import closing, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -26,6 +27,42 @@ REQUIRED_ASSETS = ("index.html", "app.js", "style.css")
 
 
 def main() -> int:
+    try:
+        status = _launch()
+    except SystemExit as exc:
+        _hold_failure_on_screen(exc.code not in (0, None))
+        raise
+    except Exception as exc:
+        # Shown before the wait, so the operator can read what went wrong.
+        traceback.print_exc()
+        _hold_failure_on_screen(failed=True)
+        raise SystemExit(1) from exc
+    _hold_failure_on_screen(status != 0)
+    return status
+
+
+def _hold_failure_on_screen(failed: bool) -> None:
+    """Started from Explorer, a bundle's console closes on exit: keep a failure readable.
+
+    Without an operator (the package smoke, pipes) stdin is closed and this returns at once.
+    """
+    if failed and getattr(sys, "frozen", False) and _owns_console():
+        with suppress(EOFError):
+            input("Press Enter to close this window.")
+
+
+def _owns_console(platform: str = sys.platform) -> bool:
+    """True when this Windows process is the only one attached to its console window."""
+    if platform != "win32":
+        return False
+    import ctypes
+
+    processes = (ctypes.c_ulong * 2)()
+    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined,unused-ignore]  # Windows-only API; mypy runs on Linux
+    return int(kernel32.GetConsoleProcessList(processes, 2)) == 1
+
+
+def _launch() -> int:
     parser = argparse.ArgumentParser(description="InvSys desktop (built assets, no HTTP server)")
     parser.add_argument(
         "--database",
@@ -81,10 +118,17 @@ def main() -> int:
             "in a folder this account can write).\n",
         )
     smoke: DesktopSmoke | None = None
-    # The smoke records folder requests instead of opening a file manager window.
+    # Windows smoke verifies the real Explorer navigation; other platforms retain
+    # their recording host until native file-manager acceptance is implemented.
     opened_folders: list[Path] = []
     host = NativeHost(opener=opened_folders.append) if args.smoke_check else NativeHost()
     try:
+        if args.smoke_check and sys.platform == "win32":
+            from inventory_control.desktop_smoke_windows import FolderProbe
+
+            folders = FolderProbe(database.parent / "smoke-captures" / "windows-folders.json")
+            host = NativeHost(opener=folders.open_folder)
+            opened_folders = folders.opened_folders
         window = webview.create_window(
             "InvSys",
             url=(assets / "index.html").as_uri(),

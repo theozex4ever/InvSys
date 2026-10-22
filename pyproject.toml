@@ -27,6 +27,7 @@ omit = [
     "inventory_control/desktop_smoke_imports.py",
     "inventory_control/desktop_smoke_export.py",
     "inventory_control/desktop_smoke_navigation.py",
+    "inventory_control/desktop_smoke_windows.py",
 ]
 
 [tool.coverage.report]

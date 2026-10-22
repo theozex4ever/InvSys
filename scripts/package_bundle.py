@@ -13,9 +13,10 @@ an ad-hoc signature. ``smoke`` proves the *frozen* bundle: its assets are
 byte-identical to the build output, startup failures are readable, and the
 native workflow smoke passes twice against one disposable inventory with
 restart persistence and a startup backup on the second launch. It writes a JSON
-evidence record. Platform differences stay in ``bundle_path``,
-``executable_path``, ``manifest_path``, ``pyinstaller_args`` and the evidence
-readers; Windows only needs to extend those.
+evidence record. Everything here is shared by every platform; the platform
+differences are the executable name, a few freeze arguments, the archive format
+(``.tar.gz``, ``.zip`` on Windows) and how the offline smoke isolates the network
+(an empty namespace on Linux, outbound firewall rules on Windows).
 """
 
 import argparse
@@ -31,8 +32,9 @@ import subprocess
 import sys
 import tarfile
 import time
-from collections.abc import Iterable
-from contextlib import closing
+import zipfile
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -49,6 +51,10 @@ ROOT = Path(__file__).resolve().parent.parent
 RECORDED_PACKAGES = ("pyinstaller", "pyinstaller-hooks-contrib", "PySide6", "pywebview", "QtPy")
 RUN_TIMEOUT_SECONDS = 300
 EXCERPT_LINES = 12
+# Name of the temporary Windows Firewall rules of an isolated smoke (removed afterwards).
+FIREWALL_RULE = "invsys-package-smoke"
+# pywebview's Windows backends need the .NET runtime; the bundle uses its Qt backend only.
+WINDOWS_EXCLUDED_MODULES = ("clr", "clr_loader", "pythonnet")
 
 
 class PackagingError(Exception):
@@ -112,6 +118,11 @@ def verify_assets(bundle: Path, assets: Path) -> dict[str, str]:
 # ---------------------------------------------------------------- build
 
 
+def archive_name(platform_name: str = sys.platform, machine: str | None = None) -> str:
+    suffix = "zip" if platform_name == "win32" else "tar.gz"
+    return f"{APP_NAME}-{platform_name}-{(machine or platform.machine()).lower()}.{suffix}"
+
+
 def bundle_path(dist: Path, system: str = sys.platform) -> Path:
     """The delivered bundle: a macOS application, a plain folder elsewhere."""
     return dist / (f"{APP_NAME}.app" if system == "darwin" else APP_NAME)
@@ -133,7 +144,11 @@ def manifest_path(bundle: Path, system: str = sys.platform) -> Path:
 def pyinstaller_args(
     root: Path, assets: Path, dist: Path, work: Path, system: str = sys.platform
 ) -> list[str]:
-    """Arguments of the one shared freeze; the data separator is the platform's."""
+    """Arguments of the one shared freeze; the data separator is the platform's.
+
+    Windows stays a console program so startup failures remain readable. macOS
+    uses an application bundle, whose executable can be launched from Terminal.
+    """
     args = [
         "--noconfirm",
         "--clean",
@@ -155,7 +170,12 @@ def pyinstaller_args(
         "--hidden-import",
         "PySide6.QtWebEngineCore",
     ]
-    for module in ("PyQt5", "PyQt6", "PySide2", "tkinter", "gi"):
+    excluded = ["PyQt5", "PyQt6", "PySide2", "tkinter", "gi"]
+    if system == "win32":
+        # UPX-packed executables trigger antivirus heuristics and add nothing offline.
+        args += ["--console", "--noupx"]
+        excluded += WINDOWS_EXCLUDED_MODULES
+    for module in excluded:
         args += ["--exclude-module", module]
     if system == "darwin":
         # An .app is what Gatekeeper assesses and approves as one unit; a loose
@@ -211,7 +231,31 @@ def build_manifest(assets: dict[str, str], root: Path) -> dict[str, Any]:
 
 
 def make_archive(bundle: Path, archive: Path) -> None:
-    """Gzipped tar with sorted entries and neutral ownership, so only content differs."""
+    """Archive the bundle (zip for ``.zip``, else gzipped tar), so only content differs."""
+    if archive.suffix == ".zip":
+        _make_zip(bundle, archive)
+    else:
+        _make_tar(bundle, archive)
+
+
+def _make_zip(bundle: Path, archive: Path) -> None:
+    """Zip with sorted entries, a fixed timestamp and fixed modes (Windows has no mode bits)."""
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zipped:
+        for path in sorted(bundle.rglob("*")):
+            name = (Path(bundle.name) / path.relative_to(bundle)).as_posix()
+            directory = path.is_dir()
+            info = zipfile.ZipInfo(name + "/" if directory else name, (1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = (0o40755 << 16 | 0x10) if directory else (0o100644 << 16)
+            if directory:
+                zipped.writestr(info, b"")
+            else:
+                with path.open("rb") as source, zipped.open(info, "w") as target:
+                    shutil.copyfileobj(source, target, 1024 * 1024)
+
+
+def _make_tar(bundle: Path, archive: Path) -> None:
+    """Gzipped tar with sorted entries and neutral ownership."""
 
     def neutral(info: tarfile.TarInfo) -> tarfile.TarInfo:
         info.uid = info.gid = 0
@@ -284,9 +328,10 @@ def build(assets: Path, dist: Path, work: Path, archive: bool) -> Path:
         seal_application(bundle)
     print(f"Bundle: {bundle}")
     if archive:
-        target = dist / f"{APP_NAME}-{sys.platform}-{platform.machine().lower()}.tar.gz"
+        target = dist / archive_name()
         make_archive(bundle, target)
-        print(f"Archive: {target} ({target.stat().st_size} bytes)")
+        digest = hashlib.sha256(target.read_bytes()).hexdigest()
+        print(f"Archive: {target} ({target.stat().st_size} bytes, sha256 {digest})")
     return bundle
 
 
@@ -302,7 +347,7 @@ def run_bundle(
 ) -> dict[str, Any]:
     arguments = list(args)
     command = [str(executable_path(bundle)), *arguments]
-    if isolate_network:
+    if isolate_network and sys.platform.startswith("linux"):
         # A fresh network namespace has no interface at all, not even loopback: any
         # attempt to reach a server, CDN or inventory service fails outright.
         # The current user stays mapped to itself: Chromium refuses to run as root.
@@ -313,6 +358,7 @@ def run_bundle(
             f"--map-group={os.getgid()}",
             *command,
         ]
+    # Elsewhere the isolation is installed around the whole smoke by network_isolation().
     started = time.monotonic()
     try:
         # The command is the bundle under test plus fixed smoke arguments.
@@ -320,8 +366,13 @@ def run_bundle(
             command,
             cwd=cwd,
             env=env,
+            # No operator: a failed launch must not wait for Enter at its console.
+            stdin=subprocess.DEVNULL,
             capture_output=True,
+            # The launcher's own messages; Windows consoles would otherwise decode as cp1252.
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=RUN_TIMEOUT_SECONDS,
             check=False,
         )
@@ -349,6 +400,100 @@ def _text(output: str | bytes | None) -> str:
 
 def excerpt(text: str) -> list[str]:
     return text.strip().splitlines()[-EXCERPT_LINES:]
+
+
+def run_netsh(command: list[str]) -> str:
+    """Run one fixed ``netsh`` command and return its output; a refusal is readable."""
+    try:
+        # Fixed binary and arguments built from the bundle's own file names, no shell.
+        result = subprocess.run(  # noqa: S603
+            command, capture_output=True, text=True, timeout=60, check=False
+        )
+    except OSError as exc:
+        raise PackagingError(f"Cannot run netsh: {exc}") from exc
+    if result.returncode != 0:
+        raise PackagingError(
+            f"`{' '.join(command[:5])}` failed (status {result.returncode}): "
+            f"{(result.stdout + result.stderr).strip()}. "
+            "Blocking the network needs an elevated (administrator) prompt."
+        )
+    return result.stdout
+
+
+def firewall_profiles(output: str) -> list[str]:
+    """Profile states (Domain, Private, Public) from ``netsh advfirewall show ... state``."""
+    return [line.split()[-1].upper() for line in output.splitlines() if line.startswith("State ")]
+
+
+@contextmanager
+def network_isolation(
+    bundle: Path,
+    enabled: bool,
+    platform_name: str = sys.platform,
+    netsh: Callable[[list[str]], str] = run_netsh,
+) -> Iterator[dict[str, Any]]:
+    """Make any network use by the bundle fail while the smoke runs.
+
+    Linux isolates each launch in an empty network namespace (``run_bundle``); Windows
+    blocks outbound traffic of every program in the bundle with Firewall rules that
+    are removed afterwards. Windows exempts loopback from the firewall, so a local
+    HTTP server is caught by the launcher's own "no HTTP server" check instead.
+    """
+    if not enabled:
+        yield {"enabled": False}
+        return
+    if platform_name.startswith("linux"):
+        yield {"enabled": True, "mechanism": "linux-empty-network-namespace"}
+        return
+    if platform_name != "win32":
+        raise PackagingError(f"--isolate-network is not available on {platform_name}.")
+    programs = sorted(str(path) for path in bundle.rglob("*.exe"))
+    base = ["netsh", "advfirewall", "firewall"]
+    profiles = firewall_profiles(netsh(["netsh", "advfirewall", "show", "allprofiles", "state"]))
+    if not profiles:
+        raise PackagingError(
+            "Cannot read the Windows Firewall profile states from `netsh advfirewall show "
+            "allprofiles state` (English output expected); the smoke would not be offline."
+        )
+    if any(state != "ON" for state in profiles):
+        # Block rules on a disabled profile are ignored: the smoke would not be offline.
+        raise PackagingError(
+            f"Windows Firewall is off (profile states: {', '.join(profiles)}), "
+            "so outbound block rules would not isolate the smoke. Enable it with "
+            "`Set-NetFirewallProfile -All -Enabled True` from an elevated prompt."
+        )
+    try:
+        for program in programs:
+            netsh(
+                [
+                    *base,
+                    "add",
+                    "rule",
+                    f"name={FIREWALL_RULE}",
+                    "dir=out",
+                    "action=block",
+                    "enable=yes",
+                    "profile=any",
+                    f"program={program}",
+                ]
+            )
+        shown = netsh([*base, "show", "rule", f"name={FIREWALL_RULE}"])
+        if shown.count("Rule Name:") != len(programs):
+            raise PackagingError(
+                f"Expected {len(programs)} outbound block rules, Windows Firewall lists "
+                f"{shown.count('Rule Name:')}."
+            )
+        yield {
+            "enabled": True,
+            "mechanism": "windows-firewall-outbound-block",
+            "firewall_profiles": profiles,
+            "blocked_programs": programs,
+        }
+    finally:
+        try:
+            netsh([*base, "delete", "rule", f"name={FIREWALL_RULE}"])
+        except PackagingError as exc:
+            print(f"package_bundle: could not remove the firewall rules: {exc}", file=sys.stderr)
 
 
 def database_counts(database: Path) -> dict[str, int | str]:
@@ -386,6 +531,18 @@ def hardlinked_copy(bundle: Path, target: Path) -> None:
         return destination
 
     shutil.copytree(bundle, target, symlinks=True, copy_function=link)
+
+
+def unused_drive(exists: Callable[[Path], bool] = Path.exists) -> Path | None:
+    """Root of a Windows drive letter nothing is mapped to, searched from Z: down."""
+    return next(
+        (
+            Path(f"{letter}:\\")
+            for letter in "ZYXWVUTSRQPONMLKJIHGFED"
+            if not exists(Path(f"{letter}:\\"))
+        ),
+        None,
+    )
 
 
 def failure_checks(
@@ -439,6 +596,18 @@ def failure_checks(
             bundle,
         ),
     ]
+    drive = unused_drive() if sys.platform == "win32" else None
+    if drive is not None:
+        # A drive letter that is not mapped, e.g. a removed USB stick or network share.
+        checks.append(
+            (
+                "database-drive-does-not-exist",
+                1,
+                "Cannot open the inventory database",
+                ["--database", str(drive / "invsys" / "inventory.db")],
+                bundle,
+            )
+        )
     results = []
     for name, code, message, args, target in checks:
         run = run_bundle(target, args, cwd, env, isolate_network)
@@ -466,14 +635,6 @@ def failure_checks(
     return results
 
 
-def require_network_isolation(system: str = sys.platform) -> None:
-    if not system.startswith("linux"):
-        raise PackagingError(
-            "--isolate-network needs a Linux network namespace (util-linux unshare); "
-            "run the smoke without it on this platform."
-        )
-
-
 def require_display() -> None:
     if sys.platform.startswith("linux") and not (
         os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
@@ -482,6 +643,38 @@ def require_display() -> None:
             "The native smoke needs a display. On a headless host run it under "
             "`xvfb-run -a -s '-screen 0 1920x1080x24'`."
         )
+
+
+def windows_machine_details() -> dict[str, Any]:
+    """CPU name and installed memory from the Windows registry and kernel."""
+    details: dict[str, Any] = {"os": f"Windows {platform.version()} ({platform.win32_edition()})"}
+    if sys.platform == "win32":
+        import ctypes
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+        ) as key:
+            details["cpu"] = str(winreg.QueryValueEx(key, "ProcessorNameString")[0]).strip()
+
+        class MemoryStatus(ctypes.Structure):
+            _fields_ = (
+                ("length", ctypes.c_ulong),
+                ("load", ctypes.c_ulong),
+                ("total_physical", ctypes.c_ulonglong),
+                ("available_physical", ctypes.c_ulonglong),
+                ("total_page_file", ctypes.c_ulonglong),
+                ("available_page_file", ctypes.c_ulonglong),
+                ("total_virtual", ctypes.c_ulonglong),
+                ("available_virtual", ctypes.c_ulonglong),
+                ("available_extended_virtual", ctypes.c_ulonglong),
+            )
+
+        status = MemoryStatus()
+        status.length = ctypes.sizeof(MemoryStatus)
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
+        details["memory"] = f"{status.total_physical // 1024} kB"
+    return details
 
 
 def machine_record(system: str = sys.platform) -> dict[str, Any]:
@@ -493,6 +686,14 @@ def machine_record(system: str = sys.platform) -> dict[str, Any]:
         "logical_cpus": os.cpu_count(),
         "display": os.environ.get("XDG_SESSION_TYPE") or os.environ.get("DISPLAY") or "none",
     }
+    if image := os.environ.get("ImageOS"):  # noqa: SIM112  # GitHub runner image metadata uses this exact key
+        version = os.environ.get("ImageVersion", "unknown")  # noqa: SIM112  # GitHub runner image metadata uses this exact key
+        record["ci_image"] = f"{image} {version}"
+    if system == "win32":
+        record["display"] = "windows-desktop-session"
+        record.pop("libc")
+        record.update(windows_machine_details())
+        return record
     if system == "darwin":
         record.update(
             os=f"macOS {platform.mac_ver()[0]}",
@@ -560,6 +761,25 @@ def bundle_record(bundle: Path) -> dict[str, Any]:
     }
 
 
+def native_folder_evidence(database: Path) -> dict[str, Any]:
+    """Require actual visible Explorer navigation to both selected-inventory folders."""
+    evidence = database.parent / "smoke-captures" / "windows-folders.json"
+    try:
+        observations = json.loads(evidence.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return {"passed": False, "error": f"Cannot read native folder evidence: {exc}"}
+    expected = {str(database.parent / kind) for kind in ("backups", "exports")}
+    verified = {
+        item.get("requested")
+        for item in observations
+        if item.get("visible") is True
+        and item.get("closed_after_probe") is True
+        and item.get("path") == item.get("requested")
+        and item.get("hwnd")
+    }
+    return {"passed": expected <= verified, "observations": observations}
+
+
 def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_network: bool) -> bool:
     # Child launches use a separate cwd; keep every selected path anchored to this one.
     bundle, assets, workdir, evidence = (
@@ -569,8 +789,6 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
         raise PackagingError(f"No bundle executable at {executable_path(bundle)}.")
     if workdir.exists() and any(workdir.iterdir()):
         raise PackagingError(f"--workdir {workdir} must be empty: the smoke writes real data.")
-    if isolate_network:
-        require_network_isolation()
     require_display()
     workdir.mkdir(parents=True, exist_ok=True)
     verified = verify_assets(bundle, assets)
@@ -583,9 +801,19 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
         "bundle": bundle_record(bundle),
         "assets_verified": verified,
         "network_isolated": isolate_network,
-        "failure_checks": failure_checks(bundle, workdir, env, isolate_network),
         "runs": [],
     }
+    with network_isolation(bundle, isolate_network) as isolation:
+        record["network_isolation"] = isolation
+        ok = run_checks(bundle, workdir, env, isolate_network, record)
+    return finish_smoke(record, ok, evidence)
+
+
+def run_checks(
+    bundle: Path, workdir: Path, env: dict[str, str], isolate_network: bool, record: dict[str, Any]
+) -> bool:
+    """Failure checks, then two native runs of the bundle against one inventory."""
+    record["failure_checks"] = failure_checks(bundle, workdir, env, isolate_network)
     database = workdir / "inventory" / "inventory.db"
     ok = all(check["passed"] for check in record["failure_checks"])
     first_ids: set[int] = set()
@@ -600,6 +828,10 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
         )
         backups = startup_backups(database) if database.is_file() else []
         run_ok = run["exit_code"] == 0 and "no HTTP server" in run["stdout"]
+        folders: dict[str, Any] | None = None
+        if sys.platform == "win32":
+            folders = native_folder_evidence(database)
+            run_ok = run_ok and folders["passed"]
         counts = database_counts(database) if database.is_file() else {}
         ids = transaction_ids(database) if database.is_file() else set()
         backed_up: int | None = None
@@ -626,6 +858,7 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
                 "startup_backup_transactions": backed_up,
                 "database": counts,
                 "passed": run_ok,
+                **({"native_folder_operations": folders} if folders is not None else {}),
             }
         )
         ok = ok and run_ok
@@ -635,6 +868,7 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
         and first_ids <= ids
         and record["runs"][1]["database"].get("integrity_check") == "ok"
     )
+    unexpected = Path(env["INVSYS_HOME"])
     record["restart_persistence"] = {"passed": persisted}
     record["no_writes_outside_selected_inventory"] = {"passed": not unexpected.exists()}
     ok = ok and persisted and not unexpected.exists()
@@ -642,6 +876,10 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
         # Checked after the runs: an intact seal also proves nothing was written inside.
         record["application_seal"] = signature_record(bundle)
         ok = ok and record["application_seal"]["passed"]
+    return ok
+
+
+def finish_smoke(record: dict[str, Any], ok: bool, evidence: Path) -> bool:
     record["result"] = "passed" if ok else "failed"
     evidence.parent.mkdir(parents=True, exist_ok=True)
     evidence.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
@@ -670,7 +908,7 @@ def main(argv: list[str] | None = None) -> int:
     smoke_parser.add_argument(
         "--isolate-network",
         action="store_true",
-        help="Run the bundle in an empty network namespace (Linux only, util-linux unshare).",
+        help="Block network use (Linux: empty namespace; Windows: outbound firewall rules).",
     )
     args = parser.parse_args(argv)
     try:

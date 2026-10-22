@@ -370,14 +370,12 @@ jobs:
     name: Package smoke (${{ matrix.os }})
     needs: frontend
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        # The Windows packaging ticket adds its runner here and extends
-        # scripts/package_bundle.py; the steps below are the shared shape.
         # `bundle` is what the build delivers: a folder, or an .app on macOS.
         include:
           - os: ubuntu-24.04
@@ -385,6 +383,8 @@ jobs:
           # Apple silicon; the bundle targets the runner's architecture only.
           - os: macos-15
             bundle: invsys-desktop.app
+          - os: windows-2025
+            bundle: invsys-desktop
     env:
       QTWEBENGINE_CHROMIUM_FLAGS: --force-prefers-reduced-motion
     steps:
@@ -431,6 +431,7 @@ jobs:
       # Smoke the installed archive, including its symlinks and executable modes,
       # rather than only the directory PyInstaller left behind.
       - name: Extract standalone archive
+        if: runner.os != 'Windows'
         env:
           BUNDLE: ${{ matrix.bundle }}
         run: |
@@ -490,6 +491,31 @@ jobs:
           --evidence "$RUNNER_TEMP/package-evidence.json"
           2>&1 | tee "$RUNNER_TEMP/package-smoke.log"
 
+      # Operators install a Windows bundle by extracting the zip, so the smoke
+      # runs on the extracted archive. The runner session is an interactive
+      # desktop, so no virtual display is needed; the smoke blocks outbound
+      # traffic of every bundled program with temporary Windows Firewall rules.
+      - name: Install the archive as an operator would
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem "$env:RUNNER_TEMP/bundle-dist" -Filter 'invsys-desktop-*.zip' | Select-Object -First 1
+          if (-not $archive) { throw 'The build produced no zip archive.' }
+          Expand-Archive -Path $archive.FullName -DestinationPath "$env:RUNNER_TEMP/bundle-installed"
+          $digest = (Get-FileHash -Algorithm SHA256 $archive.FullName).Hash.ToLowerInvariant()
+          "$digest  $($archive.Name)" | Set-Content -Encoding utf8 "$env:RUNNER_TEMP/bundle-dist/SHA256SUMS"
+
+      - name: Package smoke
+        if: runner.os == 'Windows'
+        run: >-
+          python scripts/package_bundle.py smoke
+          --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
+          --assets frontend/dist
+          --workdir "$RUNNER_TEMP/invsys-package-smoke"
+          --evidence "$RUNNER_TEMP/package-evidence.json"
+          --isolate-network
+          2>&1 | tee "$RUNNER_TEMP/package-smoke.log"
+
       - name: Package evidence summary
         if: ${{ !cancelled() }}
         run: |
@@ -498,7 +524,7 @@ jobs:
           {
             echo "### Package smoke (${RUNNER_OS})"
             echo '```json'
-            python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d.get(k) for k in ('result','machine','network_isolated','application_seal')}, indent=2))" "$RUNNER_TEMP/package-evidence.json"
+            python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d.get(k) for k in ('result','machine','network_isolated','network_isolation','application_seal')}, indent=2))" "$RUNNER_TEMP/package-evidence.json"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

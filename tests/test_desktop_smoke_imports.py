@@ -50,6 +50,8 @@ def test_macos_import_probe_drives_qt_dialogs_instead_of_the_cocoa_panel(qapp):
         qapp.setAttribute(attribute, False)
         use_scriptable_file_dialogs(qapp, "linux")
         assert not qapp.testAttribute(attribute)
+        use_scriptable_file_dialogs(qapp, "win32")
+        assert not qapp.testAttribute(attribute)
         use_scriptable_file_dialogs(qapp, "darwin")
         assert qapp.testAttribute(attribute)
     finally:
