@@ -25,7 +25,17 @@ IDCANCEL = 2
 WM_SETTEXT = 0x000C
 BM_CLICK = 0x00F5
 WM_CLOSE = 0x0010
-EXPLORER_TIMEOUT_SECONDS = 20
+# One end-to-end smoke budget: initial snapshot, opener, navigation and cleanup.
+# Reserve the final five seconds for closing our window. This is probe overhead,
+# not an application response-time or packaged-launch performance threshold.
+EXPLORER_TIMEOUT_SECONDS = 40
+EXPLORER_CLEANUP_SECONDS = 5
+
+
+def folder_wait_seconds(platform: str = sys.platform) -> float:
+    """Let the folder UI settle after the whole Windows probe, without changing other waits."""
+    return EXPLORER_TIMEOUT_SECONDS + 5 if platform == "win32" else 20
+
 
 # Shell.Windows exposes the displayed FolderItem's filesystem path and HWND.
 # Only read Explorer windows; no path or other input is interpolated into this script.
@@ -140,8 +150,11 @@ def press(path: Path | None) -> bool:
     return True
 
 
-def explorer_windows() -> list[dict[str, Any]]:
+def explorer_windows(deadline: float) -> list[dict[str, Any]]:
     """Read actual Explorer navigation through Windows' built-in COM automation."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise OSError("Explorer navigation exhausted its smoke observation budget.")
     powershell = (
         Path(os.environ["SYSTEMROOT"])
         / "System32"
@@ -150,13 +163,23 @@ def explorer_windows() -> list[dict[str, Any]]:
         / "powershell.exe"
     )
     # A fixed Windows tool and read-only script, without shell interpolation.
-    result = subprocess.run(  # noqa: S603
-        [str(powershell), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", EXPLORER_SCRIPT],
-        capture_output=True,
-        encoding="utf-8-sig",
-        timeout=15,
-        check=False,
-    )
+    try:
+        result = subprocess.run(  # noqa: S603
+            [
+                str(powershell),
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                EXPLORER_SCRIPT,
+            ],
+            capture_output=True,
+            encoding="utf-8-sig",
+            timeout=min(15, remaining),
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise OSError("Explorer snapshot exceeded its remaining smoke observation budget.") from exc
     if result.returncode != 0:
         raise OSError(f"Cannot inspect Explorer navigation: {result.stderr.strip()}")
     windows: list[dict[str, Any]] = json.loads(result.stdout)
@@ -182,13 +205,14 @@ class FolderProbe:
         self.evidence.write_text(json.dumps(self.observations, indent=2) + "\n", encoding="utf-8")
 
     def open_folder(self, path: Path) -> None:
-        before = {item["hwnd"] for item in explorer_windows()}
+        deadline = time.monotonic() + EXPLORER_TIMEOUT_SECONDS
+        observe_by = deadline - EXPLORER_CLEANUP_SECONDS
+        before = {item["hwnd"] for item in explorer_windows(observe_by)}
         open_with_system(path)
         user32 = _user32()
-        deadline = time.monotonic() + EXPLORER_TIMEOUT_SECONDS
         windows: list[dict[str, Any]] = []
-        while time.monotonic() < deadline:
-            windows = explorer_windows()
+        while time.monotonic() < observe_by:
+            windows = explorer_windows(observe_by)
             for item in windows:
                 if (
                     item["hwnd"] not in before
@@ -199,9 +223,9 @@ class FolderProbe:
                     self.observations.append(observation)
                     self._save()
                     user32.PostMessageW(item["hwnd"], WM_CLOSE, 0, 0)
-                    closed_by = time.monotonic() + 5
+                    closed_by = min(deadline, time.monotonic() + EXPLORER_CLEANUP_SECONDS)
                     while user32.IsWindow(item["hwnd"]) and time.monotonic() < closed_by:
-                        time.sleep(0.1)
+                        time.sleep(min(0.1, max(0, closed_by - time.monotonic())))
                     observation["closed_after_probe"] = not user32.IsWindow(item["hwnd"])
                     self._save()
                     if not observation["closed_after_probe"]:
@@ -211,5 +235,5 @@ class FolderProbe:
                         f"Desktop smoke: visible Explorer navigation verified: {path}", flush=True
                     )
                     return
-            time.sleep(0.2)
+            time.sleep(min(0.2, max(0, observe_by - time.monotonic())))
         raise OSError(f"No new visible Explorer window navigated to {path}. Observed: {windows}")

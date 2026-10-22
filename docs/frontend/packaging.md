@@ -302,7 +302,12 @@ that new window. Each run records the actual path, location URL, window handle,
 visibility and cleanup in `smoke-captures/windows-folders.json`; the package JSON
 retains both runs separately and fails without verified observations for both
 folders. A Windows regression also checks that a no-op system opener fails this
-observer. Linux/macOS keep their recording folder host. The Windows smoke also
+observer. Explorer verification has a 40-second end-to-end smoke budget (initial
+snapshot, opener, navigation and cleanup), with five seconds reserved for cleanup;
+each PowerShell snapshot is capped by the remaining observation budget. Only the
+three Windows folder-click UI waits allow 45 seconds for that probe and the bridge
+response. General workflow waits and approved performance thresholds are unchanged.
+Linux/macOS keep their recording folder host. The Windows smoke also
 launches against a drive letter nothing is mapped to. It needs
 English `netsh` output to read the firewall profile states and refuses to run
 isolated otherwise.

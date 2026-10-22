@@ -1,12 +1,15 @@
 """Native CSV acceptance. Only registered by --smoke-check on disposable inventory."""
 
 import csv
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 
-def check_exports(window: Any, wait: Callable[[str], None]) -> list[Path]:
+class _Wait(Protocol):
+    def __call__(self, script: str, *, timeout: float = 20) -> None: ...
+
+
+def check_exports(window: Any, wait: _Wait) -> list[Path]:
     run = window.evaluate_js
     idle = "document.querySelectorAll('#settings button:disabled').length === 0"
 
@@ -196,7 +199,12 @@ def check_exports(window: Any, wait: Callable[[str], None]) -> list[Path]:
     run(
         "smokeAPI.export_csv = window.smokeExport; document.querySelector('[data-open-folder=exports]').click()"
     )
-    wait(f"document.querySelector('#settings-result').textContent.startsWith('Opened ') && {idle}")
+    from inventory_control.desktop_smoke_windows import folder_wait_seconds
+
+    wait(
+        f"document.querySelector('#settings-result').textContent.startsWith('Opened ') && {idle}",
+        timeout=folder_wait_seconds(),
+    )
     inventory_read("smokeAfterExports")
     require(
         "smokeBeforeExports === smokeAfterExports", "exports changed inventory or audit records"
