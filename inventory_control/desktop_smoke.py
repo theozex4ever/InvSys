@@ -35,7 +35,7 @@ class DesktopSmoke:
                 time.sleep(0.1)
             # Report where the page and keyboard focus were, so timeouts explain themselves.
             state = window.evaluate_js(
-                "JSON.stringify({page: document.querySelector('[aria-current=page]')?.dataset.page, theme: document.documentElement.dataset.theme, size: innerWidth + 'x' + innerHeight, active: document.activeElement?.outerHTML.slice(0, 120), focused: document.hasFocus(), dialogs: Array.from(document.querySelectorAll('dialog[open]')).map(d => d.id), buttons: Array.from(document.querySelectorAll('dialog[open] button')).map(b => b.id + (b.disabled ? ':disabled' : '')), messages: Array.from(document.querySelectorAll('[id$=-error], [id$=-result]')).filter(e => e.textContent.trim()).map(e => e.id + '=' + e.textContent.trim().slice(0, 80)), trace: window.smokeTrace})"
+                "JSON.stringify({page: document.querySelector('[aria-current=page]')?.dataset.page, theme: document.documentElement.dataset.theme, size: innerWidth + 'x' + innerHeight, active: document.activeElement?.outerHTML.slice(0, 120), focused: document.hasFocus(), dialogs: Array.from(document.querySelectorAll('dialog[open]')).map(d => d.id), buttons: Array.from(document.querySelectorAll('dialog[open] button')).map(b => b.id + (b.disabled ? ':disabled' : '')), messages: Array.from(document.querySelectorAll('[id$=-error], [id$=-result]')).filter(e => e.textContent.trim()).map(e => e.id + '=' + e.textContent.trim().slice(0, 80))})"
             )
             raise RuntimeError(f"Desktop smoke timed out: {script} {state}")
 
@@ -43,10 +43,6 @@ class DesktopSmoke:
             if not window.events.loaded.wait(60):
                 raise RuntimeError("Desktop assets failed to load.")
             wait("document.querySelector('#dashboard-data').textContent.includes('Active parts')")
-            # The last form, click and dialog events, so a timeout shows what happened before it.
-            window.evaluate_js(
-                "window.smokeTrace = []; const trace = text => { window.smokeTrace.push(Math.round(performance.now()) + ' ' + text); window.smokeTrace.splice(0, window.smokeTrace.length - 30); }; for (const type of ['input', 'change', 'submit', 'click']) document.addEventListener(type, event => trace(type + ' ' + (event.target.id || event.target.tagName) + (event.isTrusted ? ' native' : '')), true); for (const dialog of document.querySelectorAll('dialog')) dialog.addEventListener('close', () => trace('close ' + dialog.id)); const showModal = HTMLDialogElement.prototype.showModal; HTMLDialogElement.prototype.showModal = function () { trace('showModal ' + this.id); return showModal.call(this); };"
-            )
             if window.evaluate_js("location.protocol") != "file:":
                 raise RuntimeError("Assets did not load from file://.")
             if not window.evaluate_js("document.styleSheets.length > 0"):

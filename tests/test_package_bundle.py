@@ -11,6 +11,7 @@ import itertools
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tarfile
 import zipfile
@@ -44,6 +45,7 @@ def write_assets(directory: Path, assets: dict[str, str] | None = None) -> Path:
 def make_bundle(root: Path, assets: dict[str, str] | None = None) -> Path:
     bundle = root / "invsys-desktop"
     write_assets(bundle / "_internal" / "frontend" / "dist", assets)
+    package_bundle.executable_path(bundle).parent.mkdir(parents=True, exist_ok=True)
     # Unrelated web content inside bundled packages must not be mistaken for the assets.
     other = bundle / "_internal" / "webview" / "js"
     other.mkdir(parents=True)
@@ -111,6 +113,144 @@ def test_freeze_arguments_bundle_the_exact_assets_and_the_qt_webengine_runtime(t
     assert ("--distpath", str(dist)) in pairs
 
 
+def test_macos_freeze_makes_an_identified_application_and_other_platforms_do_not(tmp_path):
+    for system, expected in (("darwin", True), ("linux", False), ("win32", False)):
+        args = package_bundle.pyinstaller_args(Path("/repo"), tmp_path, tmp_path, tmp_path, system)
+        pairs = list(itertools.pairwise(args))
+        assert ("--windowed" in args) is expected
+        assert (("--osx-bundle-identifier", package_bundle.BUNDLE_IDENTIFIER) in pairs) is expected
+        assert args[-1] == str(Path("/repo") / "inventory_desktop.py")
+
+
+def test_macos_bundle_is_an_application_with_executable_and_manifest_inside(tmp_path):
+    app = package_bundle.bundle_path(tmp_path, "darwin")
+    assert app == tmp_path / "invsys-desktop.app"
+    assert package_bundle.executable_path(app, "darwin") == (
+        app / "Contents" / "MacOS" / "invsys-desktop"
+    )
+    assert package_bundle.manifest_path(app, "darwin") == (
+        app / "Contents" / "Resources" / "bundle-manifest.json"
+    )
+    folder = package_bundle.bundle_path(tmp_path, "linux")
+    assert folder == tmp_path / "invsys-desktop"
+    assert package_bundle.executable_path(folder, "linux") == folder / "invsys-desktop"
+    assert package_bundle.executable_path(folder, "win32") == folder / "invsys-desktop.exe"
+    assert package_bundle.manifest_path(folder, "linux") == folder / "bundle-manifest.json"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_application_assets_are_verified_once_through_the_frameworks_link(tmp_path):
+    assets = write_assets(tmp_path / "dist")
+    app = tmp_path / "invsys-desktop.app"
+    write_assets(app / "Contents" / "Resources" / "frontend" / "dist")
+    # PyInstaller links data from Contents/Frameworks (sys._MEIPASS) to Contents/Resources.
+    (app / "Contents" / "Frameworks").mkdir()
+    (app / "Contents" / "Frameworks" / "frontend").symlink_to(Path("..") / "Resources" / "frontend")
+    found = package_bundle.find_bundled_assets(app)
+    assert found == app / "Contents" / "Resources" / "frontend" / "dist"
+    assert package_bundle.verify_assets(app, assets) == package_bundle.asset_hashes(assets)
+    # The incomplete-bundle check removes the real folder; the link is left dangling.
+    copy = tmp_path / "copy.app"
+    package_bundle.hardlinked_copy(app, copy)
+    shutil.rmtree(package_bundle.find_bundled_assets(copy))
+    assert not (copy / "Contents" / "Frameworks" / "frontend" / "dist" / "index.html").exists()
+    assert (found / "index.html").is_file()
+
+
+class FakeTools:
+    """Stands in for codesign/spctl/sysctl and records each call."""
+
+    def __init__(self, results: dict[str, tuple[int, str, str]] | None = None) -> None:
+        self.calls: list[tuple[str, ...]] = []
+        self.results = results or {}
+
+    def __call__(self, *command: str, check: bool = False) -> subprocess.CompletedProcess[str]:
+        self.calls.append(command)
+        key = " ".join(command[:2])
+        code, stdout, stderr = self.results.get(key, (0, "", ""))
+        return subprocess.CompletedProcess(list(command), code, stdout, stderr)
+
+
+def test_sealing_resigns_the_application_ad_hoc_and_verifies_it(tmp_path, monkeypatch):
+    tools = FakeTools()
+    monkeypatch.setattr(package_bundle, "_tool", tools)
+    package_bundle.seal_application(tmp_path / "invsys-desktop.app")
+    app = str(tmp_path / "invsys-desktop.app")
+    assert tools.calls == [
+        ("codesign", "--force", "--sign", "-", app),
+        ("codesign", "--verify", "--deep", "--strict", app),
+    ]
+
+
+def test_a_broken_seal_or_missing_codesign_is_a_readable_build_failure(tmp_path, monkeypatch):
+    broken = FakeTools({"codesign --verify": (1, "", "a sealed resource is missing or invalid")})
+    monkeypatch.setattr(package_bundle, "_tool", broken)
+    with pytest.raises(PackagingError, match=r"--strict` failed .*sealed resource is missing"):
+        package_bundle.seal_application(tmp_path / "invsys-desktop.app")
+
+    def missing(*command, check=False):
+        raise FileNotFoundError(2, "No such file or directory", command[0])
+
+    monkeypatch.setattr(package_bundle, "_tool", missing)
+    with pytest.raises(PackagingError, match="Cannot run codesign"):
+        package_bundle.seal_application(tmp_path / "invsys-desktop.app")
+
+
+def test_application_evidence_records_seal_signature_and_gatekeeper(tmp_path, monkeypatch):
+    details = "Executable=/x\nIdentifier=io.github.theozex4ever.invsys\nSignature=adhoc\nHash=1\n"
+    tools = FakeTools(
+        {
+            "codesign --verify": (0, "", "valid on disk\nsatisfies its Designated Requirement\n"),
+            "codesign --display": (0, "", details),
+            "spctl --assess": (3, "", "invsys-desktop.app: rejected\n"),
+        }
+    )
+    monkeypatch.setattr(package_bundle, "_tool", tools)
+    record = package_bundle.signature_record(tmp_path / "invsys-desktop.app")
+    assert record["passed"] is True
+    assert record["signature"] == ["Identifier=io.github.theozex4ever.invsys", "Signature=adhoc"]
+    # Gatekeeper rejecting an unsigned application is recorded, not a smoke failure.
+    assert record["gatekeeper"] == ["invsys-desktop.app: rejected"]
+    tools.results["codesign --verify"] = (1, "", "invalid signature\n")
+    assert package_bundle.signature_record(tmp_path / "x.app")["passed"] is False
+
+    def missing(*command, check=False):
+        raise FileNotFoundError(2, "No such file or directory", command[0])
+
+    monkeypatch.setattr(package_bundle, "_tool", missing)
+    assert package_bundle.signature_record(tmp_path / "x.app")["passed"] is False
+
+
+def test_macos_machine_record_reads_hardware_from_sysctl(monkeypatch):
+    tools = FakeTools(
+        {
+            "sysctl -n": (0, "Apple M1 (Virtual)\n", ""),
+        }
+    )
+    monkeypatch.setattr(package_bundle, "_tool", tools)
+    record = package_bundle.machine_record("darwin")
+    assert record["cpu"] == "Apple M1 (Virtual)"
+    assert record["os"].startswith("macOS")
+    assert "libc" not in record
+    assert ("sysctl", "-n", "hw.memsize") in tools.calls
+    tools.results["sysctl -n"] = (1, "", "unknown oid")
+    assert package_bundle.machine_record("darwin")["cpu"] == "unknown"
+
+
+def test_machine_record_names_the_ci_runner_image(monkeypatch):
+    monkeypatch.setenv("ImageOS", "win25")
+    monkeypatch.setenv("ImageVersion", "20261012.1")
+    assert package_bundle.machine_record()["ci_image"] == "win25 20261012.1"
+    monkeypatch.delenv("ImageOS")
+    assert "ci_image" not in package_bundle.machine_record()
+
+
+def test_machine_record_describes_the_reference_machine():
+    record = package_bundle.machine_record()
+    for key in ("os", "cpu", "memory"):
+        assert record[key], key
+
+
 def test_manifest_records_assets_toolchain_and_source(tmp_path):
     manifest = package_bundle.build_manifest({"app.js": "abc"}, tmp_path)
     assert manifest["assets"] == {"app.js": "abc"}
@@ -175,9 +315,8 @@ def test_database_evidence_reports_integrity_counts_and_startup_backups(tmp_path
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the stand-in launcher is a POSIX script")
 def test_run_bundle_reports_exit_code_and_output_of_the_launcher(tmp_path):
-    bundle = tmp_path / "invsys-desktop"
-    bundle.mkdir()
-    launcher = bundle / "invsys-desktop"
+    bundle = make_bundle(tmp_path)
+    launcher = package_bundle.executable_path(bundle)
     launcher.write_text(
         f'#!{sys.executable}\nimport os, sys\nprint("home", os.environ["INVSYS_HOME"])\n'
         'print("args", *sys.argv[1:], file=sys.stderr)\nsys.exit(3)\n',
@@ -254,9 +393,8 @@ def test_relative_smoke_paths_launch_from_another_cwd_and_retain_failure_evidenc
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the stand-in launcher is a POSIX script")
 def test_a_hung_launcher_is_a_failed_run_with_a_record(tmp_path, monkeypatch):
-    bundle = tmp_path / "invsys-desktop"
-    bundle.mkdir()
-    launcher = bundle / "invsys-desktop"
+    bundle = make_bundle(tmp_path)
+    launcher = package_bundle.executable_path(bundle)
     launcher.write_text("#!/bin/sh\necho started\nexec sleep 30\n", encoding="utf-8")
     launcher.chmod(0o755)
     monkeypatch.setattr(package_bundle, "RUN_TIMEOUT_SECONDS", 1)
@@ -271,10 +409,10 @@ def test_a_hung_launcher_is_a_failed_run_with_a_record(tmp_path, monkeypatch):
 
 def test_the_launcher_is_an_exe_on_windows_only():
     assert package_bundle.executable_path(Path("b"), "win32") == Path("b") / "invsys-desktop.exe"
-    for platform_name in ("linux", "darwin"):
-        assert (
-            package_bundle.executable_path(Path("b"), platform_name) == Path("b") / "invsys-desktop"
-        )
+    assert package_bundle.executable_path(Path("b"), "linux") == Path("b") / "invsys-desktop"
+    assert package_bundle.executable_path(Path("b.app"), "darwin") == (
+        Path("b.app") / "Contents" / "MacOS" / "invsys-desktop"
+    )
 
 
 def test_windows_bundles_are_zip_archives_and_others_gzipped_tar():
@@ -293,6 +431,7 @@ def test_the_windows_freeze_keeps_the_shared_arguments_and_drops_the_dotnet_back
         assert ("--exclude-module", module) in pairs
         assert ("--exclude-module", module) not in list(itertools.pairwise(shared))
     # A console executable keeps the readable startup failures visible.
+    assert "--console" in windows
     assert "--noupx" in windows
     assert "--windowed" not in windows
     assert "--noconsole" not in windows

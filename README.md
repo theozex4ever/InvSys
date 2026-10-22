@@ -53,7 +53,7 @@ The newer [pywebview desktop frontend](#optional-live-desktop-frontend) shown be
 | Language | Python 3.12+ |
 | UI | PySide6 (Qt6) |
 | Data | SQLite + SQLAlchemy ORM |
-| Packaging | PyInstaller (Linux and Windows standalone bundles; macOS planned) |
+| Packaging | PyInstaller (Linux, Windows and macOS standalone bundles) |
 | Tests | pytest |
 | Lint / Format | ruff |
 
@@ -165,7 +165,7 @@ Omit `--database` to use the existing operational data and startup backups.
 Built assets load offline without a frontend development server or HTTP server.
 See [desktop launch, scope, and validation](docs/frontend/desktop.md), the
 [standalone offline bundle](docs/frontend/packaging.md) (build, install and package
-smoke; Linux and Windows) and the [frontend roadmap](docs/frontend/roadmap.md).
+smoke; Linux, Windows and macOS) and the [frontend roadmap](docs/frontend/roadmap.md).
 
 ---
 

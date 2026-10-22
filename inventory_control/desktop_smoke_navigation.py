@@ -87,6 +87,15 @@ def check_navigation(window: Any, wait: Any) -> dict[str, Any]:
         if not run(script):
             raise RuntimeError(f"Desktop navigation smoke failed: {label}")
 
+    def click_catalog_part(selector: str) -> None:
+        # A pending debounce can replace rows between separate wait/click calls.
+        wait(f"""(() => {{
+            const part = document.querySelector({json.dumps(selector)});
+            if (!part) return false;
+            part.click();
+            return true;
+        }})()""")
+
     def activate() -> None:
         window.native.raise_()
         window.native.activateWindow()
@@ -151,8 +160,7 @@ def check_navigation(window: Any, wait: Any) -> dict[str, Any]:
         const set = (id, value) => { const e = document.querySelector(id); if (e.type === 'checkbox') e.checked = value; else e.value = value; e.dispatchEvent(new Event(e.tagName === 'INPUT' && e.type !== 'checkbox' ? 'input' : 'change')); };
         set('#query', 'DESKTOP-SMOKE'); set('#filter-status', 'active'); set('#sort', 'quantity'); set('#descending', true);
     """)
-    wait("document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]')")
-    run("document.querySelector('#parts-data [data-part=DESKTOP-SMOKE]').click()")
+    click_catalog_part("#parts-data [data-part=DESKTOP-SMOKE]")
     wait("document.querySelector('#drawer-data [data-stock=move]')")
     run("document.querySelector('#drawer-data [data-stock=move]').click()")
     wait(
@@ -163,10 +171,25 @@ def check_navigation(window: Any, wait: Any) -> dict[str, Any]:
     wait("document.hasFocus()")
     key(Qt.Key.Key_2, control)
     wait("!document.querySelector('#parts').hidden && document.activeElement.id === 'query'")
-    require(
-        "document.querySelector('#query').value === 'DESKTOP-SMOKE' && document.querySelector('#filter-status').value === 'active' && document.querySelector('#sort').value === 'quantity' && document.querySelector('#descending').checked && document.querySelector('#parts-data tr.selected [data-part=DESKTOP-SMOKE]')",
-        "catalog filters, sort and selected Part survive contextual navigation",
+    # A query debounce can refresh the catalog after shortcut focus is restored.
+    # Hold that read to exercise the loading interval, then assert the completed
+    # catalog state rather than taking a snapshot of the loading placeholder.
+    run("""
+        window.smokeCatalogSearch = window.smokeAPI.search_parts;
+        window.smokeCatalogRelease = null;
+        window.smokeAPI.search_parts = request => new Promise(resolve => {
+            window.smokeCatalogRelease = () => resolve(window.smokeCatalogSearch(request));
+        });
+        document.querySelector('#query').dispatchEvent(new Event('input'));
+    """)
+    wait(
+        "typeof window.smokeCatalogRelease === 'function' && document.querySelector('#parts-data').textContent.includes('Loading')"
     )
+    run("setTimeout(window.smokeCatalogRelease, 200)")
+    wait(
+        "document.querySelector('#query').value === 'DESKTOP-SMOKE' && document.querySelector('#filter-status').value === 'active' && document.querySelector('#sort').value === 'quantity' && document.querySelector('#descending').checked && document.querySelector('#parts-data tr.selected [data-part=DESKTOP-SMOKE]')",
+    )
+    run("window.smokeAPI.search_parts = window.smokeCatalogSearch")
     key(Qt.Key.Key_6, control)
     wait(
         "!document.querySelector('#move').hidden && document.activeElement.id === 'move-part_number'"
@@ -251,8 +274,7 @@ def check_navigation(window: Any, wait: Any) -> dict[str, Any]:
             audited += result["checked"]
             skipped.update(result["skipped"])
         run("document.querySelector('[data-page=parts]').click()")
-        wait("document.querySelector('#parts-data [data-part]')")
-        run("document.querySelector('#parts-data [data-part]').click()")
+        click_catalog_part("#parts-data [data-part]")
         wait("document.querySelector('#drawer-data [data-edit]')")
         result = run("window.smokeAudit(document.querySelector('#drawer'))")
         if result["failures"]:
