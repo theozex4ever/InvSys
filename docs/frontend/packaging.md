@@ -344,6 +344,13 @@ exports, themes, navigation and recovery checks all ran. Asset verification was
 byte-for-byte, the final ad-hoc seal passed `codesign --verify --deep --strict`,
 and Gatekeeper rejected the application as expected for unsigned distribution.
 
+Visual preview approved by the user on 2026-10-22. The click-through review used
+56 actual captures (14 screens, both themes, 1366×768 and 640×480 windows) from
+the [passing run for head `a60af91`](https://github.com/theozex4ever/InvSys/actions/runs/39582271771),
+whose manifest identifies integration merge `96a4649fb981c5712d00bf4382311b7aafcc0941`.
+This records approval of the visual presentation; native Cocoa-panel/Finder
+acceptance below and full operational sign-off remain outstanding.
+
 Offline checks used local assets and no HTTP server; the run was not network
 isolated. Cocoa panels and real Finder windows were not exercised. Issue #54
 remains open for the following native file-operation acceptance:
