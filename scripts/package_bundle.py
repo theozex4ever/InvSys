@@ -6,13 +6,16 @@
         --assets frontend/dist --workdir /tmp/invsys-package --evidence evidence.json
 
 ``build`` freezes ``inventory_desktop.py`` with PyInstaller (one directory, Qt
-WebEngine included), writes ``bundle-manifest.json`` beside the executable and
-archives the directory. ``smoke`` proves the *frozen* bundle: its assets are
+WebEngine included), writes ``bundle-manifest.json`` into the bundle and
+archives the directory. On macOS the bundle is ``invsys-desktop.app``: the
+manifest lives in ``Contents/Resources`` and the application is re-sealed with
+an ad-hoc signature. ``smoke`` proves the *frozen* bundle: its assets are
 byte-identical to the build output, startup failures are readable, and the
 native workflow smoke passes twice against one disposable inventory with
 restart persistence and a startup backup on the second launch. It writes a JSON
-evidence record. Everything here is platform-neutral; Windows and macOS only
-need to extend ``pyinstaller_args``, ``executable_path`` and ``make_archive``.
+evidence record. Platform differences stay in ``bundle_path``,
+``executable_path``, ``manifest_path``, ``pyinstaller_args`` and the evidence
+readers; Windows only needs to extend those.
 """
 
 import argparse
@@ -36,6 +39,8 @@ from typing import Any
 
 APP_NAME = "invsys-desktop"
 MANIFEST_NAME = "bundle-manifest.json"
+# Reverse-DNS identity of the macOS application (Info.plist CFBundleIdentifier).
+BUNDLE_IDENTIFIER = "io.github.theozex4ever.invsys"
 # Keep in step with inventory_control.desktop.REQUIRED_ASSETS (a test enforces it).
 REQUIRED_ASSETS = ("index.html", "app.js", "style.css")
 BUNDLED_ASSETS = Path("frontend") / "dist"
@@ -107,11 +112,27 @@ def verify_assets(bundle: Path, assets: Path) -> dict[str, str]:
 # ---------------------------------------------------------------- build
 
 
-def executable_path(bundle: Path) -> Path:
-    return bundle / (f"{APP_NAME}.exe" if sys.platform == "win32" else APP_NAME)
+def bundle_path(dist: Path, system: str = sys.platform) -> Path:
+    """The delivered bundle: a macOS application, a plain folder elsewhere."""
+    return dist / (f"{APP_NAME}.app" if system == "darwin" else APP_NAME)
 
 
-def pyinstaller_args(root: Path, assets: Path, dist: Path, work: Path) -> list[str]:
+def executable_path(bundle: Path, system: str = sys.platform) -> Path:
+    if system == "darwin":
+        return bundle / "Contents" / "MacOS" / APP_NAME
+    return bundle / (f"{APP_NAME}.exe" if system == "win32" else APP_NAME)
+
+
+def manifest_path(bundle: Path, system: str = sys.platform) -> Path:
+    # Everything in a macOS application belongs under Contents/; Resources is sealed data.
+    if system == "darwin":
+        return bundle / "Contents" / "Resources" / MANIFEST_NAME
+    return bundle / MANIFEST_NAME
+
+
+def pyinstaller_args(
+    root: Path, assets: Path, dist: Path, work: Path, system: str = sys.platform
+) -> list[str]:
     """Arguments of the one shared freeze; the data separator is the platform's."""
     args = [
         "--noconfirm",
@@ -136,6 +157,10 @@ def pyinstaller_args(root: Path, assets: Path, dist: Path, work: Path) -> list[s
     ]
     for module in ("PyQt5", "PyQt6", "PySide2", "tkinter", "gi"):
         args += ["--exclude-module", module]
+    if system == "darwin":
+        # An .app is what Gatekeeper assesses and approves as one unit; a loose
+        # folder of unsigned executables would be refused file by file.
+        args += ["--windowed", "--osx-bundle-identifier", BUNDLE_IDENTIFIER]
     return [*args, str(root / "inventory_desktop.py")]
 
 
@@ -159,15 +184,19 @@ def source_revision(root: Path) -> dict[str, Any]:
 
 
 def _git(root: Path, *args: str) -> str:
-    # Fixed git binary lookup and fixed arguments; no operator input reaches the command.
-    result = subprocess.run(  # noqa: S603
-        ["git", "-C", str(root), *args],  # noqa: S607
-        check=True,
+    return _tool("git", "-C", str(root), *args, check=True).stdout.strip()
+
+
+def _tool(*command: str, check: bool = False) -> subprocess.CompletedProcess[str]:
+    # Fixed system tools (git, codesign, spctl, sysctl) with arguments built here;
+    # no operator input reaches the command.
+    return subprocess.run(  # noqa: S603
+        list(command),
+        check=check,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=120,
     )
-    return result.stdout.strip()
 
 
 def build_manifest(assets: dict[str, str], root: Path) -> dict[str, Any]:
@@ -204,11 +233,34 @@ def make_archive(bundle: Path, archive: Path) -> None:
             )
 
 
+def seal_application(bundle: Path) -> None:
+    """Re-sign a macOS application ad hoc after the manifest was added to it.
+
+    PyInstaller signs the application ad hoc; adding a file to Contents/Resources
+    breaks that seal, and macOS reports a broken seal as a damaged application
+    that cannot be approved. This is not a Developer ID signature.
+    """
+    for command in (
+        ("codesign", "--force", "--sign", "-", str(bundle)),
+        ("codesign", "--verify", "--deep", "--strict", str(bundle)),
+    ):
+        try:
+            result = _tool(*command)
+        except OSError as exc:
+            raise PackagingError(f"Cannot run codesign (part of macOS): {exc}") from exc
+        if result.returncode != 0:
+            raise PackagingError(
+                f"`{' '.join(command[:-1])}` failed for {bundle}: {result.stderr.strip()}"
+            )
+
+
 def build(assets: Path, dist: Path, work: Path, archive: bool) -> Path:
     built_assets = require_built_assets(assets)
-    bundle = dist / APP_NAME
-    if bundle.exists():
-        shutil.rmtree(bundle)
+    bundle = bundle_path(dist)
+    # On macOS PyInstaller also leaves the plain folder the application was made from.
+    for stale in {dist / APP_NAME, bundle}:
+        if stale.exists():
+            shutil.rmtree(stale)
     command = [
         sys.executable,
         "-m",
@@ -223,9 +275,13 @@ def build(assets: Path, dist: Path, work: Path, archive: bool) -> Path:
         )
     if not executable_path(bundle).is_file():
         raise PackagingError(f"PyInstaller finished without producing {executable_path(bundle)}.")
+    if bundle != dist / APP_NAME and (dist / APP_NAME).exists():
+        shutil.rmtree(dist / APP_NAME)
     verify_assets(bundle, assets)
     manifest = build_manifest(built_assets, ROOT)
-    (bundle / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    manifest_path(bundle).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    if sys.platform == "darwin":
+        seal_application(bundle)
     print(f"Bundle: {bundle}")
     if archive:
         target = dist / f"{APP_NAME}-{sys.platform}-{platform.machine().lower()}.tar.gz"
@@ -346,7 +402,9 @@ def failure_checks(
     directory = workdir / "directory" / "inventory.db"
     directory.mkdir(parents=True)
     missing_db = workdir / "missing-assets" / "inventory.db"
-    incomplete = workdir / "incomplete-bundle"
+    # PyInstaller recognizes macOS applications by the literal .app/Contents/MacOS
+    # suffix. Keep the bundle name so the damaged copy still finds its Python runtime.
+    incomplete = workdir / "incomplete-bundle" / bundle.name
     hardlinked_copy(bundle, incomplete)
     shutil.rmtree(find_bundled_assets(incomplete))
 
@@ -408,6 +466,14 @@ def failure_checks(
     return results
 
 
+def require_network_isolation(system: str = sys.platform) -> None:
+    if not system.startswith("linux"):
+        raise PackagingError(
+            "--isolate-network needs a Linux network namespace (util-linux unshare); "
+            "run the smoke without it on this platform."
+        )
+
+
 def require_display() -> None:
     if sys.platform.startswith("linux") and not (
         os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")
@@ -418,7 +484,7 @@ def require_display() -> None:
         )
 
 
-def machine_record() -> dict[str, Any]:
+def machine_record(system: str = sys.platform) -> dict[str, Any]:
     record: dict[str, Any] = {
         "platform": platform.platform(),
         "machine": platform.machine(),
@@ -427,6 +493,15 @@ def machine_record() -> dict[str, Any]:
         "logical_cpus": os.cpu_count(),
         "display": os.environ.get("XDG_SESSION_TYPE") or os.environ.get("DISPLAY") or "none",
     }
+    if system == "darwin":
+        record.update(
+            os=f"macOS {platform.mac_ver()[0]}",
+            cpu=_sysctl("machdep.cpu.brand_string"),
+            memory=f"{_sysctl('hw.memsize')} bytes",
+            display="macOS window server (logged-in session)",
+        )
+        del record["libc"]
+        return record
     release = Path("/etc/os-release")
     cpuinfo = Path("/proc/cpuinfo")
     meminfo = Path("/proc/meminfo")
@@ -444,10 +519,36 @@ def machine_record() -> dict[str, Any]:
     return record
 
 
+def _sysctl(name: str) -> str:
+    try:
+        result = _tool("sysctl", "-n", name)
+    except OSError:
+        return "unknown"
+    return result.stdout.strip() if result.returncode == 0 else "unknown"
+
+
+def signature_record(bundle: Path) -> dict[str, Any]:
+    """macOS seal and Gatekeeper verdict of the application as built (unsigned distribution)."""
+    try:
+        verify = _tool("codesign", "--verify", "--deep", "--strict", "--verbose=2", str(bundle))
+        details = _tool("codesign", "--display", "--verbose=2", str(bundle))
+        gatekeeper = _tool("spctl", "--assess", "--type", "execute", "--verbose", str(bundle))
+    except OSError as exc:
+        return {"passed": False, "error": str(exc)}
+    keys = ("Identifier=", "Format=", "Signature=", "TeamIdentifier=", "Sealed Resources")
+    return {
+        "verify": excerpt(verify.stderr),
+        "signature": [line for line in details.stderr.splitlines() if line.startswith(keys)],
+        # Recorded, not required: an ad-hoc signature is expected to be rejected here.
+        "gatekeeper": excerpt(gatekeeper.stderr + gatekeeper.stdout),
+        "passed": verify.returncode == 0,
+    }
+
+
 def bundle_record(bundle: Path) -> dict[str, Any]:
     files = [path for path in bundle.rglob("*") if path.is_file() and not path.is_symlink()]
     executable = executable_path(bundle)
-    manifest_file = bundle / MANIFEST_NAME
+    manifest_file = manifest_path(bundle)
     return {
         "directory": bundle.name,
         "file_count": len(files),
@@ -468,6 +569,8 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
         raise PackagingError(f"No bundle executable at {executable_path(bundle)}.")
     if workdir.exists() and any(workdir.iterdir()):
         raise PackagingError(f"--workdir {workdir} must be empty: the smoke writes real data.")
+    if isolate_network:
+        require_network_isolation()
     require_display()
     workdir.mkdir(parents=True, exist_ok=True)
     verified = verify_assets(bundle, assets)
@@ -535,6 +638,10 @@ def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_net
     record["restart_persistence"] = {"passed": persisted}
     record["no_writes_outside_selected_inventory"] = {"passed": not unexpected.exists()}
     ok = ok and persisted and not unexpected.exists()
+    if sys.platform == "darwin":
+        # Checked after the runs: an intact seal also proves nothing was written inside.
+        record["application_seal"] = signature_record(bundle)
+        ok = ok and record["application_seal"]["passed"]
     record["result"] = "passed" if ok else "failed"
     evidence.parent.mkdir(parents=True, exist_ok=True)
     evidence.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
@@ -557,13 +664,13 @@ def main(argv: list[str] | None = None) -> int:
     build_parser.add_argument("--dist", type=Path, default=ROOT / "dist")
     build_parser.add_argument("--work", type=Path, default=ROOT / "build")
     build_parser.add_argument("--no-archive", action="store_true")
-    smoke_parser.add_argument("--bundle", type=Path, default=ROOT / "dist" / APP_NAME)
+    smoke_parser.add_argument("--bundle", type=Path, default=bundle_path(ROOT / "dist"))
     smoke_parser.add_argument("--workdir", type=Path, required=True)
     smoke_parser.add_argument("--evidence", type=Path, required=True)
     smoke_parser.add_argument(
         "--isolate-network",
         action="store_true",
-        help="Run the bundle in an empty Linux network namespace (util-linux unshare).",
+        help="Run the bundle in an empty network namespace (Linux only, util-linux unshare).",
     )
     args = parser.parse_args(argv)
     try:

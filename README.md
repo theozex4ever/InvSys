@@ -53,7 +53,7 @@ The newer [pywebview desktop frontend](#optional-live-desktop-frontend) shown be
 | Language | Python 3.12+ |
 | UI | PySide6 (Qt6) |
 | Data | SQLite + SQLAlchemy ORM |
-| Packaging | PyInstaller (Linux standalone bundle; Windows/macOS planned) |
+| Packaging | PyInstaller (Linux and macOS standalone bundles; Windows planned) |
 | Tests | pytest |
 | Lint / Format | ruff |
 

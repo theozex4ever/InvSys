@@ -376,9 +376,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The Windows and macOS packaging tickets add their runners here and
-        # extend scripts/package_bundle.py; the steps below are the shared shape.
-        os: [ubuntu-24.04]
+        # The Windows packaging ticket adds its runner here and extends
+        # scripts/package_bundle.py; the steps below are the shared shape.
+        # `bundle` is what the build delivers: a folder, or an .app on macOS.
+        include:
+          - os: ubuntu-24.04
+            bundle: invsys-desktop
+          # Apple silicon; the bundle targets the runner's architecture only.
+          - os: macos-15
+            bundle: invsys-desktop.app
     env:
       QTWEBENGINE_CHROMIUM_FLAGS: --force-prefers-reduced-motion
     steps:
@@ -420,6 +426,30 @@ jobs:
           --assets frontend/dist
           --dist "$RUNNER_TEMP/bundle-dist"
           --work "$RUNNER_TEMP/bundle-work"
+          2>&1 | tee "$RUNNER_TEMP/package-build.log"
+
+      # Smoke the installed archive, including its symlinks and executable modes,
+      # rather than only the directory PyInstaller left behind.
+      - name: Extract standalone archive
+        env:
+          BUNDLE: ${{ matrix.bundle }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/bundle-installed"
+          tar -xzf "$RUNNER_TEMP"/bundle-dist/invsys-desktop-*.tar.gz -C "$RUNNER_TEMP/bundle-installed"
+          test -d "$RUNNER_TEMP/bundle-installed/$BUNDLE"
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          dist = Path(os.environ['RUNNER_TEMP']) / 'bundle-dist'
+          lines = []
+          for archive in sorted(dist.glob('*.tar.gz')):
+              with archive.open('rb') as stream:
+                  digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+              lines.append(f'{digest}  {archive.name}\n')
+          (dist / 'SHA256SUMS').write_text(''.join(lines), encoding='utf-8')
+          PY
 
       - name: Build left the checkout untouched
         run: |
@@ -438,11 +468,27 @@ jobs:
         run: >-
           xvfb-run -a -s "-screen 0 1920x1080x24"
           python scripts/package_bundle.py smoke
-          --bundle "$RUNNER_TEMP/bundle-dist/invsys-desktop"
+          --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
           --assets frontend/dist
           --workdir "$RUNNER_TEMP/invsys-package-smoke"
           --evidence "$RUNNER_TEMP/package-evidence.json"
           --isolate-network
+          2>&1 | tee "$RUNNER_TEMP/package-smoke.log"
+
+      # The runner's logged-in session is the display. macOS has no unprivileged
+      # network namespace, so offline rests on the smoke's file:// and
+      # no-HTTP-server checks there (see docs/frontend/packaging.md).
+      - name: Package smoke (macOS)
+        if: runner.os == 'macOS'
+        env:
+          BUNDLE: ${{ matrix.bundle }}
+        run: >-
+          python scripts/package_bundle.py smoke
+          --bundle "$RUNNER_TEMP/bundle-installed/$BUNDLE"
+          --assets frontend/dist
+          --workdir "$RUNNER_TEMP/invsys-package-smoke"
+          --evidence "$RUNNER_TEMP/package-evidence.json"
+          2>&1 | tee "$RUNNER_TEMP/package-smoke.log"
 
       - name: Package evidence summary
         if: ${{ !cancelled() }}
@@ -452,7 +498,7 @@ jobs:
           {
             echo "### Package smoke (${RUNNER_OS})"
             echo '```json'
-            python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d[k] for k in ('result','machine','network_isolated')}, indent=2))" "$RUNNER_TEMP/package-evidence.json"
+            python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps({k: d.get(k) for k in ('result','machine','network_isolated','application_seal')}, indent=2))" "$RUNNER_TEMP/package-evidence.json"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -463,11 +509,28 @@ jobs:
           name: package-evidence-${{ matrix.os }}
           path: |
             ${{ runner.temp }}/package-evidence.json
+            ${{ runner.temp }}/package-build.log
+            ${{ runner.temp }}/package-smoke.log
+            ${{ runner.temp }}/bundle-dist/SHA256SUMS
             ${{ runner.temp }}/bundle-dist/invsys-desktop/bundle-manifest.json
+            ${{ runner.temp }}/bundle-dist/invsys-desktop.app/Contents/Resources/bundle-manifest.json
             ${{ runner.temp }}/invsys-package-smoke/inventory/smoke-captures/
             ${{ runner.temp }}/invsys-package-smoke/inventory/logs/
-          retention-days: 14
+          retention-days: 90
           if-no-files-found: warn
+
+      # A CI artifact for native-panel acceptance, not a published release.
+      # Keep the tar intact: uploading the .app directly would lose its symlinks/modes.
+      - name: Upload macOS acceptance bundle
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-standalone-bundle
+          path: |
+            ${{ runner.temp }}/bundle-dist/*.tar.gz
+            ${{ runner.temp }}/bundle-dist/SHA256SUMS
+          retention-days: 7
+          if-no-files-found: error
 
   dependency-audit:
     name: Dependency audit

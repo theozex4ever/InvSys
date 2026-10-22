@@ -1,13 +1,26 @@
 """Parts, Inventory receipt and BOM CSV review and recovery through real Qt dialogs."""
 
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Any
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QFileDialog, QLineEdit
 
 from inventory_control.desktop_smoke_ui import _GuiActions
+
+
+def use_scriptable_file_dialogs(app: Any, platform: str = sys.platform) -> None:
+    """Let the probe drive the file dialog the bridge opens.
+
+    macOS shows NSOpenPanel for Qt's static dialogs, which no program can choose a file
+    in; there the probe switches Qt to its own dialog. The bridge, pywebview and Qt
+    file selection path is unchanged; only the Cocoa panel itself is not exercised.
+    """
+    if platform == "darwin":
+        app.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs, True)
 
 
 class _ImportSmoke:
@@ -23,6 +36,7 @@ class _ImportSmoke:
         app = QApplication.instance()
         if app is None:
             raise RuntimeError("Native import smoke requires the Qt application.")
+        use_scriptable_file_dialogs(app)
         self.actions.moveToThread(app.thread())
 
     def q(self, part: str) -> str:
