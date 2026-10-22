@@ -2,7 +2,7 @@
 
 `scripts/package_bundle.py` turns the built frontend and the pywebview launcher into
 a self-contained, one-directory bundle that runs without Python, Node, a frontend
-development server, a CDN or any inventory HTTP service. Linux (ticket #52) and
+development server, a CDN or any inventory HTTP service. Linux (ticket #52),
 Windows (ticket #53) and macOS (ticket #54) have retained automated package
 evidence. Native Cocoa-panel and Finder acceptance on macOS remains pending as
 recorded [below](#recorded-macos-evidence). All three platforms share the same
@@ -407,6 +407,8 @@ operator acceptance.
 
 ## Recorded Windows evidence
 
+### Historical run — 2026-10-19
+
 Recorded 2026-10-19 (UTC) by the `package-smoke` CI job, [run
 39190637774](https://github.com/theozex4ever/InvSys/actions/runs/39190637774)
 attempt 1, from a clean checkout of commit `827bf0a` (`uncommitted_changes: false`).
@@ -440,6 +442,65 @@ Windows, Explorer launches by double-click (the Enter prompt is covered by unit
 tests only), the Settings folder buttons' `os.startfile`, performance targets, and
 operator acceptance. These limitations describe this historical run; the current
 Windows probe now requires real visible Explorer navigation for both folder buttons.
+
+### Integrated candidate 2026-10-22
+
+All 19 checks passed on PR #78 head
+`c6af0677b41c697f09d972f18fb2af852539394f`: [CI run
+39777209762](https://github.com/theozex4ever/InvSys/actions/runs/39777209762)
+and [CodeQL run
+39777209760](https://github.com/theozex4ever/InvSys/actions/runs/39777209760).
+The bundle manifest identifies the clean GitHub integration merge
+`9adfd617f4fe15ddeb909a62a99e974c10d4370e`, combining that head with base
+`e33afb1949b82491fa62883488079031a59ba6c2`. The integration merge and PR head
+have identical trees; the manifest source is the merge SHA, not the head SHA.
+
+The unmodified [full JSON record](evidence/windows-package-2026-10-22.json)
+retains each run's Explorer observations, actual startup errors, assets, machine,
+toolchain and persistence results. The original [archive checksum
+record](evidence/windows-package-2026-10-22.SHA256SUMS) identifies
+`invsys-desktop-win32-amd64.zip` as SHA-256
+`96785927fe859e2fd34512e5db97492242e4f5adb3c9daabba50eaaa1bb7570e`.
+The zip was 226,539,176 bytes, extracted with `Expand-Archive` before the smoke;
+the extracted bundle contained 3,026 files and 593,945,348 bytes.
+
+The reference machine was GitHub `windows-2025`, Windows Server 2025 Datacenter
+10.0.26100, image `win25-vs2026 20261018.275.1`, AMD EPYC 9V45, four logical
+CPUs and 16,771,836 kB RAM, in the runner's interactive desktop session. Python
+3.12.10 and all five recorded package versions match the historical toolchain
+above. Native workflows used the disposable inventory
+`D:\a\_temp\invsys-package-smoke\inventory\inventory.db`.
+
+The [Windows package job](https://github.com/theozex4ever/InvSys/actions/runs/39777209762/job/119819603949)
+passed both frozen runs (95.8 and 86.7 seconds, including probe overhead; these are
+not packaged-launch timings). In **each** run, both Settings folder buttons
+called the actual Windows system opener. Explorer exposed a new visible window
+at exactly the selected inventory's `backups` path and another at its `exports`
+path; the export-recovery folder action was verified too. All six observations
+retain the actual path, location URL, window handle, visibility and successful
+cleanup separately by run. Native Windows CSV selection and cancellation,
+delivered workflows, recovery, themes, keyboard and layout checks passed.
+
+Run 1 left 42 Stock ledger rows and no startup backup. Run 2's startup backup held
+exactly those 42 rows, all persisted after restart, and the final inventory held
+82 rows; SQLite integrity and selected-inventory isolation passed. Exact asset
+hashes matched the frontend artifact. All three firewall profiles were ON and
+outbound block rules covered both bundled executables. All six readable startup
+failure probes and the no-inventory-write check passed. Linux and macOS package
+jobs also passed, including the macOS application seal.
+
+Full diagnostics, build/smoke logs, captures, manifest and checksums are retained
+for 90 days in [artifact 12425662009,
+`package-evidence-windows-2025`](https://github.com/theozex4ever/InvSys/actions/runs/39777209762/artifacts/12425662009).
+The JSON and checksum above preserve the acceptance record in the repository
+after that artifact expires; the Windows zip itself is not uploaded.
+
+This establishes Windows package acceptance for ticket #53 on the recorded runner.
+It does not establish Windows 10/11 desktop editions, physical/GPU hardware,
+non-English Windows, Explorer double-click startup, performance targets or human
+operator sign-off. macOS Cocoa-panel/Finder acceptance and the parent retirement
+gates remain separate. The evidence-retention commit changes documentation only;
+its own CI result must be checked on PR #78 before completion.
 
 ## Recorded macOS evidence
 
