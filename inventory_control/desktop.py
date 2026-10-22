@@ -118,10 +118,17 @@ def _launch() -> int:
             "in a folder this account can write).\n",
         )
     smoke: DesktopSmoke | None = None
-    # The smoke records folder requests instead of opening a file manager window.
+    # Windows smoke verifies the real Explorer navigation; other platforms retain
+    # their recording host until native file-manager acceptance is implemented.
     opened_folders: list[Path] = []
     host = NativeHost(opener=opened_folders.append) if args.smoke_check else NativeHost()
     try:
+        if args.smoke_check and sys.platform == "win32":
+            from inventory_control.desktop_smoke_windows import FolderProbe
+
+            folders = FolderProbe(database.parent / "smoke-captures" / "windows-folders.json")
+            host = NativeHost(opener=folders.open_folder)
+            opened_folders = folders.opened_folders
         window = webview.create_window(
             "InvSys",
             url=(assets / "index.html").as_uri(),

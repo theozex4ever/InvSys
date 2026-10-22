@@ -251,6 +251,34 @@ def test_machine_record_describes_the_reference_machine():
         assert record[key], key
 
 
+def test_windows_folder_evidence_requires_visible_navigation_to_both_inventory_folders(tmp_path):
+    database = tmp_path / "inventory.db"
+    evidence = tmp_path / "smoke-captures" / "windows-folders.json"
+    evidence.parent.mkdir()
+    assert package_bundle.native_folder_evidence(database)["passed"] is False
+    observations = [
+        {
+            "requested": str(tmp_path / kind),
+            "path": str(tmp_path / kind),
+            "hwnd": hwnd,
+            "visible": True,
+            "closed_after_probe": True,
+        }
+        for kind, hwnd in (("backups", 101), ("exports", 102))
+    ]
+    evidence.write_text(json.dumps(observations[:1]))
+    assert package_bundle.native_folder_evidence(database)["passed"] is False
+    evidence.write_text(json.dumps(observations))
+    assert package_bundle.native_folder_evidence(database)["passed"] is True
+    observations[1]["path"] = str(tmp_path / "wrong-inventory" / "exports")
+    evidence.write_text(json.dumps(observations))
+    assert package_bundle.native_folder_evidence(database)["passed"] is False
+    observations[1]["path"] = str(tmp_path / "exports")
+    observations[1]["visible"] = False
+    evidence.write_text(json.dumps(observations))
+    assert package_bundle.native_folder_evidence(database)["passed"] is False
+
+
 def test_manifest_records_assets_toolchain_and_source(tmp_path):
     manifest = package_bundle.build_manifest({"app.js": "abc"}, tmp_path)
     assert manifest["assets"] == {"app.js": "abc"}
@@ -531,11 +559,12 @@ def test_windows_isolation_removes_its_rules_when_the_smoke_fails(tmp_path):
         commands.append(command)
         return firewall_state(command) or "Rule Name: x\n" * 2
 
-    with (
-        pytest.raises(RuntimeError, match="boom"),
-        package_bundle.network_isolation(bundle, True, "win32", fake_netsh),
-    ):
-        raise RuntimeError("boom")
+    def failed_smoke():
+        with package_bundle.network_isolation(bundle, True, "win32", fake_netsh):
+            raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        failed_smoke()
     assert "delete" in commands[-1]
 
 
@@ -602,9 +631,8 @@ def test_netsh_failures_name_the_command_and_the_elevation_requirement(monkeypat
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the stand-in launcher is a POSIX script")
 def test_a_launched_bundle_never_waits_for_an_operator_at_its_console(tmp_path):
-    bundle = tmp_path / "invsys-desktop"
-    bundle.mkdir()
-    launcher = bundle / "invsys-desktop"
+    bundle = make_bundle(tmp_path)
+    launcher = package_bundle.executable_path(bundle)
     launcher.write_text(
         f"#!{sys.executable}\nimport sys\nprint(repr(sys.stdin.read()))\n", encoding="utf-8"
     )

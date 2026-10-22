@@ -686,8 +686,9 @@ def machine_record(system: str = sys.platform) -> dict[str, Any]:
         "logical_cpus": os.cpu_count(),
         "display": os.environ.get("XDG_SESSION_TYPE") or os.environ.get("DISPLAY") or "none",
     }
-    if image := os.environ.get("ImageOS"):
-        record["ci_image"] = f"{image} {os.environ.get("ImageVersion", "unknown")}"
+    if image := os.environ.get("ImageOS"):  # noqa: SIM112  # GitHub runner image metadata uses this exact key
+        version = os.environ.get("ImageVersion", "unknown")  # noqa: SIM112  # GitHub runner image metadata uses this exact key
+        record["ci_image"] = f"{image} {version}"
     if system == "win32":
         record["display"] = "windows-desktop-session"
         record.pop("libc")
@@ -760,6 +761,25 @@ def bundle_record(bundle: Path) -> dict[str, Any]:
     }
 
 
+def native_folder_evidence(database: Path) -> dict[str, Any]:
+    """Require actual visible Explorer navigation to both selected-inventory folders."""
+    evidence = database.parent / "smoke-captures" / "windows-folders.json"
+    try:
+        observations = json.loads(evidence.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return {"passed": False, "error": f"Cannot read native folder evidence: {exc}"}
+    expected = {str(database.parent / kind) for kind in ("backups", "exports")}
+    verified = {
+        item.get("requested")
+        for item in observations
+        if item.get("visible") is True
+        and item.get("closed_after_probe") is True
+        and item.get("path") == item.get("requested")
+        and item.get("hwnd")
+    }
+    return {"passed": expected <= verified, "observations": observations}
+
+
 def smoke(bundle: Path, assets: Path, workdir: Path, evidence: Path, isolate_network: bool) -> bool:
     # Child launches use a separate cwd; keep every selected path anchored to this one.
     bundle, assets, workdir, evidence = (
@@ -808,6 +828,10 @@ def run_checks(
         )
         backups = startup_backups(database) if database.is_file() else []
         run_ok = run["exit_code"] == 0 and "no HTTP server" in run["stdout"]
+        folders: dict[str, Any] | None = None
+        if sys.platform == "win32":
+            folders = native_folder_evidence(database)
+            run_ok = run_ok and folders["passed"]
         counts = database_counts(database) if database.is_file() else {}
         ids = transaction_ids(database) if database.is_file() else set()
         backed_up: int | None = None
@@ -834,6 +858,7 @@ def run_checks(
                 "startup_backup_transactions": backed_up,
                 "database": counts,
                 "passed": run_ok,
+                **({"native_folder_operations": folders} if folders is not None else {}),
             }
         )
         ok = ok and run_ok

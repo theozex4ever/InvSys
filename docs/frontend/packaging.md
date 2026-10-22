@@ -294,10 +294,16 @@ touches operational data. It:
    records its signature details and Gatekeeper's verdict.
 
 On Windows the import step of the native smoke selects its CSV files through the real
-Windows file dialog (typing the path and pressing Open or Cancel), and the Settings
-folder buttons are recorded rather than opening Explorer windows, as on Linux, so the
-Windows shell call behind them (`os.startfile`) is not exercised by the smoke. The
-Windows smoke also launches against a drive letter nothing is mapped to. It needs
+Windows file dialog (typing the path and pressing Open or Cancel). Both Settings
+folder buttons call the real system opener (`os.startfile`); the probe then reads
+Explorer's displayed folder through `Shell.Application.Windows`, requires a new
+visible window at the exact selected-inventory backup/export path, and closes only
+that new window. Each run records the actual path, location URL, window handle,
+visibility and cleanup in `smoke-captures/windows-folders.json`; the package JSON
+retains both runs separately and fails without verified observations for both
+folders. A Windows regression also checks that a no-op system opener fails this
+observer. Linux/macOS keep their recording folder host. The Windows smoke also
+launches against a drive letter nothing is mapped to. It needs
 English `netsh` output to read the firewall profile states and refuses to run
 isolated otherwise.
 
@@ -427,7 +433,8 @@ rendering.
 Not exercised: Windows 10/11 desktop editions, a physical machine or GPU, non-English
 Windows, Explorer launches by double-click (the Enter prompt is covered by unit
 tests only), the Settings folder buttons' `os.startfile`, performance targets, and
-operator acceptance.
+operator acceptance. These limitations describe this historical run; the current
+Windows probe now requires real visible Explorer navigation for both folder buttons.
 
 ## Recorded macOS evidence
 
