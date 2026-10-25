@@ -567,3 +567,80 @@ Gatekeeper approval of a quarantined download remains separately unverified;
 unsigned-distribution instructions describe the expected restrictions, not an
 executed approval test. Full parity, performance and operator sign-off remain
 ticket 18 gates.
+
+## Recorded copied-data upgrade and restore evidence
+
+Ticket #56. The rehearsal ([`scripts/upgrade_rehearsal.py`](../../scripts/upgrade_rehearsal.py),
+procedure in [cutover.md](cutover.md)) installs the committed pre-migration fixture
+into an empty disposable folder and drives the real application through upgrade
+(native smoke on the copy), restart, a closed-app restore of the pre-upgrade startup
+backup, and a reopen of the restored inventory. Fixture: 8 Parts, 8 Lots, 11 balances,
+28 ledger rows, 4 shipments (two standard, two nested-BOM, one consuming from two Lots),
+7 per-Lot component snapshots, BOM definitions edited after those shipments, an
+inactive Part, preferences; snapshot digest `8bfb5a77…cb390bb`, text SHA-256
+`ea6da4ea…d67861`.
+
+CI run [40151401098](https://github.com/theozex4ever/InvSys/actions/runs/40151401098)
+on PR #79 head `9f5f5fabacf26bfdc677a2582250aca58997aacc`. GitHub tested the clean
+integration merge `a93da2ddd6564c93cf02754f63c63b43e49fc995`, whose tree is identical to
+the head's (`d67d1a1c…`; base `249454e` had not moved); that merge is the source
+commit in each bundle manifest. The records below are unmodified from the
+`package-evidence-*` artifacts; the evidence-retention commit that adds them changes
+documentation and evidence files only, and its own CI run must be checked on the PR.
+
+| Environment | Record | Bundle | Result |
+| --- | --- | --- | --- |
+| GitHub `ubuntu-24.04` (Ubuntu 24.04.5, image 20261023.334.3, AMD EPYC 9V74, Xvfb, empty network namespace) | [`upgrade-linux-package-2026-10-25.json`](evidence/upgrade-linux-package-2026-10-25.json) | 3,063 files, 634,299,756 bytes, `invsys-desktop` SHA-256 `1cd7abee…` | passed (job attempt 2, see below); launches 71.1 / 69.9 / 69.8 s |
+| GitHub `windows-2025` (Server 2025 10.0.26100, image win25-vs2026 20261021.278.1, AMD EPYC 7763, firewall-isolated) | [`upgrade-windows-package-2026-10-25.json`](evidence/upgrade-windows-package-2026-10-25.json) | 3,026 files, 593,945,364 bytes, `invsys-desktop.exe` SHA-256 `d82fee2b…` | passed; 103.2 / 108.0 / 101.1 s |
+| GitHub `macos-15` (macOS 15.7.9, Apple M1 virtual, arm64, image 20260907.0337.1) | [`upgrade-macos-package-2026-10-25.json`](evidence/upgrade-macos-package-2026-10-25.json) | 3,314 files, 534,916,996 bytes, `invsys-desktop` SHA-256 `38aeed5b…` | passed; 114.4 / 112.9 / 111.9 s |
+| Local Linux (Ubuntu 24.04.5, kernel 7.0.0-38-generic, Intel i7-7700HQ, 7.8 GB, real X11 session) | [`upgrade-linux-source-local-2026-10-24.json`](evidence/upgrade-linux-source-local-2026-10-24.json) | **source launch** (Python 3.12.3, PySide6 6.11.2, pywebview 6.2.1) of clean commit `9f5f5fa`; not a frozen bundle | passed; launches 93.4 / 156.8 / 89.6 s (a concurrent heavy job on the machine) |
+
+Toolchains in the CI records: Python 3.12.15 / 3.12.10 / 3.12.10 (Linux / Windows /
+macOS), PyInstaller 6.22.3, hooks-contrib 2026.8, PySide6 6.11.2, pywebview 6.2.1,
+QtPy 2.4.3. In every record and every one of its three launches: exit 0; the startup
+backup equal (schema and every row) to the inventory as the previous launch left it;
+manual backups in the selected inventory's folder; every pre-existing row unchanged
+except the two preferences the smoke sets (schema, ledger, balances, shipments,
+component snapshots, BOM definitions and Lots all preserved; schema unchanged);
+ledger, balances and shipment totals reconciled; SQLite integrity `ok`; nothing
+written to `INVSYS_HOME`. The inventory held 70 ledger rows / 10 shipments / 13
+component snapshots after launch 1 and 110 / 16 / 19 after the restart (fixture:
+28 / 4 / 7). Restoring the first launch's startup backup returned an inventory equal
+to the fixture, kept the displaced file aside equal to its pre-restore state, and
+listed the 82 ledger entries (38 RECEIVE, 12 BOM_CONSUME, 8 COUNT_CORRECTION, 8
+SHIP_BOM, 6 MOVE_IN, 6 MOVE_OUT, 4 SHIP) and 12 shipments that exist only in the
+displaced file; the third launch then reopened the restored inventory (70 / 10 / 13
+again after its own workflows).
+
+Restore refusals and file failures (recorded per platform in each JSON, database
+byte-identical afterwards in every case): missing, non-SQLite, truncated and
+non-InvSys backups, the live database as the backup and a blocked aside folder were
+refused before anything moved; a read-only database folder (real, Linux, macOS and
+the local run; not applicable on Windows) and a database held open by another program
+(real, Windows only; not applicable elsewhere) failed with the operating system's
+"Permission denied" / "being used by another process" and the previous database was
+put back. The disk-full-after-move case is **simulated** by an injected `ENOSPC`
+between the steps, not a real full disk; it also ended with the database put back.
+
+Run history, stated plainly: attempt 1 of the Linux job failed in the third
+launch, inside the *existing* native smoke's keyboard-focus check (Shift+Tab to the
+Export Parts button at 640×480, timed out with focus still on Export Inventory)
+after the rehearsal's data checks had passed; the failed attempt's artifact
+(`package-evidence-ubuntu-24.04`, id 12582986948) is retained for 90 days. Re-running that job on the same commit (attempt 2) passed all three
+launches, and the records above are from it. Windows and macOS passed on attempt 1.
+The same smoke step passed in every other native launch of this run (including both
+package-smoke launches on each platform) and in the local run. This is an intermittent focus race in code this ticket does not touch; it is not
+fixed here and now has more chances to occur because each leg runs three more native
+launches. The `Dependency audit` job failed on three new `filelock` 4.0.12
+advisories (fix 4.2.1) in a lock this ticket does not change; `main` last passed it
+on 2026-10-22.
+
+Established: the copied-data upgrade, restart, closed-app restore, rollback to the
+pre-upgrade state, ledger reconciliation listing and restore failure behaviour on the
+three CI runners above and one local source launch, all on disposable copies.
+**Not established:** a frozen bundle on the local Linux machine (not built there; the
+machine is Ubuntu 24.04.5, not the CachyOS reference), Windows 10/11 desktop
+editions, macOS other than 15.7.9, an upgrade between two *packaged releases* (no
+earlier packaged release exists; rollback to a last known-good artifact is documented
+but its executable swap was not rehearsed), operator-run restore through the file
+manager, real disk-full or ACL failures, performance, and operator sign-off (#57).

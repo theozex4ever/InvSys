@@ -1,0 +1,437 @@
+{
+  "recorded_at": "2026-10-25T01:38:08+00:00",
+  "machine": {
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "kernel": "7.0.0-38-generic",
+    "libc": "glibc 2.39",
+    "logical_cpus": 8,
+    "display": "x11",
+    "os": "Ubuntu 24.04.5 LTS",
+    "cpu": "Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz",
+    "memory": "7991528 kB"
+  },
+  "application": {
+    "kind": "source-launch",
+    "python": "3.12.3",
+    "packages": {
+      "pyinstaller": "not installed",
+      "pyinstaller-hooks-contrib": "not installed",
+      "PySide6": "6.11.2",
+      "pywebview": "6.2.1",
+      "QtPy": "2.4.3"
+    },
+    "source": {
+      "commit": "9f5f5fabacf26bfdc677a2582250aca58997aacc",
+      "uncommitted_changes": false
+    }
+  },
+  "network_isolated": false,
+  "fixture": {
+    "path": "premigration-inventory.sql",
+    "sha256": "ea6da4ea945c05f5ad56535386a04dce1a17cc3d44b16e7c33fefa3fb4d67861",
+    "counts": {
+      "locations": 4,
+      "parts": 8,
+      "lots": 8,
+      "inventory_balances": 11,
+      "inventory_transactions": 28,
+      "shipments": 4,
+      "shipment_components": 7,
+      "bom_components": 6,
+      "settings": 3
+    },
+    "snapshot_digest": "8bfb5a770ae68928af1673d1be059fe14ce87563f6253551d1ed21390cb390bb",
+    "component_snapshots": {
+      "SHP-20260905-0001": [
+        [
+          "UPG-BOLT",
+          "B-100",
+          "Stock",
+          24
+        ],
+        [
+          "UPG-GASKET",
+          "G-1",
+          "Stock",
+          6
+        ],
+        [
+          "UPG-PLATE",
+          "P-1",
+          "Stock",
+          3
+        ]
+      ],
+      "SHP-20260908-0001": [
+        [
+          "UPG-BOLT",
+          "B-100",
+          "Stock",
+          36
+        ],
+        [
+          "UPG-BOLT",
+          "B-200",
+          "Stock",
+          4
+        ],
+        [
+          "UPG-GASKET",
+          "G-1",
+          "Stock",
+          10
+        ],
+        [
+          "UPG-PLATE",
+          "P-1",
+          "Stock",
+          5
+        ]
+      ]
+    },
+    "preferences": {
+      "desktop_theme": "dark",
+      "last_operator": "J. Okafor"
+    }
+  },
+  "steps": [
+    {
+      "name": "fixture-is-intact-before-upgrade",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "name": "upgrade-open-and-workflows",
+      "passed": true,
+      "problems": [],
+      "exit_code": 0,
+      "seconds": 93.4,
+      "stdout": [
+        "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
+        "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
+        "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
+        "Desktop smoke: five real CSV files, Lot/audit/component trace, destination, duplicate clicks, navigation and export failures passed.",
+        "Desktop smoke: reduced-motion preference inactive; rerun with QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion to exercise it.",
+        "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
+        "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
+        "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
+        "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2684 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
+        "Desktop smoke: restart persistence and backup content passed; no HTTP server."
+      ],
+      "stderr": [],
+      "startup_backups": [
+        "inventory-20261024-213809-startup.db"
+      ],
+      "manual_backups": [
+        "inventory-20261024-213838-manual.db",
+        "inventory-20261024-213839-manual.db"
+      ],
+      "startup_backup_identical_to_previous_state": true,
+      "inventory_counts": {
+        "locations": 4,
+        "parts": 26,
+        "lots": 28,
+        "inventory_balances": 32,
+        "inventory_transactions": 70,
+        "shipments": 10,
+        "shipment_components": 13,
+        "bom_components": 14,
+        "settings": 3
+      },
+      "inventory_digest": "c0f47325eecc550342ab494fb8fa89be9d1a1c6a7d45d69fc36b5e0dbac03f6a"
+    },
+    {
+      "name": "restart-and-workflows",
+      "passed": true,
+      "problems": [],
+      "exit_code": 0,
+      "seconds": 156.8,
+      "stdout": [
+        "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
+        "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
+        "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
+        "Desktop smoke: five real CSV files, Lot/audit/component trace, destination, duplicate clicks, navigation and export failures passed.",
+        "Desktop smoke: reduced-motion preference inactive; rerun with QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion to exercise it.",
+        "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
+        "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
+        "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
+        "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2824 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
+        "Desktop smoke: restart persistence and backup content passed; no HTTP server."
+      ],
+      "stderr": [],
+      "startup_backups": [
+        "inventory-20261024-213943-startup.db"
+      ],
+      "manual_backups": [
+        "inventory-20261024-214009-manual.db",
+        "inventory-20261024-214010-manual.db"
+      ],
+      "startup_backup_identical_to_previous_state": true,
+      "inventory_counts": {
+        "locations": 4,
+        "parts": 40,
+        "lots": 41,
+        "inventory_balances": 45,
+        "inventory_transactions": 110,
+        "shipments": 16,
+        "shipment_components": 19,
+        "bom_components": 22,
+        "settings": 3
+      },
+      "inventory_digest": "04710d1b015eebbfa679c4ed928f69f64082fe69ba2b4445525a1bd168aecc4f"
+    },
+    {
+      "name": "closed-app-restore-of-the-pre-upgrade-backup",
+      "passed": true,
+      "problems": [],
+      "restored_from": "inventory-20261024-213809-startup.db",
+      "backup_sha256": "dba3b5cc8f89ebf00b0dbd37dc514e09243e9f7d64a399a9d150d2001f7ed04a",
+      "aside_directory": "/tmp/invsys-up-src/inventory/restore-aside/restore-aside-20261024-214219",
+      "kept_aside": [
+        "inventory.db"
+      ],
+      "reconciliation_required": {
+        "ledger_entries": 82,
+        "ledger_entry_ids": [
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110
+        ],
+        "by_type": {
+          "BOM_CONSUME": 12,
+          "COUNT_CORRECTION": 8,
+          "MOVE_IN": 6,
+          "MOVE_OUT": 6,
+          "RECEIVE": 38,
+          "SHIP": 4,
+          "SHIP_BOM": 8
+        },
+        "shipments": [
+          "SHP-20261024-0001",
+          "SHP-20261024-0002",
+          "SHP-20261024-0003",
+          "SHP-20261024-0004",
+          "SHP-20261024-0005",
+          "SHP-20261024-0006",
+          "SHP-20261024-0007",
+          "SHP-20261024-0008",
+          "SHP-20261024-0009",
+          "SHP-20261024-0010",
+          "SHP-20261024-0011",
+          "SHP-20261024-0012"
+        ]
+      }
+    },
+    {
+      "name": "reopen-after-restore-and-workflows",
+      "passed": true,
+      "problems": [],
+      "exit_code": 0,
+      "seconds": 89.6,
+      "stdout": [
+        "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
+        "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
+        "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
+        "Desktop smoke: five real CSV files, Lot/audit/component trace, destination, duplicate clicks, navigation and export failures passed.",
+        "Desktop smoke: reduced-motion preference inactive; rerun with QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion to exercise it.",
+        "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
+        "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
+        "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
+        "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2684 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
+        "Desktop smoke: restart persistence and backup content passed; no HTTP server."
+      ],
+      "stderr": [],
+      "startup_backups": [
+        "inventory-20261024-214219-startup.db"
+      ],
+      "manual_backups": [
+        "inventory-20261024-214246-manual-01.db",
+        "inventory-20261024-214246-manual.db"
+      ],
+      "startup_backup_identical_to_previous_state": true,
+      "inventory_counts": {
+        "locations": 4,
+        "parts": 26,
+        "lots": 28,
+        "inventory_balances": 32,
+        "inventory_transactions": 70,
+        "shipments": 10,
+        "shipment_components": 13,
+        "bom_components": 14,
+        "settings": 3
+      },
+      "inventory_digest": "7a252cb340d0da21f8f6c6ed360627c4fe733c4c31b58bcff7db863c8c190c7b"
+    },
+    {
+      "name": "nothing-written-outside-the-selected-inventory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "name": "restore-refusals-and-file-failures-leave-the-database-untouched",
+      "passed": true,
+      "problems": []
+    }
+  ],
+  "network_isolation": {
+    "enabled": false
+  },
+  "restore_failure_behaviour": [
+    {
+      "name": "backup-does-not-exist",
+      "applicable": true,
+      "message": "The backup /tmp/invsys-restore-probes-wnnli4mc/backup-does-not-exist/backups/absent.db does not exist. Nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "backup-is-not-sqlite",
+      "applicable": true,
+      "message": "The backup inventory-garbage.db is not a usable SQLite inventory (file is not a database). Nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "backup-is-truncated",
+      "applicable": true,
+      "message": "The backup inventory-truncated.db is not a usable SQLite inventory (database disk image is malformed). Nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "backup-is-another-kind-of-database",
+      "applicable": true,
+      "message": "The file inventory-other.db is not an InvSys inventory (no parts, lots, inventory_balances, inventory_transactions, shipments table). Nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "backup-is-the-live-database",
+      "applicable": true,
+      "message": "The backup is the live database itself. Nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "aside-folder-cannot-be-created",
+      "applicable": true,
+      "message": "Cannot create the aside folder /tmp/invsys-restore-probes-wnnli4mc/aside-folder-cannot-be-created/restore-aside/restore-aside-20261024-214350: Not a directory. Nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "copy-fails-after-database-moved-aside",
+      "applicable": true,
+      "message": "Restore failed: No space left on device. The previous database was put back; nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "database-folder-is-read-only",
+      "applicable": true,
+      "message": "Restore failed: Permission denied. The previous database was put back; nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "database-held-open-by-another-program",
+      "applicable": false,
+      "passed": true
+    }
+  ],
+  "result": "passed"
+}
