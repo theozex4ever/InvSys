@@ -93,7 +93,7 @@ class _Clock:
         self.current = datetime(2026, 9, day, hour, minute)
 
 
-def _application() -> None:
+def _ensure_repo_importable() -> None:
     """Make the repository importable when the script runs from ``scripts/``."""
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
@@ -101,7 +101,7 @@ def _application() -> None:
 
 def build_fixture_database(path: Path) -> None:
     """Write the pre-migration scenario with the application's own store and a fixed clock."""
-    _application()
+    _ensure_repo_importable()
     from inventory_control.store import InventoryStore
 
     clock = _Clock()
@@ -425,22 +425,24 @@ def component_trace(state: dict[str, Any]) -> dict[str, list[list[Any]]]:
 
 def dropped_entries(kept: dict[str, Any], replaced: dict[str, Any]) -> dict[str, Any]:
     """Ledger entries and shipments in ``replaced`` that ``kept`` lacks (to reconcile by hand)."""
+    known_transactions = set(kept["tables"]["inventory_transactions"]["rows"])
+    known_shipments = set(kept["tables"]["shipments"]["rows"])
     transactions = [
         row
-        for key, row in replaced["tables"]["inventory_transactions"]["rows"].items()
-        if key not in kept["tables"]["inventory_transactions"]["rows"]
+        for row in _table(replaced, "inventory_transactions")
+        if str(row["id"]) not in known_transactions
     ]
     shipments = [
-        row[1]
-        for key, row in replaced["tables"]["shipments"]["rows"].items()
-        if key not in kept["tables"]["shipments"]["rows"]
+        row["shipment_number"]
+        for row in _table(replaced, "shipments")
+        if str(row["id"]) not in known_shipments
     ]
     by_type: dict[str, int] = {}
     for row in transactions:
-        by_type[row[2]] = by_type.get(row[2], 0) + 1
+        by_type[row["tx_type"]] = by_type.get(row["tx_type"], 0) + 1
     return {
         "ledger_entries": len(transactions),
-        "ledger_entry_ids": [row[0] for row in transactions],
+        "ledger_entry_ids": [row["id"] for row in transactions],
         "by_type": dict(sorted(by_type.items())),
         "shipments": sorted(shipments),
     }
@@ -584,24 +586,28 @@ def restore_failure_probes(scratch: Path) -> list[dict[str, Any]]:
             action(database, good, aside_root)
         except RestoreRefused as exc:
             message = str(exc)
+        untouched = database.is_file() and _sha256(database) == before
+        no_partial = not database.with_name("inventory.db.restoring").exists() and not any(
+            aside_root.glob("*/inventory.db")
+        )
         probes.append(
             {
                 "name": name,
                 "applicable": True,
                 "message": message,
-                "database_untouched": database.is_file() and _sha256(database) == before,
-                "no_partial_files": not database.with_name("inventory.db.restoring").exists()
-                and not any(aside_root.glob("*/inventory.db")),
-                "passed": expected in message
-                and database.is_file()
-                and _sha256(database) == before
-                and not database.with_name("inventory.db.restoring").exists()
-                and not any(aside_root.glob("*/inventory.db")),
+                "database_untouched": untouched,
+                "no_partial_files": no_partial,
+                "passed": expected in message and untouched and no_partial,
             }
         )
 
     def missing(database: Path, good: Path, aside_root: Path) -> None:
         restore_from_backup(database, good.with_name("absent.db"), aside_root)
+
+    def directory(database: Path, good: Path, aside_root: Path) -> None:
+        folder = good.with_name("inventory-folder.db")
+        folder.mkdir()
+        restore_from_backup(database, folder, aside_root)
 
     def garbage(database: Path, good: Path, aside_root: Path) -> None:
         bad = good.with_name("inventory-garbage.db")
@@ -648,6 +654,7 @@ def restore_failure_probes(scratch: Path) -> list[dict[str, Any]]:
         restore_from_backup(database, good, aside_root, after_aside=fail)
 
     probe("backup-does-not-exist", missing, "does not exist")
+    probe("backup-is-a-folder", directory, "is not a file")
     probe("backup-is-not-sqlite", garbage, "not a usable SQLite inventory")
     probe("backup-is-truncated", truncated, "Nothing was changed")
     probe("backup-is-another-kind-of-database", foreign, "is not an InvSys inventory")
@@ -666,6 +673,10 @@ def restore_failure_probes(scratch: Path) -> list[dict[str, Any]]:
 
 
 # --------------------------------------------------------------- the rehearsal
+
+
+def _decoded(output: str | bytes | None) -> str:
+    return output.decode(errors="replace") if isinstance(output, bytes) else output or ""
 
 
 class Launcher:
@@ -699,8 +710,8 @@ class Launcher:
                 "arguments": arguments,
                 "exit_code": -1,
                 "seconds": package_bundle.RUN_TIMEOUT_SECONDS,
-                "stdout": package_bundle._text(exc.stdout),
-                "stderr": package_bundle._text(exc.stderr) + "\nTimed out.",
+                "stdout": _decoded(exc.stdout),
+                "stderr": _decoded(exc.stderr) + "\nTimed out.",
             }
         return {
             "arguments": arguments,

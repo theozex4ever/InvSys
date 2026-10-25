@@ -69,7 +69,8 @@ Restore replaces the inventory with an older state. Stock changes made after the
 backup exist only in the displaced file, so restoring is always followed by
 [reconciliation](#reconcile-ledger-entries-after-restoring-an-older-backup).
 
-1. **Before closing the application**, if it still opens: Settings > Export
+1. **Before closing the application**, if it still opens (this export step is not
+   part of the automated rehearsal): Settings > Export
    Transactions and Export Shipments, and keep the files. They list every ledger entry
    and shipment the restore is about to remove from the live inventory.
 2. **Close every InvSys program.** On Windows a program that still holds the file makes
@@ -95,8 +96,11 @@ sidecars) aside, and move the displaced files back together.
 ### What failure looks like
 
 The rehearsal's restore helper follows exactly these steps and is run against each
-failure below on every platform; it checks the database is byte-for-byte unchanged
-afterwards. The messages are the helper's; doing the steps by hand, the same
+failure below on every platform where the situation can occur (the read-only folder
+applies on Linux and macOS, a program holding the file open on Windows; a full disk
+is simulated by an injected error, and failing to put the files back is covered by a
+unit test rather than the native rehearsal); it checks the database is byte-for-byte
+unchanged afterwards. The messages are the helper's; doing the steps by hand, the same
 situations show up as the file manager's own errors.
 
 | Situation | Outcome |
@@ -121,8 +125,9 @@ was written is correct). Close the new application and start the last known-good
 artifact with the same `--database` (original application: `INVSYS_HOME` set to the
 folder that contains `data/inventory.db`, or the same file at the default location).
 No data step is needed because the schema is unchanged. Take a backup first.
-Whatever the new application recorded stays in the ledger and is visible to the old
-one.
+Whatever the new application recorded stays in the ledger and, the schema being the
+same, should be readable by the old release; opening the upgraded inventory with an
+older packaged release has not been rehearsed (none exists yet).
 
 **The data is wrong** (an import, a mistaken operation, a damaged file). Restore a
 backup as above. This is a data rollback and always needs reconciliation.

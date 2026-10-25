@@ -643,4 +643,4 @@ machine is Ubuntu 24.04.5, not the CachyOS reference), Windows 10/11 desktop
 editions, macOS other than 15.7.9, an upgrade between two *packaged releases* (no
 earlier packaged release exists; rollback to a last known-good artifact is documented
 but its executable swap was not rehearsed), operator-run restore through the file
-manager, real disk-full or ACL failures, performance, and operator sign-off (#57).
+manager, native Cocoa-panel/Finder acceptance (#54), real disk-full or ACL failures, performance, and operator sign-off (#57).
