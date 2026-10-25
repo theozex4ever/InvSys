@@ -283,7 +283,18 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             "document.querySelector('#settings-result').textContent.startsWith('Exported Inventory') && document.querySelectorAll('#settings button:disabled').length === 0"
         )
         wait("document.activeElement.dataset.exportKind === 'inventory'")
-        key(Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
+        # A key sent as the page restores focus after the export has intermittently been
+        # dropped (focus stays on Export Inventory). Resend only while focus has not moved.
+        for _ in range(3):
+            key(Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
+            deadline = time.monotonic() + 3
+            while (
+                time.monotonic() < deadline
+                and run("document.activeElement.dataset.exportKind") == "inventory"
+            ):
+                time.sleep(0.1)
+            if run("document.activeElement.dataset.exportKind") != "inventory":
+                break
         wait("document.activeElement.dataset.exportKind === 'parts'")
         capture(captures / f"export-keyboard-{theme}.png")
     window.resize(1366, 768)
