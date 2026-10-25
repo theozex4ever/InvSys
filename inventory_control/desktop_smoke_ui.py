@@ -53,6 +53,22 @@ class _GuiActions(QObject):
             raise self.error
 
 
+def shift_tab_to_previous_export(press: Any, wait: Any, run: Any) -> None:
+    """Send exactly one Shift+Tab once the page has finished restoring focus, then require it.
+
+    A key that was delivered but had no effect (swallowed, or focus stolen back) must fail
+    the check, so it is never resent. The key is sent only after native focus and the page's
+    own focus restoration have settled: two painted frames with focus back on Export Inventory.
+    """
+    wait("document.hasFocus()")
+    run(
+        "window.smokeSettled=false; requestAnimationFrame(() => requestAnimationFrame(() => { window.smokeSettled=true; }));"
+    )
+    wait("window.smokeSettled && document.activeElement.dataset.exportKind === 'inventory'")
+    press()
+    wait("document.activeElement.dataset.exportKind === 'parts'")
+
+
 def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
     import json
 
@@ -76,6 +92,10 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
 
     def key(code: Any, modifiers: Any = Qt.KeyboardModifier.NoModifier) -> None:
         actions.run(lambda: QTest.keyClick(window.native.webview.focusProxy(), code, modifiers))
+
+    def key_shift_tab() -> None:
+        actions.run(activate)
+        key(Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
 
     def capture(target: Path) -> None:
         # Geometry updates precede Chromium painting; capture the completed frame.
@@ -283,19 +303,7 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             "document.querySelector('#settings-result').textContent.startsWith('Exported Inventory') && document.querySelectorAll('#settings button:disabled').length === 0"
         )
         wait("document.activeElement.dataset.exportKind === 'inventory'")
-        # A key sent as the page restores focus after the export has intermittently been
-        # dropped (focus stays on Export Inventory). Resend only while focus has not moved.
-        for _ in range(3):
-            key(Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
-            deadline = time.monotonic() + 3
-            while (
-                time.monotonic() < deadline
-                and run("document.activeElement.dataset.exportKind") == "inventory"
-            ):
-                time.sleep(0.1)
-            if run("document.activeElement.dataset.exportKind") != "inventory":
-                break
-        wait("document.activeElement.dataset.exportKind === 'parts'")
+        shift_tab_to_previous_export(key_shift_tab, wait, run)
         capture(captures / f"export-keyboard-{theme}.png")
     window.resize(1366, 768)
 

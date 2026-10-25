@@ -645,3 +645,306 @@ def test_the_committed_fixture_text_is_what_the_generator_writes(tmp_path, monke
     assert regenerated.read_text(encoding="utf-8").splitlines()[2:] == committed[2:]
     assert committed[0] == rehearsal.FIXTURE_HEADER
     assert committed[1].startswith("-- Written by the application at commit ")
+
+
+# ------------------------------------------------------- restore cleanup and rollback
+
+
+def test_a_staging_cleanup_failure_still_puts_the_database_back(inventory, monkeypatch):
+    backup, _ = make_later_inventory(inventory)
+    before = rehearsal.snapshot(inventory)
+    original_unlink = Path.unlink
+    checks = []
+
+    def failing_check(path):
+        checks.append(path)
+        if len(checks) > 1:  # the copy beside the database fails its own check
+            raise rehearsal.RestoreRefused("The copy is damaged. Nothing was changed.")
+
+    def failing_unlink(self, *args, **kwargs):
+        if self.name.endswith(".restoring"):
+            raise PermissionError(13, "Permission denied")
+        return original_unlink(self, *args, **kwargs)
+
+    real_check = rehearsal.check_backup
+    monkeypatch.setattr(
+        rehearsal,
+        "check_backup",
+        lambda path: (
+            real_check(path) if len(checks) < 1 and not checks.append(path) else failing_check(path)
+        ),
+    )
+    monkeypatch.setattr(Path, "unlink", failing_unlink)
+    with pytest.raises(rehearsal.RestoreRefused) as refused:
+        rehearsal.restore_from_backup(inventory, backup, inventory.parent / "restore-aside")
+    monkeypatch.undo()
+
+    message = str(refused.value)
+    assert "The copy is damaged" in message
+    assert "could not be removed" in message
+    assert ".restoring" in message
+    assert "previous database was put back" in message
+    assert rehearsal.compare(before, rehearsal.snapshot(inventory), identical=True) == []
+
+
+def test_every_recovery_path_is_named_when_nothing_can_be_cleaned_or_put_back(
+    inventory, monkeypatch
+):
+    backup, _ = make_later_inventory(inventory)
+    original_replace = Path.replace
+    original_unlink = Path.unlink
+
+    def refuse_into_database_folder(self, target):
+        if Path(target).parent == inventory.parent:
+            raise PermissionError(13, "Permission denied")
+        return original_replace(self, target)
+
+    def refuse_staging(self, *args, **kwargs):
+        if self.name.endswith(".restoring"):
+            raise PermissionError(13, "Permission denied")
+        return original_unlink(self, *args, **kwargs)
+
+    def fail() -> None:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(Path, "replace", refuse_into_database_folder)
+    monkeypatch.setattr(Path, "unlink", refuse_staging)
+    with pytest.raises(rehearsal.RestoreRefused) as refused:
+        rehearsal.restore_from_backup(
+            inventory, backup, inventory.parent / "restore-aside", after_aside=fail
+        )
+    monkeypatch.undo()
+    message = str(refused.value)
+    assert "No space left on device" in message
+    assert "could NOT be put back" in message
+    assert "restore-aside" in message
+
+
+# ------------------------------------------------------------ evidence destination
+
+
+@pytest.mark.parametrize("kind", ["database", "text", "symlink", "dangling", "inside-workdir"])
+def test_an_existing_evidence_destination_is_refused_before_anything_runs(tmp_path, display, kind):
+    workdir = tmp_path / "work"
+    destination = tmp_path / "somewhere" / "evidence.json"
+    destination.parent.mkdir()
+    if kind == "database":
+        with closing(sqlite3.connect(destination)) as connection:
+            connection.execute("CREATE TABLE precious (id INTEGER)")
+        original = destination.read_bytes()
+    elif kind == "text":
+        destination.write_text("keep me", encoding="utf-8")
+        original = destination.read_bytes()
+    elif kind == "symlink":
+        target = tmp_path / "target.db"
+        target.write_bytes(b"SQLite format 3\x00 precious")
+        original = target.read_bytes()
+        destination.symlink_to(target)
+    elif kind == "dangling":
+        destination.symlink_to(tmp_path / "nowhere")
+        original = b""
+    else:
+        destination = workdir / "inventory" / "evidence.json"
+        original = b""
+    app = StandInApplication()
+
+    with pytest.raises(rehearsal.RehearsalError, match="evidence"):
+        rehearsal.rehearse(app, workdir, destination)
+
+    assert app.launches == 0
+    assert not workdir.exists() or not any(workdir.iterdir())
+    if kind in ("database", "text"):
+        assert destination.read_bytes() == original
+    if kind == "symlink":
+        assert (tmp_path / "target.db").read_bytes() == original
+
+
+def test_the_cli_reports_a_refused_evidence_destination(tmp_path, display, capsys):
+    destination = tmp_path / "evidence.json"
+    destination.write_text("keep me", encoding="utf-8")
+    code = rehearsal.main(
+        ["rehearse", "--source", "--workdir", str(tmp_path / "w"), "--evidence", str(destination)]
+    )
+    assert code == 1
+    assert "evidence" in capsys.readouterr().err
+    assert destination.read_text(encoding="utf-8") == "keep me"
+
+
+def test_evidence_is_created_exclusively_even_if_the_file_appears_during_the_run(tmp_path, display):
+    destination = tmp_path / "evidence.json"
+
+    class Racing(StandInApplication):
+        def run(self, database, cwd, env):
+            destination.write_text("someone else's file", encoding="utf-8")
+            return super().run(database, cwd, env)
+
+    with pytest.raises(rehearsal.RehearsalError, match="evidence"):
+        rehearsal.rehearse(Racing(), tmp_path / "work", destination)
+    assert destination.read_text(encoding="utf-8") == "someone else's file"
+
+
+# --------------------------------------------------------- backup verification (original app)
+
+
+def test_a_good_backup_verifies_with_its_counts(inventory):
+    backup = backup_database(inventory, inventory.parent / "backups", reason="manual")
+    report = rehearsal.verify_backup_file(backup)
+    assert report["problems"] == []
+    assert report["counts"] == FIXTURE_COUNTS
+    assert report["integrity_check"] == "ok"
+
+
+def test_a_backup_that_only_looks_like_a_copy_is_rejected(inventory, tmp_path):
+    good = backup_database(inventory, inventory.parent / "backups", reason="manual")
+    truncated = tmp_path / "inventory-truncated.db"
+    truncated.write_bytes(good.read_bytes()[: good.stat().st_size // 2 + 7])
+    garbage = tmp_path / "inventory-garbage.db"
+    garbage.write_text("not an SQLite database", encoding="utf-8")
+    inconsistent = tmp_path / "inventory-inconsistent.db"
+    inconsistent.write_bytes(good.read_bytes())
+    tamper(inconsistent, "UPDATE inventory_balances SET quantity = quantity + 1 WHERE id = 5")
+    for bad, expected in (
+        (truncated, "not a usable SQLite inventory"),
+        (garbage, "not a usable SQLite inventory"),
+        (inconsistent, "Balance part/lot/location"),
+        (tmp_path / "absent.db", "does not exist"),
+    ):
+        report = rehearsal.verify_backup_file(bad)
+        assert any(expected in problem for problem in report["problems"]), (bad, report)
+
+
+def test_verifying_a_backup_never_changes_it_or_leaves_files_beside_it(inventory):
+    backup = backup_database(inventory, inventory.parent / "backups", reason="manual")
+    before = (backup.read_bytes(), sqlite_files(backup.parent))
+    rehearsal.verify_backup_file(backup)
+    assert (backup.read_bytes(), sqlite_files(backup.parent)) == before
+
+
+def test_the_cli_verifies_a_backup_and_fails_on_a_bad_one(inventory, tmp_path, capsys):
+    good = backup_database(inventory, inventory.parent / "backups", reason="manual")
+    assert rehearsal.main(["verify-backup", str(good)]) == 0
+    assert "28 ledger rows" in capsys.readouterr().out
+    bad = tmp_path / "inventory-bad.db"
+    bad.write_text("nope", encoding="utf-8")
+    assert rehearsal.main(["verify-backup", str(bad)]) == 1
+
+
+# ------------------------------------------------- reconciliation: identity, minute, WAL
+
+
+class FrozenMinute:
+    """Pins the store's wall clock (minute resolution) while a block runs."""
+
+    def __init__(self, stamp):
+        from datetime import datetime
+
+        self.moment = datetime.strptime(stamp, "%Y-%m-%d %H:%M")  # stored times are naive local
+        moment = self.moment
+
+        class Frozen(datetime):
+            @classmethod
+            def now(cls, tz=None):  # noqa: ARG003  # mirrors datetime.now
+                return cls(moment.year, moment.month, moment.day, moment.hour, moment.minute, 45)
+
+        self.cls = Frozen
+
+    def __enter__(self):
+        from unittest import mock
+
+        self.patch = mock.patch("inventory_control.store.datetime", self.cls)
+        self.patch.start()
+
+    def __exit__(self, *exc):
+        self.patch.stop()
+
+
+def test_work_in_the_backups_own_minute_is_still_found_by_identity(inventory):
+    """The store records minutes: a filename time cannot say which entries came later."""
+    with FrozenMinute("2026-10-24 10:30"):
+        store = InventoryStore(inventory, seed=False)
+        try:
+            store.receive("UPG-WIDGET", 1, "Stock", "W-A", "Early", "before backup")
+        finally:
+            store.engine.dispose()
+        backup = backup_database(inventory, inventory.parent / "backups", reason="startup")
+        store = InventoryStore(inventory, seed=False)
+        try:
+            store.receive("UPG-WIDGET", 2, "Stock", "W-B", "Late", "after backup, same minute")
+            store.receive("UPG-WIDGET", 2, "Stock", "W-B", "Late", "after backup, same minute")
+        finally:
+            store.engine.dispose()
+    later = rehearsal.snapshot(inventory)
+    restored = rehearsal.snapshot(backup)
+
+    dropped = rehearsal.dropped_entries(restored, later)
+
+    assert dropped["ledger_entries"] == 2
+    assert [entry["operator"] for entry in dropped["entries"]] == ["Late", "Late"]
+    # Two identical rows stay two rows, and they carry the boundary minute.
+    assert {entry["timestamp"] for entry in dropped["entries"]} == {"2026-10-24 10:30"}
+    newer_than_minute = [e for e in dropped["entries"] if e["timestamp"] > "2026-10-24 10:30"]
+    assert newer_than_minute == []  # the filename-time cutoff would have dropped both
+
+
+def test_dropped_entries_describe_each_record_for_the_operator(inventory):
+    backup, later = make_later_inventory(inventory)
+    dropped = rehearsal.dropped_entries(rehearsal.snapshot(backup), later)
+    ship = next(entry for entry in dropped["entries"] if entry["tx_type"] == "SHIP")
+    assert (ship["part_number"], ship["lot_number"], ship["quantity_change"]) == (
+        "UPG-WIDGET",
+        "W-9",
+        -3,
+    )
+    assert ship["shipment_number"].startswith("SHP-")
+
+
+def test_the_cli_lists_what_a_restore_removed_from_the_displaced_set(inventory, capsys):
+    backup, _ = make_later_inventory(inventory)
+    rehearsal.restore_from_backup(inventory, backup, inventory.parent / "restore-aside", stamp="s")
+    displaced = inventory.parent / "restore-aside" / "restore-aside-s" / "inventory.db"
+    code = rehearsal.main(["dropped", "--kept", str(inventory), "--displaced", str(displaced)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "2 ledger entries" in out
+    assert "UPG-WIDGET" in out
+    assert "1 shipments" in out
+
+
+def test_committed_records_that_exist_only_in_the_wal_need_the_whole_displaced_set(
+    inventory, tmp_path
+):
+    """After a crash the newest committed rows can sit in the -wal file only."""
+    store = InventoryStore(inventory, seed=False)  # WAL mode; connection stays open
+    crashed = tmp_path / "crashed"
+    crashed.mkdir()
+    try:
+        store.receive("UPG-WIDGET", 4, "Stock", "W-CRASH", "Last operator")
+        wal = inventory.with_name("inventory.db-wal")
+        assert wal.stat().st_size > 0
+        # What the disk holds at the moment of a crash: the main file plus sidecars.
+        for suffix in ("", "-wal", "-shm"):
+            shutil_copy(inventory.with_name("inventory.db" + suffix), crashed)
+    finally:
+        store.engine.dispose()
+    database_only = tmp_path / "database-only"
+    database_only.mkdir()
+    shutil_copy(crashed / "inventory.db", database_only)
+
+    whole = rehearsal.snapshot(crashed / "inventory.db")
+    partial = rehearsal.snapshot(database_only / "inventory.db")
+
+    assert any(row[2] == "W-CRASH" for row in whole["tables"]["lots"]["rows"].values())
+    assert not any(row[2] == "W-CRASH" for row in partial["tables"]["lots"]["rows"].values())
+    copied = rehearsal.copy_database_set(crashed / "inventory.db", tmp_path / "inspect")
+    assert sorted(path.name for path in copied.parent.iterdir()) == [
+        "inventory.db",
+        "inventory.db-shm",
+        "inventory.db-wal",
+    ]
+    assert rehearsal.digest(rehearsal.snapshot(copied)) == rehearsal.digest(whole)
+
+
+def shutil_copy(source: Path, destination: Path) -> None:
+    import shutil
+
+    shutil.copy2(source, destination)

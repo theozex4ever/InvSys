@@ -247,16 +247,26 @@ def install_fixture(target: Path, fixture: Path = FIXTURE) -> None:
 # ----------------------------------------------------------------- snapshots
 
 
+def copy_database_set(database: Path, directory: Path) -> Path:
+    """Copy the database and its matching ``-wal``/``-shm`` files together into ``directory``.
+
+    After a crash the newest committed rows can exist only in the ``-wal`` file, so a
+    database file copied alone silently loses them. Returns the copied database path.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    copy = directory / "inventory.db"
+    for suffix in ("", "-wal", "-shm"):
+        source = database.with_name(database.name + suffix)
+        if source.is_file():
+            shutil.copy2(source, copy.with_name(copy.name + suffix))
+    return copy
+
+
 @contextmanager
 def _scratch_copy(database: Path) -> Iterator[Path]:
     """A throwaway copy of the database with its WAL sidecars, so reading never changes it."""
     with tempfile.TemporaryDirectory(prefix="invsys-snapshot-") as scratch:
-        copy = Path(scratch) / "inventory.db"
-        for suffix in ("", "-wal", "-shm"):
-            source = database.with_name(database.name + suffix)
-            if source.is_file():
-                shutil.copy2(source, copy.with_name(copy.name + suffix))
-        yield copy
+        yield copy_database_set(database, Path(scratch))
 
 
 def snapshot(database: Path) -> dict[str, Any]:
@@ -424,9 +434,18 @@ def component_trace(state: dict[str, Any]) -> dict[str, list[list[Any]]]:
 
 
 def dropped_entries(kept: dict[str, Any], replaced: dict[str, Any]) -> dict[str, Any]:
-    """Ledger entries and shipments in ``replaced`` that ``kept`` lacks (to reconcile by hand)."""
+    """Ledger entries and shipments in ``replaced`` that ``kept`` lacks (to reconcile by hand).
+
+    Record identity (the row id) is the authority, never a time: the store records minutes,
+    so a time cutoff cannot tell an entry made just before a backup from one just after.
+    The ids are comparable only until new work is posted to the restored inventory.
+    """
     known_transactions = set(kept["tables"]["inventory_transactions"]["rows"])
     known_shipments = set(kept["tables"]["shipments"]["rows"])
+    parts = {row["id"]: row["part_number"] for row in _table(replaced, "parts")}
+    lots = {row["id"]: row["lot_number"] for row in _table(replaced, "lots")}
+    locations = {row["id"]: row["name"] for row in _table(replaced, "locations")}
+    numbers = {row["id"]: row["shipment_number"] for row in _table(replaced, "shipments")}
     transactions = [
         row
         for row in _table(replaced, "inventory_transactions")
@@ -445,7 +464,48 @@ def dropped_entries(kept: dict[str, Any], replaced: dict[str, Any]) -> dict[str,
         "ledger_entry_ids": [row["id"] for row in transactions],
         "by_type": dict(sorted(by_type.items())),
         "shipments": sorted(shipments),
+        "entries": [
+            {
+                "id": row["id"],
+                "timestamp": row["timestamp"],
+                "tx_type": row["tx_type"],
+                "part_number": parts[row["part_id"]],
+                "lot_number": lots.get(row["lot_id"], ""),
+                "quantity_change": row["quantity_change"],
+                "location_from": locations.get(row["location_from_id"], ""),
+                "location_to": locations.get(row["location_to_id"], ""),
+                "operator": row["operator"],
+                "reference": row["reference"],
+                "notes": row["notes"],
+                "shipment_number": numbers.get(row["shipment_id"], ""),
+            }
+            for row in transactions
+        ],
     }
+
+
+def verify_backup_file(path: Path) -> dict[str, Any]:
+    """Verify a backup independently of the application that wrote it.
+
+    The original application's Settings backup only copies the file; this reopens it
+    read-only, checks SQLite integrity, the required tables, foreign keys and that every
+    balance and shipment still agrees with the ledger. Never changes ``path``.
+    """
+    report: dict[str, Any] = {"path": str(path), "problems": []}
+    try:
+        check_backup(path)
+    except RestoreRefused as exc:
+        report["problems"].append(str(exc))
+        return report
+    state = snapshot(path)
+    report["integrity_check"] = state["integrity_check"]
+    report["counts"] = counts(state)
+    if state["integrity_check"] != "ok":
+        report["problems"].append(f"SQLite integrity check: {state['integrity_check']}.")
+    if state["foreign_key_violations"]:
+        report["problems"].append(f"{state['foreign_key_violations']} foreign key violation(s).")
+    report["problems"] += reconcile(state)
+    return report
 
 
 # ------------------------------------------------------------------- restore
@@ -522,20 +582,29 @@ def restore_from_backup(
         check_backup(staged)
         staged.replace(database)
     except (OSError, RestoreRefused) as exc:
-        staged.unlink(missing_ok=True)
+        # Rolling back must never depend on the cleanup of the staging copy succeeding.
+        cleanup_error: OSError | None = None
+        try:
+            staged.unlink(missing_ok=True)
+        except OSError as unlink_error:
+            cleanup_error = unlink_error
         undone = _put_back(moved)
         if undone:
             with suppress(OSError):
                 aside.rmdir()
         reason = exc.strerror or exc if isinstance(exc, OSError) else exc
-        raise RestoreRefused(
-            f"Restore failed: {reason}. "
-            + (
-                "The previous database was put back; nothing was changed."
-                if undone
-                else f"The previous database could NOT be put back; it is in {aside}."
+        notes = []
+        if cleanup_error is not None:
+            notes.append(
+                f"The staging copy {staged} could not be removed "
+                f"({cleanup_error.strerror or cleanup_error}); delete it by hand."
             )
-        ) from exc
+        notes.append(
+            "The previous database was put back; nothing was changed."
+            if undone
+            else f"The previous database could NOT be put back; it is in {aside}."
+        )
+        raise RestoreRefused(f"Restore failed: {reason}. " + " ".join(notes)) from exc
     if not any(aside.iterdir()):
         aside.rmdir()
     return {
@@ -807,6 +876,40 @@ def launch_and_check(
     return ok, after, startup[0] if len(startup) == 1 else None
 
 
+def claim_evidence(evidence: Path, workdir: Path, fixture: Path) -> Path:
+    """Resolve ``--evidence`` and refuse any destination that already exists or is rehearsal data.
+
+    Checked before anything launches or is written, so a typo can never truncate an
+    inventory (or any file) the operator already has.
+    """
+    destination = evidence.resolve()
+    if evidence.is_symlink() or destination.exists():
+        raise RehearsalError(
+            f"--evidence {evidence} already exists (or links to something that does); "
+            "choose a new file. The rehearsal never overwrites."
+        )
+    inside = destination.is_relative_to(workdir.resolve())
+    if inside or destination == fixture.resolve():
+        raise RehearsalError(
+            f"--evidence {evidence} collides with the rehearsal's own data; "
+            "choose a path outside --workdir."
+        )
+    if destination.parent.exists() and not destination.parent.is_dir():
+        raise RehearsalError(f"--evidence {evidence}: its folder is a file.")
+    return destination
+
+
+def write_evidence(record: dict[str, Any], destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with destination.open("x", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, indent=2) + "\n")
+    except FileExistsError as exc:
+        raise RehearsalError(
+            f"--evidence {destination} appeared during the run; it was not overwritten."
+        ) from exc
+
+
 def rehearse(
     launcher: Launcher,
     workdir: Path,
@@ -814,9 +917,10 @@ def rehearse(
     assets: Path = ROOT / "frontend" / "dist",
     fixture: Path = FIXTURE,
 ) -> bool:
-    workdir, evidence = workdir.resolve(), evidence.resolve()
+    workdir = workdir.resolve()
     if workdir.exists() and any(workdir.iterdir()):
         raise RehearsalError(f"--workdir {workdir} must be empty: the rehearsal writes real data.")
+    evidence = claim_evidence(evidence, workdir, fixture)
     package_bundle.require_display()
     workdir.mkdir(parents=True, exist_ok=True)
     unexpected_home = workdir / "unexpected-home"
@@ -900,8 +1004,7 @@ def rehearse(
         and ok
     )
     record["result"] = "passed" if ok else "failed"
-    evidence.parent.mkdir(parents=True, exist_ok=True)
-    evidence.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    write_evidence(record, evidence)
     print(f"Upgrade rehearsal {record['result']}; evidence written to {evidence}")
     return ok
 
@@ -943,6 +1046,53 @@ def restore_rollback(
 # ---------------------------------------------------------------- command line
 
 
+def report_backup(path: Path) -> int:
+    report = verify_backup_file(path)
+    if report["problems"]:
+        print(f"{path}: NOT VERIFIED")
+        for problem in report["problems"]:
+            print(f"  {problem}")
+        return 1
+    found = report["counts"]
+    print(
+        f"{path}: verified. SQLite integrity ok; {found['parts']} parts, {found['lots']} lots, "
+        f"{found['inventory_transactions']} ledger rows, {found['shipments']} shipments; "
+        "balances and shipments agree with the ledger."
+    )
+    return 0
+
+
+def report_dropped(kept: Path, displaced: Path) -> int:
+    for path in (kept, displaced):
+        if not path.is_file():
+            raise RehearsalError(f"{path} is not a file.")
+    dropped = dropped_entries(snapshot(kept), snapshot(displaced))
+    print(
+        f"{dropped['ledger_entries']} ledger entries and {len(dropped['shipments'])} shipments "
+        f"exist only in {displaced}."
+    )
+    for entry in dropped["entries"]:
+        print(
+            "  "
+            + " | ".join(
+                str(entry[key])
+                for key in (
+                    "timestamp",
+                    "tx_type",
+                    "part_number",
+                    "lot_number",
+                    "quantity_change",
+                    "location_from",
+                    "location_to",
+                    "operator",
+                    "reference",
+                    "shipment_number",
+                )
+            )
+        )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -955,8 +1105,27 @@ def main(argv: list[str] | None = None) -> int:
     rehearse_parser.add_argument("--assets", type=Path, default=ROOT / "frontend" / "dist")
     rehearse_parser.add_argument("--isolate-network", action="store_true")
     commands.add_parser("generate-fixture")
+    verify_parser = commands.add_parser(
+        "verify-backup", help="Check a backup file independently of the application"
+    )
+    verify_parser.add_argument("backup", type=Path)
+    dropped_parser = commands.add_parser(
+        "dropped",
+        help="List ledger entries and shipments that exist only in a displaced database set",
+    )
+    dropped_parser.add_argument("--kept", type=Path, required=True, help="The restored inventory")
+    dropped_parser.add_argument(
+        "--displaced",
+        type=Path,
+        required=True,
+        help="The displaced inventory.db (beside its -wal/-shm)",
+    )
     args = parser.parse_args(argv)
     try:
+        if args.command == "verify-backup":
+            return report_backup(args.backup)
+        if args.command == "dropped":
+            return report_dropped(args.kept, args.displaced)
         if args.command == "generate-fixture":
             write_fixture()
             print(f"Wrote {FIXTURE}")
