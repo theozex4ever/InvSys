@@ -580,10 +580,10 @@ backup, and a reopen of the restored inventory. Fixture: 8 Parts, 8 Lots, 11 bal
 inactive Part, preferences; snapshot digest `8bfb5a77…cb390bb`, text SHA-256
 `ea6da4ea…d67861`.
 
-CI run [40153744366](https://github.com/theozex4ever/InvSys/actions/runs/40153744366)
-on PR #79 head `f8a7dc85b774106bab09fef92e54f904ca720e3f`. GitHub tested the clean
-integration merge `8bf702ce5dd2c729937f48929c3d7e33d53ef6ba`, whose tree
-(`0731591a…`) is identical to the head's (base `249454e` had not moved); that merge is
+CI run [40185926947](https://github.com/theozex4ever/InvSys/actions/runs/40185926947)
+on PR #79 head `1fb627605aed77993823052075c1fdfdee02a6e0`. GitHub tested the clean
+integration merge `52913d4d8e43d995908d144feca0e02fa02d29ac`, whose tree
+(`25d64518…`) is identical to the head's (base `249454e` had not moved); that merge is
 the source commit in each bundle manifest. The records below are unmodified from the
 `package-evidence-*` artifacts, first attempt of every job; the evidence-retention
 commit that adds them changes documentation and evidence files only, and its own CI
@@ -591,59 +591,77 @@ run must be checked on the PR.
 
 | Environment | Record | Bundle | Result |
 | --- | --- | --- | --- |
-| GitHub `ubuntu-24.04` (Ubuntu 24.04.5, image 20261023.334.3, AMD EPYC, Xvfb, empty network namespace; Python 3.12.15) | [`upgrade-linux-package-2026-10-25.json`](evidence/upgrade-linux-package-2026-10-25.json) | 3,063 files, 634,300,004 bytes, `invsys-desktop` SHA-256 `3d1f7bd6…` | passed; launches 67.6 / 68.9 / 67.9 s |
-| GitHub `windows-2025` (Server 2025 10.0.26100, image win25-vs2026 20261021.278.1, firewall-isolated; Python 3.12.10) | [`upgrade-windows-package-2026-10-25.json`](evidence/upgrade-windows-package-2026-10-25.json) | 3,026 files, 593,945,618 bytes, `invsys-desktop.exe` SHA-256 `99d6df32…` | passed; 93.8 / 94.6 / 92.9 s |
-| GitHub `macos-15` (macOS 15.7.9, Apple M1 virtual, arm64, image 20260907.0337.1; Python 3.12.10) | [`upgrade-macos-package-2026-10-25.json`](evidence/upgrade-macos-package-2026-10-25.json) | 3,314 files, 534,917,252 bytes, `invsys-desktop` SHA-256 `b37fd5f6…` | passed; 111.5 / 114.9 / 116.3 s |
-| Local Linux (Ubuntu 24.04.5, kernel 7.0.0-38-generic, Intel i7-7700HQ, 7.8 GB, real X11 session) | [`upgrade-linux-source-local-2026-10-25.json`](evidence/upgrade-linux-source-local-2026-10-25.json) | **source launch** (Python 3.12.3, PySide6 6.11.2, pywebview 6.2.1) of clean commit `f8a7dc8`; not a frozen bundle | passed; 108.9 / 93.8 / 94.3 s |
+| GitHub `ubuntu-24.04` (Ubuntu 24.04.5, image 20261023.334.3, AMD EPYC, Xvfb, empty network namespace; Python 3.12.15) | [`upgrade-linux-package-2026-10-25.json`](evidence/upgrade-linux-package-2026-10-25.json) | 3,063 files, 634,300,716 bytes, `invsys-desktop` SHA-256 `4f41fcba…` | passed; launches 76.1 / 76.7 / 76.0 s |
+| GitHub `windows-2025` (Server 2025 10.0.26100, image win25-vs2026 20261021.278.1, firewall-isolated; Python 3.12.10) | [`upgrade-windows-package-2026-10-25.json`](evidence/upgrade-windows-package-2026-10-25.json) | 3,026 files, 593,946,327 bytes, `invsys-desktop.exe` SHA-256 `d36322d1…` | passed; 104.8 / 110.0 / 105.7 s |
+| GitHub `macos-15` (macOS 15.7.9, Apple M1 virtual, arm64, image 20260907.0337.1; Python 3.12.10) | [`upgrade-macos-package-2026-10-25.json`](evidence/upgrade-macos-package-2026-10-25.json) | 3,314 files, 534,917,956 bytes, `invsys-desktop` SHA-256 `de59a6ce…` | passed; 121.1 / 121.8 / 122.7 s |
+| Local Linux (Ubuntu 24.04.5, kernel 7.0.0-38-generic, Intel i7-7700HQ, 7.8 GB, real X11 session) | [`upgrade-linux-source-local-2026-10-25.json`](evidence/upgrade-linux-source-local-2026-10-25.json) | **source launch** (Python 3.12.3, PySide6 6.11.2, pywebview 6.2.1) of clean commit **`f8a7dc8`** (an earlier head); not a frozen bundle | passed; 108.9 / 93.8 / 94.3 s |
 
-Fixture SHA-256 (line endings normalized) and snapshot digest were identical in all
-four records. Toolchain in the CI records: PyInstaller 6.22.3, hooks-contrib 2026.8,
-PySide6 6.11.2, pywebview 6.2.1, QtPy 2.4.3. In every record and every one of its
-three launches: exit 0; the startup backup equal (schema and every row) to the
-inventory as the previous launch left it; manual backups in the selected inventory's
-folder; every pre-existing row unchanged except the two preferences the smoke sets
-(schema, ledger, balances, shipments, component snapshots, BOM definitions and Lots
-all preserved; schema unchanged); ledger, balances and shipment totals reconciled;
-SQLite integrity `ok`; nothing written to `INVSYS_HOME`. The inventory held 70 ledger
-rows / 10 shipments / 13 component snapshots after launch 1 and 110 / 16 / 19 after
-the restart (fixture: 28 / 4 / 7). Restoring the first launch's startup backup
-returned an inventory equal to the fixture, kept the displaced file aside equal to
-its pre-restore state, and listed the 82 ledger entries (38 RECEIVE, 12 BOM_CONSUME,
-8 COUNT_CORRECTION, 8 SHIP_BOM, 6 MOVE_IN, 6 MOVE_OUT, 4 SHIP) and 12 shipments that
-exist only in the displaced file; the third launch then reopened the restored
-inventory (70 / 10 / 13 again after its own workflows).
+The local record is for `f8a7dc8`, not the current head: a rerun on the current head
+timed out in its first two launches (the 300 s limit, under the shared 3 GB memory cap
+while another lane was measuring) before reaching any changed code, so it is **not**
+evidence and is not retained. Fixture SHA-256 (line endings normalized) and snapshot
+digest were identical in all four retained records. Toolchain in the CI records:
+PyInstaller 6.22.3, hooks-contrib 2026.8, PySide6 6.11.2, pywebview 6.2.1, QtPy 2.4.3.
+In every record and every one of its three launches: exit 0; the startup backup equal
+(schema and every row) to the inventory as the previous launch left it; manual backups
+in the selected inventory's folder; every pre-existing row unchanged except the two
+preferences the smoke sets (schema, ledger, balances, shipments, component snapshots,
+BOM definitions and Lots all preserved; schema unchanged); ledger, balances and
+shipment totals reconciled; SQLite integrity `ok`; nothing written to `INVSYS_HOME`.
+The inventory held 70 ledger rows / 10 shipments / 13 component snapshots after launch
+1 and 110 / 16 / 19 after the restart (fixture: 28 / 4 / 7). Restoring the first
+launch's startup backup returned an inventory equal to the fixture, kept the displaced
+file aside equal to its pre-restore state, and listed the 82 ledger entries (38 RECEIVE,
+12 BOM_CONSUME, 8 COUNT_CORRECTION, 8 SHIP_BOM, 6 MOVE_IN, 6 MOVE_OUT, 4 SHIP) and 12
+shipments that exist only in the displaced file; the third launch then reopened the
+restored inventory (70 / 10 / 13 again after its own workflows).
 
-Restore refusals and file failures (ten probes, recorded per platform in each JSON;
-the database is byte-identical afterwards in every case): a missing, folder,
-non-SQLite, truncated or non-InvSys backup, the live database as the backup and a
-blocked aside folder were refused before anything moved. A read-only database folder
-(real; Linux, macOS and the local run, not applicable on Windows) and a database held
-open by another program (real; Windows only, not applicable elsewhere) failed with
-the operating system's "Permission denied" / "being used by another process" and the
-previous database was put back. Disk-full after the move is **simulated** by an
-injected `ENOSPC`, not a real full disk; it also ended with the database put back.
-A failure while putting the files back is covered by a unit test only.
+Restore refusals and file failures (ten probes, recorded per platform in each JSON; the
+database is byte-identical afterwards in every case): a missing, folder, non-SQLite,
+truncated or non-InvSys backup, the live database as the backup and a blocked aside
+folder were refused before anything moved. A read-only database folder (real; Linux and
+macOS, not applicable on Windows) and a database held open by another program (real;
+Windows only, not applicable elsewhere) failed with the operating system's "Permission
+denied" / "being used by another process" and the previous database was put back.
+Disk-full after the move is **simulated** by an injected `ENOSPC`, not a real full
+disk; so are a staging copy that cannot be removed and files that cannot be put back
+(unit tests); all ended with the previous database put back or its location named.
 
-Run history, stated plainly. On the previous commit `9f5f5fa` the third launch failed
-twice in the *existing* native smoke's keyboard-focus check (Shift+Tab to Export
-Parts at 640×480 timed out with focus still on Export Inventory): once in CI on
-Linux and once in the local run, after the rehearsal's data checks had passed. On
-`d75ef48` the Windows `package-smoke` step failed once in the existing smoke's
-Settings "Open backups folder" Explorer check (a different, pre-existing flake). The
-cause of the key drop was not isolated; commit `f8a7dc8` resends that one key while
-focus has not moved (`inventory_control/desktop_smoke_ui.py`), and the run recorded
-here passed every job except `Dependency audit` on its first attempt. One green run
-does not prove the race gone. `Dependency audit` fails on `filelock` 4.0.12
-advisories in a lock this ticket does not change; PR #80 addresses it.
+Run history, stated plainly.
+- On `9f5f5fa` the third launch failed twice in the *existing* native smoke's
+  keyboard-focus check (Shift+Tab to Export Parts timed out with focus still on Export
+  Inventory), in CI on Linux and in a local run. The cause was not isolated.
+  `f8a7dc8` resent that key; round-1 review rightly objected that a resend can turn a
+  real swallowed-key regression green, so the head now sends **one** Shift+Tab after
+  native focus and two painted frames have settled and fails if it has no effect (unit
+  test with a key that is delivered but ineffective). Whether this removes the race is
+  not established: it passed on every platform in the run above, which does not prove it.
+- On `56baecd` the Windows job failed twice. Attempt 1 failed in the existing package
+  smoke (an unrelated Parts-drawer wait timed out), so the rehearsal step never ran;
+  attempt 2 passed the package smoke and failed the rehearsal's third launch at "drawer:
+  last action reachable by scrolling", without saying which size. The same check passed
+  in that run's first two launches on identical data and the failing run's captures were
+  not retained, so the root cause is **not established**. It is not the fixture's data:
+  the drawer shown is the smoke's own `DESKTOP-SMOKE` Part, and launch 1 and launch 3 start
+  from the same inventory. The current head records the measured geometry in the failure
+  message, prints the smallest margin (25 px over 32 dialog checks on all three
+  platforms, Windows included, so the passing layout is not marginal), waits for two
+  painted frames after each resize before measuring (the assertion is unchanged, not
+  retried) and uploads the rehearsal's captures. If it recurs the geometry will say
+  why; treat it as an open intermittent Windows failure until then.
+- On `d75ef48` the Windows package smoke failed once in the existing smoke's Settings
+  "Open backups folder" Explorer check (also pre-existing).
+- `Dependency audit` fails on `filelock` 4.0.12 advisories in a lock this ticket does
+  not change; PR #80 addresses it.
 
 Established: the copied-data upgrade, restart, closed-app restore, rollback to the
 pre-upgrade state, ledger reconciliation listing and restore failure behaviour on the
-three CI runners above and one local source launch, all on disposable copies.
-**Not established:** an upgrade from a database written by an *older release* (the fixture
-was generated by the current store at `249454e` with a frozen clock), a frozen bundle on the local machine (not built there; it is
-Ubuntu 24.04.5, not the CachyOS reference), Windows 10/11 desktop editions, macOS
-other than 15.7.9, an upgrade between two *packaged releases* (no earlier packaged
-release exists; rollback to a last known-good artifact is documented but its
-executable swap was not rehearsed), operator-run restore through the file manager,
-native Cocoa-panel/Finder acceptance (#54), real disk-full or ACL failures,
-performance, and operator sign-off (#57).
+three CI runners above (and, for an earlier head, one local source launch), all on
+disposable copies. **Not established:** an upgrade from a database written by an *older
+release* (the fixture was generated by the current store at `249454e` with a frozen
+clock), a frozen bundle on the local machine (not built there; it is Ubuntu 24.04.5, not
+the CachyOS reference), Windows 10/11 desktop editions, macOS other than 15.7.9, an
+upgrade between two *packaged releases* (no earlier packaged release exists; rollback to
+a last known-good artifact is documented but its executable swap was not rehearsed),
+operator-run restore through the file manager, native Cocoa-panel/Finder acceptance
+(#54), real disk-full or ACL failures, performance, and operator sign-off (#57).
