@@ -137,7 +137,83 @@ decision, not an incidental performance patch.
 
 ## Results
 
-@@RESULTS@@
+Recorded 2026-10-25 by `scripts/package_perf.py` on the frozen bundles. Every record has
+`result: passed`, no probe error, no missing step and no warm-up over its limit. The
+unmodified JSON records and their [checksums](evidence/performance-2026-10-25.SHA256SUMS)
+are in `evidence/`: [Linux hosted](evidence/performance-linux-hosted-2026-10-25.json),
+[Windows hosted](evidence/performance-windows-hosted-2026-10-25.json),
+[macOS hosted](evidence/performance-macos-hosted-2026-10-25.json) and
+[Linux local](evidence/performance-linux-local-2026-10-25.json). The hosted records are
+also in each job's `package-evidence-<os>` artifact for 90 days.
+
+### Hosted runners (CI)
+
+[CI run 40188450902](https://github.com/theozex4ever/InvSys/actions/runs/40188450902),
+PR #81 code head `21fd08d347037f2f539488bad07bdb65dbbdd62b`; every job passed. Each bundle
+manifest names the GitHub integration merge `4109e0702df8924337490e03e101c393dd740bc3`
+(that head merged into `main` `249454e`), which has exactly the head's tree
+(`16ecf7a8cc15`) and `uncommitted_changes: false`. Later commits on the PR change only
+documentation and these evidence files.
+
+| Platform | Machine | Bundle | Fixture (built by that job through the public API) |
+| --- | --- | --- | --- |
+| Linux | `ubuntu-24.04` image `20261023.334.3`: AMD EPYC 9V45, 4 logical CPUs, 16 GB, Ubuntu 24.04.5, glibc 2.39, Xvfb 1920×1080 (window 1366×768), Python 3.12.15 | 3,063 files, 634,324,744 bytes, `invsys-desktop` `e73d6d55c29e…` | database `c9b2fe1538e4…` |
+| Windows | `windows-2025` image `win25-vs2026 20261021.278.1`: AMD EPYC 7763, 4 logical CPUs, 16 GB, Windows Server 2025 10.0.26100, interactive session at 1024×768 (window 1028×749), software rendering, Python 3.12.10 | 3,026 files, 593,970,355 bytes, `invsys-desktop.exe` `9de932bbc9dd…` | database `a0ee2819008a…` |
+| macOS | `macos-15` image `macos15 20260907.0337.1`: Apple M1 (virtual), 3 logical CPUs, 7.5 GB, macOS 15.7.9, logged-in session at 1024×768 (window 1024×653), Python 3.12.10 | 3,314 files, 534,942,176 bytes, executable `1e19e9e1e7fb…` | database `ac0cc940978a…` |
+
+All fixtures are 18,923,520 bytes with 10,000 Parts and 100,000 transactions; the hashes
+differ because generated timestamps do. PyInstaller 6.22.3, PySide6/Qt WebEngine 6.11.2
+(Chrome 140) and pywebview 6.2.1 everywhere.
+
+### Local workstation
+
+The user's laptop: Intel Core i7-7700HQ (8 logical CPUs), 8 GB, Ubuntu 24.04.5, Linux
+7.0.0-38, glibc 2.39, Python 3.12.3. Bundle built from the clean commit `21fd08d34704`
+(`uncommitted_changes: false`; 3,047 files, 604,338,138 bytes, `invsys-desktop`
+`aa8d1d566cad…`), extracted, and measured under a virtual X server (Xvfb 1920×1080,
+window 1366×768) with memory capped at 3 GB, serialized with other jobs, fixture built
+by the runner in 146 s (database `d5d1effa9fb5…`). **Not** measured on the physical
+desktop session: with the screen locked or the window covered, Chromium throttles timers
+and every bridge call costs about a second (probe runs on the locked screen
+showed exactly that, and Xvfb removed it); such runs are invalid, not slow.
+
+### Timings
+
+Median / slowest of the five measured repeats, in milliseconds (every repeat of every
+step, including those not shown, is in the records):
+
+| Step | Limit | Linux | Windows | macOS | Local Linux |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `P01.search` | 2,000 | 342 / 380 | 607 / 721 | 353 / 405 | 475 / 534 |
+| `P01.sort` | 2,000 | 245 / 295 | 501 / 569 | 240 / 252 | 424 / 497 |
+| `P02.search` | 2,000 | 273 / 277 | 958 / 967 | 504 / 538 | 568 / 580 |
+| `P02.open` | 2,000 | 245 / 331 | 640 / 691 | 284 / 325 | 464 / 531 |
+| `P03.open_ship` | 2,000 | 601 / 665 | 1,084 / 1,169 | 508 / 616 | 950 / 997 |
+| `P03.review_standard` | 2,000 | 253 / 260 | 592 / 716 | 245 / 256 | 554 / 606 |
+| `P03.review_kit` | 2,000 | 195 / 277 | 725 / 762 | 232 / 237 | 456 / 571 |
+| `P03.review_root` | 2,000 | 545 / 568 | 1,386 / **1,435** | 506 / 516 | 1,124 / 1,233 |
+| `P04.explore` | 5,000 | 490 / 533 | 1,421 / 1,666 | 524 / 556 | 1,047 / 1,104 |
+| `P04.zoom` | 2,000 | 19 / 27 | 96 / 176 | 74 / 108 | 16 / 32 |
+| `P04.labels` | 2,000 | 118 / 124 | 498 / 645 | 157 / 176 | 439 / 525 |
+| `P05.launch` | 10,000 | 1,220 / 1,246 | 2,063 / 2,359 | 1,657 / 1,787 | 2,212 / 2,418 |
+
+The tightest step everywhere is the nested BOM review or opening Ship (the 10,000-option
+Part list): Windows `review_root` 1.44 s of 2 s, Windows `open_ship` 1.17 s, local
+`review_root` 1.23 s. Those are the first limits a slower workstation would reach.
+Windows is consistently about 2–3× the others (software rendering on a shared VM).
+
+### History of this work's evidence
+
+Two things happened on the way that explain the record rather than hide it:
+
+* A first CI attempt failed on Windows in the existing explorer keyboard smoke (not in
+  this probe): a one-line hint addition to the explorer changed the page height and
+  toggled Windows' classic scrollbar, shifting the fitted graph. Linux and macOS use
+  overlay scrollbars and passed. The line was reverted.
+* A review found vacuous probe assertions and a missing measurement (the cost of laying
+  out node text when zooming in). The checks were strengthened (they compare with
+  SQLite, see Method) and `P04.labels` was added; hosted and local evidence was
+  re-recorded on the commit above, replacing records from the earlier probe.
 
 ## What this does and does not establish
 
