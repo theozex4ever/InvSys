@@ -107,6 +107,17 @@ def test_fixture_truth_reads_sqlite_independently_of_the_store(tmp_path):
     assert perf.reference_count(database, "NO-SUCH-REFERENCE") == 0
 
 
+def test_type_and_stock_reads_match_the_workflow_fixture(tmp_path):
+    database = create_fixture(tmp_path / "fixture")
+    assert perf.type_count(database, "RECEIVE") == 8
+    assert perf.type_count(database, "NO_SUCH_TYPE") == 0
+    # LEAF holds A=0 and B=21 in Stock after the baseline shipment, so 21 in all; a Part
+    # with no balance there counts as nothing, and the smallest of several wins.
+    assert perf.smallest_stock(database, ["LEAF"], "Stock") == 21
+    assert perf.smallest_stock(database, ["LEAF", "SUB"], "Stock") == 10
+    assert perf.smallest_stock(database, ["LEAF", "INACTIVE"], "Receiving") == 0
+
+
 def test_fixture_truth_never_creates_a_missing_database(tmp_path):
     with pytest.raises(sqlite3.OperationalError):
         perf.fixture_truth(tmp_path / "absent.db")
@@ -138,13 +149,24 @@ def test_the_probe_only_accepts_the_two_documented_modes(tmp_path):
         PerfProbe("everything", tmp_path / "out.json", database)
 
 
-def test_review_content_checks_name_what_the_python_review_failed_to_show():
+def test_review_content_checks_compare_with_stock_read_from_sqlite(tmp_path):
     from inventory_control.desktop_perf import PerfProbe, ProbeError
 
-    PerfProbe._check_review("standard", "Part STANDARD Stock / A Reviewed lot impact")
-    PerfProbe._check_review("kit", "Ready to ship LEAF 14 21 0")
-    PerfProbe._check_review("root", "Ready to ship PERF-00100 ... PERF-00999")
+    database = create_fixture(tmp_path / "fixture")
+    probe = PerfProbe("launch", tmp_path / "out.json", database)
+    standard = "Location / lot\nStock / A\nReviewed lot impact\nBefore\n10\nShipping\n2\nLot remaining after shipment\n8"
+    probe._check_review("standard", standard)
+    # Lot "A" must be the lot named, and the remainder must be the real one.
+    with pytest.raises(ProbeError, match="Stock"):
+        probe._check_review("standard", standard.replace("Stock / A", "Stock / B"))
+    with pytest.raises(ProbeError, match="Lot remaining"):
+        probe._check_review("standard", standard.replace("shipment\n8", "shipment\n9"))
+    kit = (
+        "Ready to ship\nBOM build capacity at this location\n3\nLEAF\tAcceptance LEAF\t14\t21\t0\n"
+        "LEAF\tB\nStock\t14\t21"
+    )
+    probe._check_review("kit", kit)
+    with pytest.raises(ProbeError, match="capacity"):
+        probe._check_review("kit", kit.replace("location\n3", "location\n4"))
     with pytest.raises(ProbeError, match="Ready to ship"):
-        PerfProbe._check_review("kit", "Blocked — component shortage LEAF 14")
-    with pytest.raises(ProbeError, match="PERF-00999"):
-        PerfProbe._check_review("root", "Ready to ship PERF-00100")
+        probe._check_review("kit", kit.replace("Ready to ship", "Blocked — component shortage"))

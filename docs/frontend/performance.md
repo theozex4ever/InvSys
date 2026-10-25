@@ -9,7 +9,7 @@ records what was actually measured, and says what is still missing.
 | P01 | Catalog: search `PERF-00999`, open the Part, clear, filter inactive/active/Low stock, sort by Stock, next page | 2 s per interaction |
 | P02 | History: open, search `PERF-RECEIPT-050000`, open the exact record, clear, next 50-row page, filter by type | 2 s per interaction |
 | P03 | Ship: open, choose a Part, review a standard shipment (STANDARD lot A × 2), a nested BOM (KIT × 2) and the 1,000-node BOM (PERF-ROOT × 1) | 2 s per interaction |
-| P04 | BOM explorer: PERF-ROOT, one build — 1,000 nodes laid out, the first zoom applied; then zoom, pan, fit, select | 5 s to a usable graph, 2 s per graph interaction |
+| P04 | BOM explorer: PERF-ROOT, one build — 1,000 nodes laid out, the first zoom applied; then zoom, pan, fit, select, and zoom to 100 % (where every node's text is laid out) | 5 s to a usable graph, 2 s per graph interaction |
 | P05 | Start the packaged executable on the large inventory | 10 s to a usable dashboard |
 
 The limits live in `inventory_control/perf.py` and cannot be passed as options.
@@ -52,6 +52,15 @@ disposable `--database`).
   a new process on a pristine copy of the fixture; the first of six is the warm-up
   and is retained but not judged. The OS file cache is warm after that first launch;
   caches are not dropped.
+* **Correctness is asserted, not assumed.** Waiting conditions and checks use counts and
+  stock read from SQLite independently of the store: the Parts and History footers'
+  totals (10,000 Parts, 451 inactive, 100,000 transactions, one `PERF-RECEIPT-050000`,
+  the RECEIVE count), the standard review's lot and remainder (lot A: 10 → 8), the KIT
+  review's capacity and 14 Leaf units from lot B, the PERF-ROOT review's and explorer's
+  Build capacity (the smallest Leaf stock) with the first and last of the 900 Leaf
+  rows, and 1,000 laid-out nodes. "Visible focus" in the acceptance wording is only
+  checked as far as moving focus to the control and into the opened drawer; the
+  rendered focus ring was audited separately (see [acceptance.md](acceptance.md)).
 * **Read-only scenarios stay read-only.** The probe compares ledger, balance,
   shipment and BOM counters read from SQLite before and after P01–P04.
 * Raw timings of every repeat, min/median/max, the machine, the bundle (hash,
@@ -66,10 +75,16 @@ xvfb-run -a -s "-screen 0 1920x1080x24" \
   --workdir /tmp/invsys-perf --evidence /tmp/invsys-perf-evidence.json
 ```
 
-Debugging aids for the probe only (all optional environment variables):
-`INVSYS_PERF_ONLY=P01,P04` runs just those scenarios, `INVSYS_PERF_CSS`/
-`INVSYS_PERF_EVAL` inject a style rule / evaluate a script after the launch, and
-`INVSYS_PERF_HOLD=<seconds>` keeps the window open so a DevTools client can trace it.
+Run the probe in a window nothing covers. Chromium slows timers to one a second in an
+occluded or background window, and pywebview polls for every bridge answer with a timer,
+so every bridge call then costs about 1 s. The probe records the page's visibility; for a
+local run on a busy desktop add `--disable-background-timer-throttling
+--disable-renderer-backgrounding --disable-backgrounding-occluded-windows` to
+`QTWEBENGINE_CHROMIUM_FLAGS` (CI's virtual or dedicated sessions need nothing).
+
+Debugging aids for the probe only (optional environment variables):
+`INVSYS_PERF_ONLY=P01,P04` runs just those scenarios, and `INVSYS_PERF_HOLD=<seconds>`
+keeps the window open after the result is written so a DevTools client can trace it.
 
 ## CI
 
@@ -95,8 +110,23 @@ not complete (the renderer passed 2.4 GB showing 10,000 Parts rows and was kille
 | Ship: Part selection 0.9 s | Every selection re-read all 10,000 Parts and rebuilt both option lists | Choosing from the list keeps the lists; Refresh availability and opening Ship reload them |
 | Ship: nested BOM review 2.1–2.5 s | The plan (900 + 900 rows) was laid out in the page *and* in the dialog; the dialog's off-screen table was painted | Large plans (>100 lot lines) are collapsed in the page; the dialog's tables skip off-screen rendering (`content-visibility: auto`) |
 
+Changes an operator can see (all are presentation limits; Python still decides what
+the data is):
+
+* The Parts page shows 100 rows per page with Previous/Next and the total; filters and
+  sorts still apply to the whole catalog.
+* Below 25 % zoom the BOM explorer shows boxes without text; the text appears when the
+  view is zoomed in (the 1,000-node fit is 2 %). Node names remain in the accessibility
+  tree and the inspector.
+* A large BOM plan (over 100 lot lines) is collapsed under a "Show … lot allocations"
+  summary on the Ship page; the confirmation dialog still shows the whole plan.
+  The dialog's tables are not laid out until scrolled near (`content-visibility: auto`),
+  so the scrollbar length of the second table is an estimate until it is reached.
+* Choosing a Part on Receive or Ship no longer reloads the Part list; opening the page
+  or Refresh availability does. A Part created elsewhere appears after that.
+
 The JavaScript size budget (34,000 B gzip) was not changed: the frontend is now
-33,966 B, **34 B under it**, so any further frontend change needs an explicit size
+33,950 B, **50 B under it**, so any further frontend change needs an explicit size
 decision (see [desktop.md](desktop.md)).
 
 Not changed, and why it matters: opening Ship still reads and builds a 10,000-option
@@ -107,34 +137,7 @@ decision, not an incidental performance patch.
 
 ## Results
 
-### Linux, local machine (frozen bundle)
-
-Recorded 2026-10-24 by `scripts/package_perf.py` on the user's workstation, record
-[`evidence/performance-linux-local-2026-10-24.json`](evidence/performance-linux-local-2026-10-24.json).
-
-| Item | Value |
-| --- | --- |
-| Machine | Intel Core i7-7700HQ (8 logical CPUs), 8 GB RAM, Ubuntu 24.04.5, Linux 7.0.0-38, glibc 2.39, X11 session at 1920×1080, 1366×768 window, device pixel ratio 1, no GPU tuning |
-| Software | Python 3.12.13 bundle (PyInstaller 6.22.3, PySide6/Qt WebEngine 6.11.2 = Chrome 140, pywebview 6.2.1), reduced motion forced as in CI |
-| Bundle | 3,047 files, 604,336,491 bytes, `invsys-desktop` SHA-256 `fbb4ce83…`; built from commit `589c2adb2bb5` **with uncommitted test and coverage-configuration edits** (`uncommitted_changes: true`; nothing in the bundle differed) |
-| Fixture | the large fixture above, database SHA-256 `d7b9dc95…`, 18,923,520 bytes, on the workstation's disk |
-| Conditions | the workstation was in normal use (a browser, an editor and other agents' jobs); runs were serialized and capped at 3 GB memory; warm file cache after the first launch |
-| Result | **every step passed** (all 28 steps, every repeat); no probe error |
-
-| Step | Max of 5 measured repeats (ms) | Median (ms) | Limit (ms) |
-| --- | ---: | ---: | ---: |
-| P01 slowest (search, clear, filters, sort) | 557.7 | 437.3 | 2,000 |
-| P02 slowest (search) | 753.8 | 545.1 | 2,000 |
-| P03 `open_ship` | 1,267.8 | 1,191.9 | 2,000 |
-| P03 `review_root` (PERF-ROOT) | 1,791.9 | 1,520.1 | 2,000 |
-| P04 `explore` (1,000 nodes + first zoom) | 1,746.5 | 1,690.4 | 5,000 |
-| P04 slowest graph interaction | 33.1 | 32.0 | 2,000 |
-| P05 `launch` (spawn → usable) | 2,582.2 | 2,315.3 | 10,000 |
-
-The heaviest margin is the nested-BOM review (1.79 s of 2 s). Every raw timing is in
-the record.
-
-CI results: see below.
+@@RESULTS@@
 
 ## What this does and does not establish
 

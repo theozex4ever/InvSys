@@ -66,6 +66,7 @@ STEPS: tuple[Step, ...] = (
     Step("P04", "pan", "Pan the 1,000-node graph", INTERACTION_MS),
     Step("P04", "fit", "Fit the 1,000-node graph", INTERACTION_MS),
     Step("P04", "select", "Select a node in the 1,000-node graph", INTERACTION_MS),
+    Step("P04", "labels", "Zoom to 100% so every node's text is laid out", INTERACTION_MS),
     Step("P05", "launch", "Launch to a usable dashboard", LAUNCH_MS),
 )
 STEPS_BY_ID = {step.id: step for step in STEPS}
@@ -168,6 +169,33 @@ def reference_count(database: Path, reference: str) -> int:
             "SELECT COUNT(*) FROM inventory_transactions WHERE reference = ?", (reference,)
         ).fetchone()
     return int(row[0])
+
+
+def type_count(database: Path, tx_type: str) -> int:
+    """How many ledger rows have exactly this transaction type."""
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM inventory_transactions WHERE tx_type = ?", (tx_type,)
+        ).fetchone()
+    return int(row[0])
+
+
+def smallest_stock(database: Path, part_numbers: Sequence[str], location: str) -> int:
+    """The least stock at ``location`` over these Parts (a Part with no balance counts as 0).
+
+    For a BOM whose Leaf materials need one unit each per build, this is the Build capacity
+    the explorer and the shipment review must report, computed without the store.
+    """
+    placeholders = ",".join("?" * len(part_numbers))
+    sql = (
+        "SELECT COALESCE(SUM(b.quantity), 0) FROM parts p "  # noqa: S608  # only "?" markers are interpolated; every value is bound
+        "LEFT JOIN inventory_balances b ON b.part_id = p.id AND b.location_id = "
+        "(SELECT id FROM locations WHERE name = ?) "
+        f"WHERE p.part_number IN ({placeholders}) GROUP BY p.id"
+    )
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as connection:
+        totals = [int(row[0]) for row in connection.execute(sql, (location, *part_numbers))]
+    return min(totals)
 
 
 def writes_between(before: Mapping[str, int], after: Mapping[str, int]) -> list[str]:

@@ -17,6 +17,7 @@ Two modes (the second repeats the first's launch measurement and adds the scenar
 import json
 import logging
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -24,6 +25,7 @@ from typing import Any
 
 from inventory_control import perf
 from inventory_control.bridge import InventoryBridge
+from inventory_control.store import InventoryStore
 
 USABLE_MARKER = "INVSYS-PERF-USABLE"
 STEP_TIMEOUT_SECONDS = 30
@@ -46,24 +48,35 @@ window.P = {
 window.perfMarks = {};
 window.perfT0 = 0;
 window.perfResult = null;
+// Timers run at most once a second in a window that is occluded or in the background (and so does
+// pywebview's own polling for bridge answers): the page's visibility is recorded with every step,
+// and a hidden page fails the run instead of passing as a slow result.
+window.perfYield = fn => setTimeout(fn, 0);
 window.perfTimed = (start, ready, timeoutMs) => {
   window.perfResult = null; window.perfMarks = {};
   let settled = false;
-  const finish = value => { if (!settled) { settled = true; window.perfResult = JSON.stringify(value); } };
+  const finish = value => { if (!settled) { settled = true; window.perfResult = JSON.stringify({ visibility: document.visibilityState, ...value }); } };
   window.perfT0 = performance.now();
   const t0 = window.perfT0;
+  // Two animation frames after the state is reached means it was laid out and painted; a window
+  // that never produces frames is bounded by 250 ms of the page's own clock.
+  const painted = (now) => {
+    let frames = 0;
+    requestAnimationFrame(() => requestAnimationFrame(() => { frames = 2; }));
+    const wait = () => {
+      if (frames >= 2 || performance.now() - now > 250) finish({ ms: performance.now() - t0, ready_ms: now - t0, marks: window.perfMarks });
+      else window.perfYield(wait);
+    };
+    wait();
+  };
   const check = () => {
     if (settled) return;
     let ok = false, problem = '';
     try { ok = !!ready(); } catch (error) { problem = String(error); }
     const now = performance.now();
-    if (ok) {
-      let painted = false;
-      const done = () => { if (!painted) { painted = true; finish({ ms: performance.now() - t0, ready_ms: now - t0, marks: window.perfMarks }); } };
-      requestAnimationFrame(() => requestAnimationFrame(done));
-      setTimeout(done, 250);
-    } else if (now - t0 > timeoutMs) finish({ timeout: true, ms: now - t0, problem });
-    else setTimeout(check, 0);
+    if (ok) painted(now);
+    else if (now - t0 > timeoutMs) finish({ timeout: true, ms: now - t0, problem });
+    else window.perfYield(check);
   };
   try { start(); } catch (error) { finish({ timeout: true, ms: 0, problem: 'start failed: ' + String(error) }); return; }
   check();
@@ -92,10 +105,11 @@ window.perfWatchUsable = (active, parts) => {
     && ['#query', '#operator', '#global-search', '#theme', '#history-query'].every(s => !P.$(s)?.disabled)
     && P.actionable(P.$('[data-page=parts]')) && P.actionable(P.$('[data-page=history]'));
   const poll = () => {
-    if (!ok()) { setTimeout(poll, 0); return; }
-    let painted = false;
-    const done = () => { if (!painted) { painted = true; window.perfUsableAt = performance.now(); } };
-    requestAnimationFrame(() => requestAnimationFrame(done)); setTimeout(done, 250);
+    if (!ok()) { window.perfYield(poll); return; }
+    const now = performance.now(); let frames = 0;
+    requestAnimationFrame(() => requestAnimationFrame(() => { frames = 2; }));
+    const wait = () => { if (frames >= 2 || performance.now() - now > 250) window.perfUsableAt = performance.now(); else window.perfYield(wait); };
+    wait();
   };
   poll();
 };
@@ -192,6 +206,11 @@ class PerfProbe:
                 f"{step_id}: expected state not reached ({result.get('problem') or 'condition false'}). "
                 f"{self._state()}"
             )
+        if result.get("visibility") != "visible":
+            raise ProbeError(
+                f"{step_id}: the page was {result.get('visibility')}, not visible: timings would "
+                "measure a throttled window. Keep the window unobstructed."
+            )
         sample = {
             "run": run,
             "ms": round(result["ms"], 1),
@@ -266,13 +285,9 @@ class PerfProbe:
     def _workflow(self) -> None:
         # After the launch measurement: the stamps add a microtask per bridge call.
         self._js("perfWrapApi()")
-        # Debugging aid: INVSYS_PERF_CSS="rule" adds a style rule to compare rendering costs.
-        if css := os.environ.get("INVSYS_PERF_CSS"):
-            self._js(
-                f"document.head.insertAdjacentHTML('beforeend', '<style>' + {json.dumps(css)} + '</style>')"
-            )
         before = perf.fixture_truth(self.database)
-        bridge = InventoryBridge(self._store())
+        store = InventoryStore(self.database, seed=False)
+        bridge = InventoryBridge(store)
         try:
             if not self.only or "P01" in self.only:
                 self._parts(bridge)
@@ -284,20 +299,9 @@ class PerfProbe:
                 self._explorer()
         finally:
             after = perf.fixture_truth(self.database)
-            if script := os.environ.get("INVSYS_PERF_EVAL"):  # debugging aid
-                self.snapshots["eval"] = str(self._js(script))
             if changed := perf.writes_between(before, after):
                 self.errors.append(f"read-only scenarios wrote to the database: {changed}")
-            self._store_close()
-
-    def _store(self) -> Any:
-        from inventory_control.store import InventoryStore
-
-        self._owned_store = InventoryStore(self.database, seed=False)
-        return self._owned_store
-
-    def _store_close(self) -> None:
-        self._owned_store.engine.dispose()
+            store.engine.dispose()
 
     def _go(self, page: str) -> None:
         self._js(f"P.click('[data-page={page}]')")
@@ -397,20 +401,30 @@ class PerfProbe:
         if perf.reference_count(self.database, reference) != 1:
             raise ProbeError(f"The fixture must hold exactly one {reference} record.")
         rows = "P.n('#history-data tbody tr')"
-        page = f"{rows} === 50 && !P.loading()"
+        # The footer states Python's match count; SQLite supplies the expected one.
+        receives = perf.type_count(self.database, "RECEIVE")
+
+        def page(matching: int) -> str:
+            footer = (
+                f"P.text('#history-data .table-footer').startsWith('{matching} matching records')"
+            )
+            return f"{rows} === 50 && !P.loading() && {footer}"
+
+        everything = page(self.truth["transactions"])
 
         def sequence(run: int) -> None:
             self._go("dashboard")
             self._timed(
                 "P02.open",
                 "P.click('[data-page=history]')",
-                f"!P.$('#history').hidden && {page}",
+                f"!P.$('#history').hidden && {everything}",
                 run,
             )
             self._timed(
                 "P02.search",
                 f"P.set('#history-query', {json.dumps(reference)})",
-                f"{rows} === 1 && P.text('#history-data tbody').includes({json.dumps(reference)})",
+                f"{rows} === 1 && P.text('#history-data tbody').includes({json.dumps(reference)}) "
+                "&& P.text('#history-data .table-footer').startsWith('1 matching records')",
                 run,
             )
             self._timed(
@@ -425,26 +439,26 @@ class PerfProbe:
             self._timed(
                 "P02.clear",
                 "P.click('#history-clear')",
-                f"{page} && P.$('#history-query').value === ''",
+                f"{everything} && P.$('#history-query').value === ''",
                 run,
             )
             self._timed(
                 "P02.next_page",
                 "window.perfFirst = P.$('#history-data [data-history-id]').dataset.historyId; P.click('#history-data [data-history-page=\"1\"]')",
-                f"{page} && P.$('#history-data [data-history-id]').dataset.historyId !== window.perfFirst "
+                f"{everything} && P.$('#history-data [data-history-id]').dataset.historyId !== window.perfFirst "
                 "&& P.text('#history-filters').includes('Page: 2')",
                 run,
             )
             self._timed(
                 "P02.type_filter",
                 "P.set('#history-type', 'RECEIVE', 'change')",
-                f"{page} && P.text('#history-filters').includes('Type: RECEIVE') "
+                f"{page(receives)} && P.text('#history-filters').includes('Type: RECEIVE') "
                 "&& Array.from(document.querySelectorAll('#history-data tbody tr')).every(r => r.textContent.includes('RECEIVE'))",
                 run,
             )
             self._js("P.click('#history-clear')")
             self._wait(
-                page
+                everything
                 + " && P.$('#history-query').value === '' && P.$('#history-type').value === ''",
                 "cleared History",
             )
@@ -475,10 +489,6 @@ class PerfProbe:
                 run,
             )
             text = str(self._js("P.$('#ship-confirm-data').innerText"))
-            if key == "root" and run == perf.WARMUPS + 1:
-                self.snapshots["P03.phases"] = str(
-                    self._js("JSON.stringify(window.perfPhase ?? null)")
-                )
             if run == perf.WARMUPS:
                 self.snapshots[f"P03.review_{key}"] = text
             self._check_review(snapshot, text)
@@ -519,19 +529,40 @@ class PerfProbe:
 
         self._repeat("P03", sequence)
 
-    @staticmethod
-    def _check_review(kind: str, text: str) -> None:
-        """Content the Python review must have produced (stock, leaf requirement, allocation)."""
+    def _check_review(self, kind: str, text: str) -> None:
+        """Content the Python review must have produced, against stock read from SQLite."""
+        # Rendered text puts each label and its value on separate lines or tab-separated.
         if kind == "standard":
             # Lot A holds 10 after the baseline shipment of 2; shipping 2 leaves 8.
-            required = ("STANDARD", "A", "Reviewed lot impact")
+            patterns = [
+                r"Reviewed lot impact",
+                r"Stock\s*/\s*A\b",
+                r"Before\s+10\s+Shipping\s+2\s+Lot remaining after shipment\s+8\b",
+            ]
         elif kind == "kit":
-            # KIT x2 needs 14 LEAF (7 per KIT) allocated from lot B after A was exhausted.
-            required = ("Ready to ship", "LEAF", "14")
+            # KIT x2 needs 14 LEAF (7 per KIT), all from lot B once lot A is exhausted.
+            capacity = perf.smallest_stock(self.database, ["LEAF"], "Stock") // 7
+            patterns = [
+                r"Ready to ship",
+                rf"BOM build capacity at this location\s+{capacity}\b",
+                r"LEAF\s+Acceptance LEAF\s+14\s+21\s+0\b",
+                r"LEAF\s+B\s+Stock\s+14\s+21\b",
+            ]
         else:
-            required = ("Ready to ship", "PERF-00100", "PERF-00999")
-        if missing := [item for item in required if item not in text]:
+            # One PERF-ROOT needs one of each of the 900 Leaf materials: capacity is the
+            # smallest Leaf stock, and the first and last Leaf rows are present.
+            patterns = [
+                r"Ready to ship",
+                rf"BOM build capacity at this location\s+{self._root_capacity()}\b",
+                r"PERF-00100\s+Performance PERF-00100\s+1\s+\d+\s+0\b",
+                r"PERF-00999\s+Performance PERF-00999\s+1\s+\d+\s+0\b",
+            ]
+        if missing := [pattern for pattern in patterns if not re.search(pattern, text)]:
             raise ProbeError(f"The {kind} review lacks {missing}: {text[:300]!r}")
+
+    def _root_capacity(self) -> int:
+        leaves = [f"PERF-{index:05d}" for index in range(100, 1000)]
+        return perf.smallest_stock(self.database, leaves, "Stock")
 
     def _explorer(self) -> None:
         nodes = "P.n('#bomx-canvas .bomx-node')"
@@ -559,10 +590,15 @@ class PerfProbe:
                 run,
             )
             summary = str(self._js("P.$('#bomx-result').innerText"))
-            if "No material shortage" not in summary or "900 Leaf materials" not in summary:
-                raise ProbeError(f"The explorer summary is wrong: {summary[:300]!r}")
-            if phases := self._js("JSON.stringify(window.perfPhase ?? null)"):
-                self.snapshots["P04.phases"] = str(phases)
+            capacity = self._root_capacity()
+            if (
+                "No material shortage" not in summary
+                or "900 Leaf materials" not in summary
+                or not re.search(rf"{capacity}\s*final builds", summary)
+            ):
+                raise ProbeError(
+                    f"The explorer summary is wrong (capacity {capacity}): {summary[:300]!r}"
+                )
             self._timed(
                 "P04.zoom",
                 f"window.perfPrev = {transform}; P.click('[data-bomx=out]')",
@@ -587,6 +623,16 @@ class PerfProbe:
                 "P.$('#bomx-canvas [data-id=\"500\"]').dispatchEvent(new MouseEvent('click', {bubbles: true}))",
                 "P.$('#bomx-canvas [data-id=\"500\"]').getAttribute('aria-pressed') === 'true' "
                 "&& P.text('#bomx-inspector').includes(P.$('#bomx-canvas [data-id=\"500\"] .bomx-part').textContent.replace('…', ''))",
+                run,
+            )
+
+            # Zooming in is where the text of all 1,000 nodes is laid out for the first time.
+            self._timed(
+                "P04.labels",
+                f"window.perfPrev = {transform}; P.click('[data-bomx=reset]')",
+                f"{transform} !== window.perfPrev && P.text('#bomx-zoom') === '100%' "
+                "&& !P.$('#bomx-canvas').classList.contains('bomx-far') "
+                "&& getComputedStyle(P.$('#bomx-canvas .bomx-part')).display !== 'none'",
                 run,
             )
 

@@ -651,14 +651,15 @@ class InventoryStore:
                     .offset(page * 50)
                     .limit(50)
                 ).all()
-                matching = (
-                    rows[0][2]
-                    if rows
-                    else 0
-                    if page == 0
+                if rows:
+                    matching = rows[0][2]
+                elif page == 0:
+                    matching = 0
+                else:
                     # A page past the last row carries no count: ask for it.
-                    else session.scalar(select(func.count()).select_from(statement.subquery()))
-                )
+                    matching = session.scalar(
+                        select(func.count()).select_from(statement.subquery())
+                    )
                 records = [(row, number) for row, number, _ in rows]
             else:
                 matching = session.scalar(select(func.count()).select_from(statement.subquery()))

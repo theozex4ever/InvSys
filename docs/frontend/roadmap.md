@@ -27,7 +27,7 @@ scenario, approved workload and retirement evidence gate from tickets #39/#40.
 | 9 | Ctrl+K Part search and original Ctrl+1–9 destinations delivered; command search deferred | In Progress |
 | 10 | Operator/theme, startup/manual backup, five CSV exports, folder access and Parts, Inventory receipt and BOM CSV imports delivered | In Progress |
 | 11 | PySide6 retirement | Not Started |
-| 12 | Scripted native navigation/safety/layout acceptance and rendered contrast/name audit delivered; human screen-reader review and release hardening remain | In Progress |
+| 12 | Scripted native navigation/safety/layout acceptance, rendered contrast/name audit and the packaged performance envelope on Windows, Linux and macOS ([performance.md](performance.md)) delivered; human screen-reader review, operator-designated workstation timings and release hardening remain | In Progress |
 
 Update this table when a phase meaningfully changes.
 
