@@ -580,24 +580,26 @@ backup, and a reopen of the restored inventory. Fixture: 8 Parts, 8 Lots, 11 bal
 inactive Part, preferences; snapshot digest `8bfb5a77…cb390bb`, text SHA-256
 `ea6da4ea…d67861`.
 
-CI run [40185926947](https://github.com/theozex4ever/InvSys/actions/runs/40185926947)
-on PR #79 head `1fb627605aed77993823052075c1fdfdee02a6e0`. GitHub tested the clean
-integration merge `52913d4d8e43d995908d144feca0e02fa02d29ac`, whose tree
-(`25d64518…`) is identical to the head's (base `249454e` had not moved); that merge is
-the source commit in each bundle manifest. The records below are unmodified from the
+CI run [40191189300](https://github.com/theozex4ever/InvSys/actions/runs/40191189300)
+on PR #79 head `e90030d0c3a5e0c53cee807a6ccfd68a486465f2` (the earlier head merged with
+`main` at `9a6610f`, which bumped `filelock` and `setuptools` in the CI and package
+locks, so the bundles were rebuilt). GitHub tested the clean integration merge
+`c30e6d6fe3a51221e3e689d881d9f0109681178d`, whose tree (`ef4f0864…`) is identical to the
+head's; that merge is the source commit in each bundle manifest. Every job, `CI gate`
+and `Dependency audit` included, passed on its first attempt. The records below are unmodified from the
 `package-evidence-*` artifacts, first attempt of every job; the evidence-retention
 commit that adds them changes documentation and evidence files only, and its own CI
 run must be checked on the PR.
 
 | Environment | Record | Bundle | Result |
 | --- | --- | --- | --- |
-| GitHub `ubuntu-24.04` (Ubuntu 24.04.5, image 20261023.334.3, AMD EPYC, Xvfb, empty network namespace; Python 3.12.15) | [`upgrade-linux-package-2026-10-25.json`](evidence/upgrade-linux-package-2026-10-25.json) | 3,063 files, 634,300,716 bytes, `invsys-desktop` SHA-256 `4f41fcba…` | passed; launches 76.1 / 76.7 / 76.0 s |
-| GitHub `windows-2025` (Server 2025 10.0.26100, image win25-vs2026 20261021.278.1, firewall-isolated; Python 3.12.10) | [`upgrade-windows-package-2026-10-25.json`](evidence/upgrade-windows-package-2026-10-25.json) | 3,026 files, 593,946,327 bytes, `invsys-desktop.exe` SHA-256 `d36322d1…` | passed; 104.8 / 110.0 / 105.7 s |
-| GitHub `macos-15` (macOS 15.7.9, Apple M1 virtual, arm64, image 20260907.0337.1; Python 3.12.10) | [`upgrade-macos-package-2026-10-25.json`](evidence/upgrade-macos-package-2026-10-25.json) | 3,314 files, 534,917,956 bytes, `invsys-desktop` SHA-256 `de59a6ce…` | passed; 121.1 / 121.8 / 122.7 s |
+| GitHub `ubuntu-24.04` (Ubuntu 24.04.5, image 20261023.334.3, AMD EPYC, Xvfb, empty network namespace; Python 3.12.15) | [`upgrade-linux-package-2026-10-25.json`](evidence/upgrade-linux-package-2026-10-25.json) | 3,063 files, 634,300,716 bytes, `invsys-desktop` SHA-256 `4f41fcba…` | passed; launches 70.6 / 71.1 / 71.3 s |
+| GitHub `windows-2025` (Server 2025 10.0.26100, image win25-vs2026 20261021.278.1, firewall-isolated; Python 3.12.10) | [`upgrade-windows-package-2026-10-25.json`](evidence/upgrade-windows-package-2026-10-25.json) | 3,026 files, 593,946,327 bytes, `invsys-desktop.exe` SHA-256 `7072f063…` | passed; 118.1 / 114.7 / 114.2 s |
+| GitHub `macos-15` (macOS 15.7.9, Apple M1 virtual, arm64, image 20260907.0337.1; Python 3.12.10) | [`upgrade-macos-package-2026-10-25.json`](evidence/upgrade-macos-package-2026-10-25.json) | 3,314 files, 534,917,956 bytes, `invsys-desktop` SHA-256 `08caebb6…` | passed; 118.6 / 122.9 / 118.4 s |
 | Local Linux (Ubuntu 24.04.5, kernel 7.0.0-38-generic, Intel i7-7700HQ, 7.8 GB, real X11 session) | [`upgrade-linux-source-local-2026-10-25.json`](evidence/upgrade-linux-source-local-2026-10-25.json) | **source launch** (Python 3.12.3, PySide6 6.11.2, pywebview 6.2.1) of clean commit **`f8a7dc8`** (an earlier head); not a frozen bundle | passed; 108.9 / 93.8 / 94.3 s |
 
-The local record is for `f8a7dc8`, not the current head: a rerun on the current head
-timed out in its first two launches (the 300 s limit, under the shared 3 GB memory cap
+The local record is for `f8a7dc8`, not the current head: a rerun on `1fb6276` (before
+the merge) timed out in its first two launches (the 300 s limit, under the shared 3 GB memory cap
 while another lane was measuring) before reaching any changed code, so it is **not**
 evidence and is not retained. Fixture SHA-256 (line endings normalized) and snapshot
 digest were identical in all four retained records. Toolchain in the CI records:
@@ -635,7 +637,8 @@ Run history, stated plainly.
   real swallowed-key regression green, so the head now sends **one** Shift+Tab after
   native focus and two painted frames have settled and fails if it has no effect (unit
   test with a key that is delivered but ineffective). Whether this removes the race is
-  not established: it passed on every platform in the run above, which does not prove it.
+  not established: it passed on every platform in the run above and in the earlier run on `1fb6276`, which does not
+  prove it.
 - On `56baecd` the Windows job failed twice. Attempt 1 failed in the existing package
   smoke (an unrelated Parts-drawer wait timed out), so the rehearsal step never ran;
   attempt 2 passed the package smoke and failed the rehearsal's third launch at "drawer:
@@ -651,8 +654,8 @@ Run history, stated plainly.
   why; treat it as an open intermittent Windows failure until then.
 - On `d75ef48` the Windows package smoke failed once in the existing smoke's Settings
   "Open backups folder" Explorer check (also pre-existing).
-- `Dependency audit` fails on `filelock` 4.0.12 advisories in a lock this ticket does
-  not change; PR #80 addresses it.
+- `Dependency audit` failed on `filelock` 4.0.12 advisories on every run until `main`
+  gained #80; it passes on the head above. This ticket changes no lock file.
 
 Established: the copied-data upgrade, restart, closed-app restore, rollback to the
 pre-upgrade state, ledger reconciliation listing and restore failure behaviour on the
