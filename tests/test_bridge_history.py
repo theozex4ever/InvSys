@@ -186,6 +186,33 @@ def test_history_search_folds_unicode_case_like_the_catalog(tmp_path):
     store.engine.dispose()
 
 
+def test_history_ascii_search_still_matches_folded_non_ascii_text_and_counts_matches(tmp_path):
+    # ASCII values use a native fast path; a value with any non-ASCII character must
+    # still fold through Python ("Straße" -> "strasse", the Kelvin sign -> "k").
+    store = InventoryStore(tmp_path / "inventory.db", seed=False)
+    store.add_part("A", "Bearing")
+    store.receive("A", 1, "Stock", "L", "Pat", notes="Straße delivered")
+    store.receive("A", 1, "Stock", "L", "Pat", notes="Kelvin \u212a unit")
+    store.receive("A", 1, "Stock", "L", "Pat", notes="plain STRASSE note")
+    store.receive("A", 1, "Stock", "L", "Pat", notes="unrelated")
+    bridge = InventoryBridge(store)
+    strasse = bridge.history({"query": "strasse"})["data"]
+    assert sorted(r["notes"] for r in strasse["records"]) == [
+        "Straße delivered",
+        "plain STRASSE note",
+    ]
+    assert (strasse["matching"], strasse["page"]) == (2, 0)
+    assert [r["notes"] for r in bridge.history({"query": "k unit"})["data"]["records"]] == [
+        "Kelvin \u212a unit"
+    ]
+    # The count survives paging: an empty page past the matches still reports them.
+    beyond = bridge.history({"query": "strasse", "page": 3})["data"]
+    assert (beyond["records"], beyond["matching"]) == ([], 2)
+    nothing = bridge.history({"query": "absent"})["data"]
+    assert (nothing["records"], nothing["matching"]) == ([], 0)
+    store.engine.dispose()
+
+
 def test_history_search_treats_wildcards_as_literal_text(tmp_path):
     store = InventoryStore(tmp_path / "inventory.db", seed=False)
     store.add_part("A", "Bearing")

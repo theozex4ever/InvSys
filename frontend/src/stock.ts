@@ -32,7 +32,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     form(mode).addEventListener('submit', event => { event.preventDefault(); void submit(mode); });
     const edited = () => { if (mode === 'ship') dropReview(); renderReview(mode); };
     form(mode).addEventListener('input', edited); form(mode).addEventListener('change', edited);
-    control<HTMLSelectElement>(mode, 'part_number').addEventListener('change', () => { void refresh(mode, true); });
+    control<HTMLSelectElement>(mode, 'part_number').addEventListener('change', () => { void refresh(mode, true, true); });
     control<HTMLSelectElement>(mode, 'location').addEventListener('change', () => { renderLots(mode); renderReview(mode); });
     control<HTMLButtonElement>(mode, 'refresh').onclick = () => { void refresh(mode); };
     control<HTMLElement>(mode, 'result').onclick = event => {
@@ -89,8 +89,11 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     if (saved && !lots.some(b => b.lot_number === saved)) select.insertAdjacentHTML('beforeend', `<option value="${esc(saved)}">${esc(saved)} · unavailable</option>`);
     select.value = saved;
   }
-  function allocations(review: BOMPreview) {
-    return `<div class="readiness"><span class="badge ${review.plan.ready ? 'good' : 'bad'}">${review.plan.ready ? 'Ready to ship' : 'Blocked — component shortage'}</span></div>` + pair('BOM build capacity at this location', review.buildable) + `<h3>Aggregated leaf requirements</h3><div class="table-wrap"><table><thead><tr><th>Material</th><th class="num">Required</th><th class="num">Available</th><th class="num">Shortage</th></tr></thead><tbody>${review.plan.requirements.map(r => `<tr><td>${esc(r.part_number)}<br>${esc(r.description)}</td><td class="num">${r.quantity_required}</td><td class="num">${r.stock_available}</td><td class="num">${r.shortage > 0 ? `<span class="badge bad">${r.shortage} short</span>` : '0'}</td></tr>`).join('')}</tbody></table></div><h3>Leaf lot allocations</h3><div class="table-wrap"><table><thead><tr><th>Material</th><th>Lot / Location</th><th class="num">Consume</th><th class="num">Lot stock</th></tr></thead><tbody>${review.plan.lines.map(line => `<tr><td>${esc(line.part_number)}</td><td>${esc(line.lot_number)}<br>${esc(line.location)}</td><td class="num">${line.quantity_allocated}</td><td class="num">${line.lot_stock}</td></tr>`).join('')}</tbody></table></div><p class="help">Parent and intermediate assembly stock stays unchanged. Only these leaf lots are consumed.</p>`;
+  // The page keeps the plan beside the form while the dialog shows it in full: a large plan is
+  // collapsed on the page so each plan is not laid out twice.
+  function allocations(review: BOMPreview, compact = false) {
+    const fold = (rows: string) => compact && review.plan.lines.length > 100 ? `<details><summary>Show ${review.plan.requirements.length} materials and ${review.plan.lines.length} lot allocations</summary>${rows}</details>` : rows;
+    return `<div class="readiness"><span class="badge ${review.plan.ready ? 'good' : 'bad'}">${review.plan.ready ? 'Ready to ship' : 'Blocked — component shortage'}</span></div>` + pair('BOM build capacity at this location', review.buildable) + fold(`<h3>Aggregated leaf requirements</h3><div class="table-wrap"><table><thead><tr><th>Material</th><th class="num">Required</th><th class="num">Available</th><th class="num">Shortage</th></tr></thead><tbody>${review.plan.requirements.map(r => `<tr><td>${esc(r.part_number)}<br>${esc(r.description)}</td><td class="num">${r.quantity_required}</td><td class="num">${r.stock_available}</td><td class="num">${r.shortage > 0 ? `<span class="badge bad">${r.shortage} short</span>` : '0'}</td></tr>`).join('')}</tbody></table></div><h3>Leaf lot allocations</h3><div class="table-wrap"><table><thead><tr><th>Material</th><th>Lot / Location</th><th class="num">Consume</th><th class="num">Lot stock</th></tr></thead><tbody>${review.plan.lines.map(line => `<tr><td>${esc(line.part_number)}</td><td>${esc(line.lot_number)}<br>${esc(line.location)}</td><td class="num">${line.quantity_allocated}</td><td class="num">${line.lot_stock}</td></tr>`).join('')}</tbody></table></div>`) + `<p class="help">Parent and intermediate assembly stock stays unchanged. Only these leaf lots are consumed.</p>`;
   }
   function impact(title: string, before: number, quantity: number | null, after: number | null, receiving = false) {
     const blocked = after !== null && after < 0;
@@ -112,9 +115,9 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
       stockImpact += '<p class="help">Preview based on the last availability read. Python validates current stock at submission.</p>';
     }
     const health = context?.part.low_stock ? `<span class="badge warn">${context.part.quantity === 0 ? 'Low stock · No stock' : 'Low stock'}</span>` : `<span class="badge ${context?.part.active ? 'good' : 'neutral'}">${context?.part.active ? 'Above minimum' : 'Inactive'}</span>`;
-    control<HTMLElement>(mode, 'review').innerHTML = context ? `<div class="review-part">${esc(context.part.part_number)}</div><p class="description help">${esc(context.part.description)}</p><div class="readiness">${health}</div>${pair('Location', location)}${stockImpact}${pair('Total location stock', locationStock)}${mode === 'ship' && !context.has_bom ? pair('Selected lot', lot || 'Select a lot') + pair('Selected-lot availability', lotStock) : ''}${pair('Quantity requested', value(mode, 'quantity') || 'Enter quantity')}${pair('Operator', operator() || 'Name required in header')}<p class="help">${mode === 'ship' ? 'Review shipment reads current stock and shows the exact stock impact before confirmation.' : 'Enter a lot number to keep this receipt traceable.'}</p>${!context.part.active ? '<div class="status error">This part is inactive. Use the original application to reactivate it.</div>' : ''}${mode === 'ship' && context.has_bom ? states.ship.completed ? '<p class="help">Shipment complete. Inspect shipment for consumed leaf lots, or use Ship another.</p>' : bomReview ? allocations(bomReview) : '<p class="help">BOM parent selected. Review shipment to read current leaf requirements, build capacity, and lot allocations.</p>' : ''}` : 'Select a part to read current inventory.';
+    control<HTMLElement>(mode, 'review').innerHTML = context ? `<div class="review-part">${esc(context.part.part_number)}</div><p class="description help">${esc(context.part.description)}</p><div class="readiness">${health}</div>${pair('Location', location)}${stockImpact}${pair('Total location stock', locationStock)}${mode === 'ship' && !context.has_bom ? pair('Selected lot', lot || 'Select a lot') + pair('Selected-lot availability', lotStock) : ''}${pair('Quantity requested', value(mode, 'quantity') || 'Enter quantity')}${pair('Operator', operator() || 'Name required in header')}<p class="help">${mode === 'ship' ? 'Review shipment reads current stock and shows the exact stock impact before confirmation.' : 'Enter a lot number to keep this receipt traceable.'}</p>${!context.part.active ? '<div class="status error">This part is inactive. Use the original application to reactivate it.</div>' : ''}${mode === 'ship' && context.has_bom ? states.ship.completed ? '<p class="help">Shipment complete. Inspect shipment for consumed leaf lots, or use Ship another.</p>' : bomReview ? allocations(bomReview, true) : '<p class="help">BOM parent selected. Review shipment to read current leaf requirements, build capacity, and lot allocations.</p>' : ''}` : 'Select a part to read current inventory.';
   }
-  async function refresh(mode: Mode, adoptLocation = false) {
+  async function refresh(mode: Mode, adoptLocation = false, keepLists = false) {
     const state = states[mode];
     if (state.pending || state.uncertain) return;
     const version = ++state.version; dropReview();
@@ -122,15 +125,20 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
     control<HTMLElement>(mode, 'review').textContent = 'Reading current stock…';
     try {
       const api = getAPI();
-      const [parts, locations] = await Promise.all([read(api.search_parts({ query: '', status: 'all', low_stock: false, sort: 'part_number', descending: false })), read(api.locations())]);
-      if (version !== state.version) return;
+      // Choosing a part in the list keeps the lists already shown: re-reading and rebuilding every part
+      // option for each selection is the cost of a large catalog (Refresh availability reloads them).
+      if (!keepLists) {
+        const [parts, locations] = await Promise.all([read(api.search_parts({ query: '', status: 'all', low_stock: false, sort: 'part_number', descending: false })), read(api.locations())]);
+        if (version !== state.version) return;
+        const part = value(mode, 'part_number');
+        control<HTMLSelectElement>(mode, 'part_number').innerHTML = '<option value="">Select a part…</option>' + parts.map(p => `<option value="${esc(p.part_number)}">${esc(p.part_number)} · ${esc(p.description)}${p.active ? '' : ' (inactive)'}</option>`).join('');
+        if (part && !parts.some(p => p.part_number === part)) control<HTMLSelectElement>(mode, 'part_number').insertAdjacentHTML('beforeend', `<option value="${esc(part)}">${esc(part)} · unavailable</option>`);
+        control<HTMLSelectElement>(mode, 'part_number').value = part;
+        const location = value(mode, 'location');
+        control<HTMLSelectElement>(mode, 'location').innerHTML = locations.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
+        control<HTMLSelectElement>(mode, 'location').value = locations.includes(location) ? location : locations[0] ?? '';
+      }
       const part = value(mode, 'part_number');
-      control<HTMLSelectElement>(mode, 'part_number').innerHTML = '<option value="">Select a part…</option>' + parts.map(p => `<option value="${esc(p.part_number)}">${esc(p.part_number)} · ${esc(p.description)}${p.active ? '' : ' (inactive)'}</option>`).join('');
-      if (part && !parts.some(p => p.part_number === part)) control<HTMLSelectElement>(mode, 'part_number').insertAdjacentHTML('beforeend', `<option value="${esc(part)}">${esc(part)} · unavailable</option>`);
-      control<HTMLSelectElement>(mode, 'part_number').value = part;
-      const location = value(mode, 'location');
-      control<HTMLSelectElement>(mode, 'location').innerHTML = locations.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
-      control<HTMLSelectElement>(mode, 'location').value = locations.includes(location) ? location : locations[0] ?? '';
       if (part) {
         const context = await read(api.stock_context(part));
         if (version !== state.version) return;
