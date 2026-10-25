@@ -45,6 +45,7 @@ files = [
     "inventory_visualizer.py",
     "scripts/junit_annotations.py",
     "scripts/package_bundle.py",
+    "scripts/upgrade_rehearsal.py",
 ]
 strict = true
 warn_unreachable = true

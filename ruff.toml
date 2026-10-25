@@ -65,6 +65,9 @@ ignore = [
 # The bundle tool is a CLI that reports progress on stdout and drives subprocesses
 # built from fixed arguments (annotated per call).
 "scripts/package_bundle.py" = ["T201"]
+# The upgrade rehearsal is a CLI that reports progress on stdout and launches the
+# application under test (annotated per call).
+"scripts/upgrade_rehearsal.py" = ["T201"]
 # Workflow commands (annotations) are written to stdout by design.
 "scripts/junit_annotations.py" = ["T201"]
 

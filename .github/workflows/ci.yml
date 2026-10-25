@@ -516,6 +516,44 @@ jobs:
           --isolate-network
           2>&1 | tee "$RUNNER_TEMP/package-smoke.log"
 
+      # Copied-data upgrade, restart, closed-app restore and reopen of the same extracted
+      # bundle against a disposable copy of the pre-migration fixture
+      # (docs/frontend/cutover.md). Never touches operational data.
+      - name: Upgrade and restore rehearsal
+        if: runner.os == 'Linux'
+        run: >-
+          xvfb-run -a -s "-screen 0 1920x1080x24"
+          python scripts/upgrade_rehearsal.py rehearse
+          --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
+          --assets frontend/dist
+          --workdir "$RUNNER_TEMP/invsys-upgrade-rehearsal"
+          --evidence "$RUNNER_TEMP/upgrade-evidence.json"
+          --isolate-network
+          2>&1 | tee "$RUNNER_TEMP/upgrade-rehearsal.log"
+
+      - name: Upgrade and restore rehearsal (macOS)
+        if: runner.os == 'macOS'
+        env:
+          BUNDLE: ${{ matrix.bundle }}
+        run: >-
+          python scripts/upgrade_rehearsal.py rehearse
+          --bundle "$RUNNER_TEMP/bundle-installed/$BUNDLE"
+          --assets frontend/dist
+          --workdir "$RUNNER_TEMP/invsys-upgrade-rehearsal"
+          --evidence "$RUNNER_TEMP/upgrade-evidence.json"
+          2>&1 | tee "$RUNNER_TEMP/upgrade-rehearsal.log"
+
+      - name: Upgrade and restore rehearsal (Windows)
+        if: runner.os == 'Windows'
+        run: >-
+          python scripts/upgrade_rehearsal.py rehearse
+          --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
+          --assets frontend/dist
+          --workdir "$RUNNER_TEMP/invsys-upgrade-rehearsal"
+          --evidence "$RUNNER_TEMP/upgrade-evidence.json"
+          --isolate-network
+          2>&1 | tee "$RUNNER_TEMP/upgrade-rehearsal.log"
+
       - name: Package evidence summary
         if: ${{ !cancelled() }}
         run: |
@@ -537,6 +575,9 @@ jobs:
             ${{ runner.temp }}/package-evidence.json
             ${{ runner.temp }}/package-build.log
             ${{ runner.temp }}/package-smoke.log
+            ${{ runner.temp }}/upgrade-evidence.json
+            ${{ runner.temp }}/upgrade-rehearsal.log
+            ${{ runner.temp }}/invsys-upgrade-rehearsal/inventory/logs/
             ${{ runner.temp }}/bundle-dist/SHA256SUMS
             ${{ runner.temp }}/bundle-dist/invsys-desktop/bundle-manifest.json
             ${{ runner.temp }}/bundle-dist/invsys-desktop.app/Contents/Resources/bundle-manifest.json

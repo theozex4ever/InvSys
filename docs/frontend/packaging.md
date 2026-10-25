@@ -353,6 +353,12 @@ A passing macOS job also uploads the intact archive and `SHA256SUMS` as
 exact tested bundle. This is a CI artifact, not a release publication. Linux and
 Windows archives are not uploaded. All three legs are part of **CI gate**.
 
+After the package smoke, each leg runs `scripts/upgrade_rehearsal.py` against the same
+extracted bundle (copied-data upgrade, restart, closed-app restore and reopen on a
+disposable copy of a pre-migration fixture; see [cutover.md](cutover.md)) and uploads
+`upgrade-evidence.json` and its log with the package evidence. It adds three more
+native launches per leg.
+
 ## Extending packaging
 
 Extend, do not fork: add a runner to the matrix with its `bundle` name and its
