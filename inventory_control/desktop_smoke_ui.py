@@ -127,6 +127,8 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
         key(Qt.Key.Key_Escape)
         wait(f"!document.querySelector('#{dialog_id}').open")
 
+    slack: list[float] = []
+
     def capture_dialog(dialog_id: str) -> None:
         for theme in ("light", "dark"):
             # Modal dialogs make the shell's theme button inert.
@@ -137,6 +139,11 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             for width, height in ((1366, 768), (1920, 1080), (800, 650), (640, 480)):
                 window.resize(width, height)
                 time.sleep(0.15)
+                # The window manager may clamp the size; let the relayout paint before measuring.
+                run(
+                    "window.smokeLaidOut=false; requestAnimationFrame(() => requestAnimationFrame(() => { window.smokeLaidOut=true; }));"
+                )
+                wait("window.smokeLaidOut")
                 require(
                     "document.documentElement.scrollWidth <= innerWidth",
                     f"{dialog_id}: page width",
@@ -151,9 +158,18 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
                 run(
                     f"Array.from(document.querySelectorAll('#{dialog_id} button')).filter(e => e.getClientRects().length).at(-1).scrollIntoView({{block:'nearest'}})"
                 )
+                # Recorded for every size so a failure (and the margin of every pass) is diagnosable.
+                geometry = run(
+                    f"""(() => {{
+                        const dialog = document.querySelector('#{dialog_id}');
+                        const last = Array.from(dialog.querySelectorAll('button')).filter(e => e.getClientRects().length).at(-1).getBoundingClientRect();
+                        return {{top: last.top, bottom: last.bottom, innerHeight, innerWidth, scrollTop: dialog.scrollTop, scrollHeight: dialog.scrollHeight, clientHeight: dialog.clientHeight}};
+                    }})()"""
+                )
+                slack.append(round(geometry["innerHeight"] - geometry["bottom"], 2))
                 require(
                     f"Array.from(document.querySelectorAll('#{dialog_id} button')).filter(e => e.getClientRects().length).slice(-1).every(e => e.getBoundingClientRect().top >= 0 && e.getBoundingClientRect().bottom <= innerHeight)",
-                    f"{dialog_id}: last action reachable by scrolling",
+                    f"{dialog_id} {theme} {width}x{height}: last action reachable by scrolling {geometry}",
                 )
                 target = captures / f"{dialog_id}-{theme}-{width}.png"
                 capture(target)
@@ -318,6 +334,10 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             "Desktop smoke: reduced-motion preference inactive; rerun with QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion to exercise it.",
             flush=True,
         )
+    print(
+        f"Desktop smoke: dialog last-action margin below the viewport, min {min(slack)} px over {len(slack)} checks.",
+        flush=True,
+    )
     print(
         "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
         flush=True,

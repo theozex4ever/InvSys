@@ -578,6 +578,7 @@ jobs:
             ${{ runner.temp }}/upgrade-evidence.json
             ${{ runner.temp }}/upgrade-rehearsal.log
             ${{ runner.temp }}/invsys-upgrade-rehearsal/inventory/logs/
+            ${{ runner.temp }}/invsys-upgrade-rehearsal/inventory/smoke-captures/
             ${{ runner.temp }}/bundle-dist/SHA256SUMS
             ${{ runner.temp }}/bundle-dist/invsys-desktop/bundle-manifest.json
             ${{ runner.temp }}/bundle-dist/invsys-desktop.app/Contents/Resources/bundle-manifest.json
