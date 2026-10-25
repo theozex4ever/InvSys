@@ -117,6 +117,7 @@ def fake_bundle(tmp_path):
     bundle = tmp_path / "invsys-desktop"
     bundle.mkdir()
     executable = package_perf.package_bundle.executable_path(bundle)
+    executable.parent.mkdir(parents=True, exist_ok=True)  # Contents/MacOS inside a macOS .app
     executable.write_bytes(b"binary")
     return bundle
 
