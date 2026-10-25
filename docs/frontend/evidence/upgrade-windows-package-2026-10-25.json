@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-25T01:46:04+00:00",
+  "recorded_at": "2026-10-25T02:22:22+00:00",
   "machine": {
     "platform": "Windows-2025Server-10.0.26100-SP0",
     "machine": "AMD64",
@@ -8,19 +8,19 @@
     "display": "windows-desktop-session",
     "ci_image": "win25-vs2026 20261021.278.1",
     "os": "Windows 10.0.26100 (ServerDatacenter)",
-    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
     "memory": "16771836 kB"
   },
   "application": {
     "kind": "packaged-bundle",
     "directory": "invsys-desktop",
     "file_count": 3026,
-    "size_bytes": 593945364,
-    "executable_sha256": "d82fee2b74779756c01fef71583c0b727b6710859511fec02ccfe6a4fb2122b9",
+    "size_bytes": 593945618,
+    "executable_sha256": "99d6df321006786c4e7883e9928ba829e886348901ab4d2cb18fce9ad8b0ab40",
     "manifest": {
       "app": "invsys-desktop",
       "source": {
-        "commit": "a93da2ddd6564c93cf02754f63c63b43e49fc995",
+        "commit": "8bf702ce5dd2c729937f48929c3d7e33d53ef6ba",
         "uncommitted_changes": false
       },
       "python": "3.12.10",
@@ -119,7 +119,7 @@
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 103.2,
+      "seconds": 93.8,
       "stdout": [
         "Desktop smoke: visible Explorer navigation verified: D:\\a\\_temp\\invsys-upgrade-rehearsal\\inventory\\exports",
         "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
@@ -130,17 +130,21 @@
         "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
         "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
         "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
-        "Desktop smoke: Ctrl+1\ufffd9/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2722 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: Ctrl+1\ufffd9/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2684 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
         "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
         "Desktop smoke: restart persistence and backup content passed; no HTTP server."
       ],
-      "stderr": [],
+      "stderr": [
+        "[9084:2284:1025/022357.153:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[9084:2284:1025/022357.153:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[9084:2284:1025/022357.153:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox."
+      ],
       "startup_backups": [
-        "inventory-20261025-014605-startup.db"
+        "inventory-20261025-022223-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-014627-manual.db",
-        "inventory-20261025-014630-manual.db"
+        "inventory-20261025-022245-manual.db",
+        "inventory-20261025-022247-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -154,14 +158,14 @@
         "bom_components": 14,
         "settings": 3
       },
-      "inventory_digest": "c712999e594a4d960638115587249f0e5ce58f8071b690879cfdddec150282c2"
+      "inventory_digest": "b67a061b4f8c83c5f2bc651582a920f3d4e88d60331566afed25f060909c6479"
     },
     {
       "name": "restart-and-workflows",
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 108.0,
+      "seconds": 94.6,
       "stdout": [
         "Desktop smoke: visible Explorer navigation verified: D:\\a\\_temp\\invsys-upgrade-rehearsal\\inventory\\exports",
         "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
@@ -178,11 +182,11 @@
       ],
       "stderr": [],
       "startup_backups": [
-        "inventory-20261025-014749-startup.db"
+        "inventory-20261025-022357-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-014811-manual.db",
-        "inventory-20261025-014814-manual.db"
+        "inventory-20261025-022418-manual.db",
+        "inventory-20261025-022421-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -196,15 +200,15 @@
         "bom_components": 22,
         "settings": 3
       },
-      "inventory_digest": "d53c78be0fde23a3f3e0b8732c3287d72aee46bd9a8cc09bd4db0aabdcbb2b6a"
+      "inventory_digest": "59bdf92312728bd84e48adbf4a5c9345ffa923fb87e0d3d6a35661577369bf6a"
     },
     {
       "name": "closed-app-restore-of-the-pre-upgrade-backup",
       "passed": true,
       "problems": [],
-      "restored_from": "inventory-20261025-014605-startup.db",
+      "restored_from": "inventory-20261025-022223-startup.db",
       "backup_sha256": "1346b5ab661733070e57ddb1396645c13306cf6526b2d1625295dae77f33102c",
-      "aside_directory": "D:\\a\\_temp\\invsys-upgrade-rehearsal\\inventory\\restore-aside\\restore-aside-20261025-014936",
+      "aside_directory": "D:\\a\\_temp\\invsys-upgrade-rehearsal\\inventory\\restore-aside\\restore-aside-20261025-022532",
       "kept_aside": [
         "inventory.db"
       ],
@@ -324,7 +328,7 @@
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 101.1,
+      "seconds": 92.9,
       "stdout": [
         "Desktop smoke: visible Explorer navigation verified: D:\\a\\_temp\\invsys-upgrade-rehearsal\\inventory\\exports",
         "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
@@ -339,13 +343,21 @@
         "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
         "Desktop smoke: restart persistence and backup content passed; no HTTP server."
       ],
-      "stderr": [],
+      "stderr": [
+        "[2592:5300:1025/022705.116:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[2592:5300:1025/022705.116:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[2592:5300:1025/022705.116:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[2592:5300:1025/022705.116:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[2592:5300:1025/022705.116:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[2592:5300:1025/022705.116:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[2592:5300:1025/022705.116:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox."
+      ],
       "startup_backups": [
-        "inventory-20261025-014937-startup.db"
+        "inventory-20261025-022532-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-014958-manual.db",
-        "inventory-20261025-015001-manual.db"
+        "inventory-20261025-022554-manual.db",
+        "inventory-20261025-022557-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -359,7 +371,7 @@
         "bom_components": 14,
         "settings": 3
       },
-      "inventory_digest": "e234f07b40b59f215842376cf7d8ea6cc940be0199171e931b4ee497271c8952"
+      "inventory_digest": "25af188fc11c01a2c5c3ce63a77bdf0aa98abb420eef3a93ab2efa6e144cf2ca"
     },
     {
       "name": "nothing-written-outside-the-selected-inventory",
@@ -394,7 +406,15 @@
     {
       "name": "backup-does-not-exist",
       "applicable": true,
-      "message": "The backup C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\invsys-restore-probes-bvve_uq9\\backup-does-not-exist\\backups\\absent.db does not exist. Nothing was changed.",
+      "message": "The backup C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\invsys-restore-probes-v049r3nx\\backup-does-not-exist\\backups\\absent.db does not exist. Nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "backup-is-a-folder",
+      "applicable": true,
+      "message": "The backup C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\invsys-restore-probes-v049r3nx\\backup-is-a-folder\\backups\\inventory-folder.db is not a file. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true
@@ -434,7 +454,7 @@
     {
       "name": "aside-folder-cannot-be-created",
       "applicable": true,
-      "message": "Cannot create the aside folder C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\invsys-restore-probes-bvve_uq9\\aside-folder-cannot-be-created\\restore-aside\\restore-aside-20261025-015134: Cannot create a file when that file already exists. Nothing was changed.",
+      "message": "Cannot create the aside folder C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\invsys-restore-probes-v049r3nx\\aside-folder-cannot-be-created\\restore-aside\\restore-aside-20261025-022722: Cannot create a file when that file already exists. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true

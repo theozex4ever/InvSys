@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-25T01:45:00+00:00",
+  "recorded_at": "2026-10-25T02:22:52+00:00",
   "machine": {
     "platform": "macOS-15.7.9-arm64-arm-64bit",
     "machine": "arm64",
@@ -15,12 +15,12 @@
     "kind": "packaged-bundle",
     "directory": "invsys-desktop.app",
     "file_count": 3314,
-    "size_bytes": 534916996,
-    "executable_sha256": "38aeed5bec704cdd341f33d1de5b519d8033fff2e4f6babdb488cb40341defc0",
+    "size_bytes": 534917252,
+    "executable_sha256": "b37fd5f6c6db59e223fc5771578dcb22721792ad7d63fe9ba81351d42d1f7268",
     "manifest": {
       "app": "invsys-desktop",
       "source": {
-        "commit": "a93da2ddd6564c93cf02754f63c63b43e49fc995",
+        "commit": "8bf702ce5dd2c729937f48929c3d7e33d53ef6ba",
         "uncommitted_changes": false
       },
       "python": "3.12.10",
@@ -119,7 +119,7 @@
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 114.4,
+      "seconds": 111.5,
       "stdout": [
         "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
         "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
@@ -130,7 +130,7 @@
         "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
         "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
         "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
-        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2722 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2703 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
         "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
         "Desktop smoke: restart persistence and backup content passed; no HTTP server."
       ],
@@ -138,11 +138,11 @@
         "qt.qpa.window: Window position QRect(-171,-16 1366x768) outside any known screen, using primary screen"
       ],
       "startup_backups": [
-        "inventory-20261025-014501-startup.db"
+        "inventory-20261025-022253-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-014534-manual-01.db",
-        "inventory-20261025-014534-manual.db"
+        "inventory-20261025-022327-manual-01.db",
+        "inventory-20261025-022327-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -156,14 +156,14 @@
         "bom_components": 14,
         "settings": 3
       },
-      "inventory_digest": "08ae2f1b029e13c424e8e98f301d5c35374235724ac6665ef02d5b9f7a78791f"
+      "inventory_digest": "4bff87225c5d38eaeb19bd1170c17de71f30b68a5b98bf2cdb4a5a83b46feab6"
     },
     {
       "name": "restart-and-workflows",
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 112.9,
+      "seconds": 114.9,
       "stdout": [
         "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
         "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
@@ -182,11 +182,11 @@
         "qt.qpa.window: Window position QRect(-171,-16 1366x768) outside any known screen, using primary screen"
       ],
       "startup_backups": [
-        "inventory-20261025-014655-startup.db"
+        "inventory-20261025-022444-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-014729-manual-01.db",
-        "inventory-20261025-014729-manual.db"
+        "inventory-20261025-022518-manual.db",
+        "inventory-20261025-022519-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -200,15 +200,15 @@
         "bom_components": 22,
         "settings": 3
       },
-      "inventory_digest": "514e3cbda7561d0d13290e39beb607ae013feba0258451f6795eba4643237caa"
+      "inventory_digest": "e15e55fafd4eb1adce337dee8b31a69b0e5dd9116c776e7abcd3869b2e7645c3"
     },
     {
       "name": "closed-app-restore-of-the-pre-upgrade-backup",
       "passed": true,
       "problems": [],
-      "restored_from": "inventory-20261025-014501-startup.db",
+      "restored_from": "inventory-20261025-022253-startup.db",
       "backup_sha256": "1346b5ab661733070e57ddb1396645c13306cf6526b2d1625295dae77f33102c",
-      "aside_directory": "/Users/runner/work/_temp/invsys-upgrade-rehearsal/inventory/restore-aside/restore-aside-20261025-014847",
+      "aside_directory": "/Users/runner/work/_temp/invsys-upgrade-rehearsal/inventory/restore-aside/restore-aside-20261025-022639",
       "kept_aside": [
         "inventory.db"
       ],
@@ -328,7 +328,7 @@
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 111.9,
+      "seconds": 116.3,
       "stdout": [
         "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
         "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
@@ -347,11 +347,11 @@
         "qt.qpa.window: Window position QRect(-171,-16 1366x768) outside any known screen, using primary screen"
       ],
       "startup_backups": [
-        "inventory-20261025-014848-startup.db"
+        "inventory-20261025-022640-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-014922-manual-01.db",
-        "inventory-20261025-014922-manual.db"
+        "inventory-20261025-022713-manual.db",
+        "inventory-20261025-022714-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -365,7 +365,7 @@
         "bom_components": 14,
         "settings": 3
       },
-      "inventory_digest": "98e5ee5b665b4aa9d89f9cf25e29276a7b169728eedcfc0e9c4940d2e9ca5181"
+      "inventory_digest": "74b1c3d60d34797932af19eb7c5e2562c55f4b9257eddb208f9801b7c083b28c"
     },
     {
       "name": "nothing-written-outside-the-selected-inventory",
@@ -390,7 +390,15 @@
     {
       "name": "backup-does-not-exist",
       "applicable": true,
-      "message": "The backup /var/folders/nj/vtw8zd2j31d1gdrtntc5y4600000gn/T/invsys-restore-probes-hu0ii61v/backup-does-not-exist/backups/absent.db does not exist. Nothing was changed.",
+      "message": "The backup /var/folders/nj/vtw8zd2j31d1gdrtntc5y4600000gn/T/invsys-restore-probes-vyhzga46/backup-does-not-exist/backups/absent.db does not exist. Nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "backup-is-a-folder",
+      "applicable": true,
+      "message": "The backup /var/folders/nj/vtw8zd2j31d1gdrtntc5y4600000gn/T/invsys-restore-probes-vyhzga46/backup-is-a-folder/backups/inventory-folder.db is not a file. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true
@@ -430,7 +438,7 @@
     {
       "name": "aside-folder-cannot-be-created",
       "applicable": true,
-      "message": "Cannot create the aside folder /var/folders/nj/vtw8zd2j31d1gdrtntc5y4600000gn/T/invsys-restore-probes-hu0ii61v/aside-folder-cannot-be-created/restore-aside/restore-aside-20261025-015040: Not a directory. Nothing was changed.",
+      "message": "Cannot create the aside folder /var/folders/nj/vtw8zd2j31d1gdrtntc5y4600000gn/T/invsys-restore-probes-vyhzga46/aside-folder-cannot-be-created/restore-aside/restore-aside-20261025-022836: Not a directory. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true

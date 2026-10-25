@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-25T01:57:08+00:00",
+  "recorded_at": "2026-10-25T02:20:36+00:00",
   "machine": {
     "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
     "machine": "x86_64",
@@ -9,19 +9,19 @@
     "display": ":99",
     "ci_image": "ubuntu24 20261023.334.3",
     "os": "Ubuntu 24.04.5 LTS",
-    "cpu": "AMD EPYC 9V74 80-Core Processor",
-    "memory": "16373444 kB"
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "memory": "16373452 kB"
   },
   "application": {
     "kind": "packaged-bundle",
     "directory": "invsys-desktop",
     "file_count": 3063,
-    "size_bytes": 634299756,
-    "executable_sha256": "1cd7abeeca32c4eb8670c96c2a3c536ab54da7071f9b6bbbbd54d0acbf39b6de",
+    "size_bytes": 634300004,
+    "executable_sha256": "3d1f7bd6d62e8213c661c1e8db7afe99b423944fbe5fe972b656c81d2406f071",
     "manifest": {
       "app": "invsys-desktop",
       "source": {
-        "commit": "a93da2ddd6564c93cf02754f63c63b43e49fc995",
+        "commit": "8bf702ce5dd2c729937f48929c3d7e33d53ef6ba",
         "uncommitted_changes": false
       },
       "python": "3.12.15",
@@ -120,7 +120,7 @@
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 71.1,
+      "seconds": 67.6,
       "stdout": [
         "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
         "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
@@ -131,20 +131,21 @@
         "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
         "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
         "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
-        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2703 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2684 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
         "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
         "Desktop smoke: restart persistence and backup content passed; no HTTP server."
       ],
       "stderr": [
         "Failed to create Vulkan instance: -9",
-        "Failed to create platform Vulkan instance"
+        "Failed to create platform Vulkan instance",
+        "[12040:7:1025/022037.271946:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/ipc/client/command_buffer_proxy_impl.cc:127] ContextResult::kTransientFailure: Failed to send GpuControl.CreateCommandBuffer."
       ],
       "startup_backups": [
-        "inventory-20261025-015709-startup.db"
+        "inventory-20261025-022036-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-015730-manual-01.db",
-        "inventory-20261025-015730-manual.db"
+        "inventory-20261025-022057-manual-01.db",
+        "inventory-20261025-022057-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -158,14 +159,14 @@
         "bom_components": 14,
         "settings": 3
       },
-      "inventory_digest": "7f406b783091f8838dadc1a58f31afbda8f6c70a3009ebbd50c86069ffad2db3"
+      "inventory_digest": "cd929fcffbcadea7849bde3c66e513383eecc43e6ae5becca3b3d0b2660fe73a"
     },
     {
       "name": "restart-and-workflows",
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 69.9,
+      "seconds": 68.9,
       "stdout": [
         "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
         "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
@@ -182,14 +183,15 @@
       ],
       "stderr": [
         "Failed to create Vulkan instance: -9",
-        "Failed to create platform Vulkan instance"
+        "Failed to create platform Vulkan instance",
+        "[12944:7:1025/022144.867851:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/ipc/client/command_buffer_proxy_impl.cc:127] ContextResult::kTransientFailure: Failed to send GpuControl.CreateCommandBuffer."
       ],
       "startup_backups": [
-        "inventory-20261025-015820-startup.db"
+        "inventory-20261025-022144-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-015841-manual-01.db",
-        "inventory-20261025-015841-manual.db"
+        "inventory-20261025-022205-manual-01.db",
+        "inventory-20261025-022205-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -203,15 +205,15 @@
         "bom_components": 22,
         "settings": 3
       },
-      "inventory_digest": "feaf39c6dddacdd0836f48dde8d3d3ba504380fce836ae58da7f2962d7a6e734"
+      "inventory_digest": "ee7531eaff5fc669e0208420572435274a2621facc3059b5758e1acb4a92e3e2"
     },
     {
       "name": "closed-app-restore-of-the-pre-upgrade-backup",
       "passed": true,
       "problems": [],
-      "restored_from": "inventory-20261025-015709-startup.db",
+      "restored_from": "inventory-20261025-022036-startup.db",
       "backup_sha256": "dba3b5cc8f89ebf00b0dbd37dc514e09243e9f7d64a399a9d150d2001f7ed04a",
-      "aside_directory": "/home/runner/work/_temp/invsys-upgrade-rehearsal/inventory/restore-aside/restore-aside-20261025-015930",
+      "aside_directory": "/home/runner/work/_temp/invsys-upgrade-rehearsal/inventory/restore-aside/restore-aside-20261025-022253",
       "kept_aside": [
         "inventory.db"
       ],
@@ -331,7 +333,7 @@
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 69.8,
+      "seconds": 67.9,
       "stdout": [
         "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
         "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
@@ -342,20 +344,21 @@
         "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
         "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
         "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
-        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2684 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2703 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
         "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
         "Desktop smoke: restart persistence and backup content passed; no HTTP server."
       ],
       "stderr": [
         "Failed to create Vulkan instance: -9",
-        "Failed to create platform Vulkan instance"
+        "Failed to create platform Vulkan instance",
+        "[13810:7:1025/022253.828510:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/ipc/client/command_buffer_proxy_impl.cc:127] ContextResult::kTransientFailure: Failed to send GpuControl.CreateCommandBuffer."
       ],
       "startup_backups": [
-        "inventory-20261025-015930-startup.db"
+        "inventory-20261025-022253-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-015951-manual-01.db",
-        "inventory-20261025-015951-manual.db"
+        "inventory-20261025-022314-manual-01.db",
+        "inventory-20261025-022314-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -369,7 +372,7 @@
         "bom_components": 14,
         "settings": 3
       },
-      "inventory_digest": "d04c13aa4c651eee0a3c8fe6766577ccaada125f6f645761e1f7f33231b0f92d"
+      "inventory_digest": "3ee6897fdb158ff59e902fc82d2aedaf01c69bd41f1f717d3af8c938034c94d2"
     },
     {
       "name": "nothing-written-outside-the-selected-inventory",
@@ -395,7 +398,15 @@
     {
       "name": "backup-does-not-exist",
       "applicable": true,
-      "message": "The backup /tmp/invsys-restore-probes-7k_u_n5s/backup-does-not-exist/backups/absent.db does not exist. Nothing was changed.",
+      "message": "The backup /tmp/invsys-restore-probes-fprksvn4/backup-does-not-exist/backups/absent.db does not exist. Nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "backup-is-a-folder",
+      "applicable": true,
+      "message": "The backup /tmp/invsys-restore-probes-fprksvn4/backup-is-a-folder/backups/inventory-folder.db is not a file. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true
@@ -435,7 +446,7 @@
     {
       "name": "aside-folder-cannot-be-created",
       "applicable": true,
-      "message": "Cannot create the aside folder /tmp/invsys-restore-probes-7k_u_n5s/aside-folder-cannot-be-created/restore-aside/restore-aside-20261025-020040: Not a directory. Nothing was changed.",
+      "message": "Cannot create the aside folder /tmp/invsys-restore-probes-fprksvn4/aside-folder-cannot-be-created/restore-aside/restore-aside-20261025-022401: Not a directory. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true

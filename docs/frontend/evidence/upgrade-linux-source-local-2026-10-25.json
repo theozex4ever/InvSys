@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-25T01:38:08+00:00",
+  "recorded_at": "2026-10-25T02:29:20+00:00",
   "machine": {
     "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
     "machine": "x86_64",
@@ -22,7 +22,7 @@
       "QtPy": "2.4.3"
     },
     "source": {
-      "commit": "9f5f5fabacf26bfdc677a2582250aca58997aacc",
+      "commit": "f8a7dc85b774106bab09fef92e54f904ca720e3f",
       "uncommitted_changes": false
     }
   },
@@ -106,7 +106,7 @@
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 93.4,
+      "seconds": 108.9,
       "stdout": [
         "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
         "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
@@ -123,11 +123,11 @@
       ],
       "stderr": [],
       "startup_backups": [
-        "inventory-20261024-213809-startup.db"
+        "inventory-20261024-222921-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261024-213838-manual.db",
-        "inventory-20261024-213839-manual.db"
+        "inventory-20261024-222957-manual.db",
+        "inventory-20261024-222958-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -141,14 +141,14 @@
         "bom_components": 14,
         "settings": 3
       },
-      "inventory_digest": "c0f47325eecc550342ab494fb8fa89be9d1a1c6a7d45d69fc36b5e0dbac03f6a"
+      "inventory_digest": "7f7114655014ac6a764b6caa6406c40c0d84a0dd11de7a3ed62881a33410c616"
     },
     {
       "name": "restart-and-workflows",
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 156.8,
+      "seconds": 93.8,
       "stdout": [
         "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
         "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
@@ -159,17 +159,17 @@
         "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
         "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
         "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
-        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2824 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2862 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
         "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
         "Desktop smoke: restart persistence and backup content passed; no HTTP server."
       ],
       "stderr": [],
       "startup_backups": [
-        "inventory-20261024-213943-startup.db"
+        "inventory-20261024-223110-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261024-214009-manual.db",
-        "inventory-20261024-214010-manual.db"
+        "inventory-20261024-223133-manual-01.db",
+        "inventory-20261024-223133-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -183,15 +183,15 @@
         "bom_components": 22,
         "settings": 3
       },
-      "inventory_digest": "04710d1b015eebbfa679c4ed928f69f64082fe69ba2b4445525a1bd168aecc4f"
+      "inventory_digest": "3727c98b4fcdc070ce4585be5c68019f1fc41dd1eaccc36162d0095c279c3571"
     },
     {
       "name": "closed-app-restore-of-the-pre-upgrade-backup",
       "passed": true,
       "problems": [],
-      "restored_from": "inventory-20261024-213809-startup.db",
+      "restored_from": "inventory-20261024-222921-startup.db",
       "backup_sha256": "dba3b5cc8f89ebf00b0dbd37dc514e09243e9f7d64a399a9d150d2001f7ed04a",
-      "aside_directory": "/tmp/invsys-up-src/inventory/restore-aside/restore-aside-20261024-214219",
+      "aside_directory": "/tmp/invsys-up-src/inventory/restore-aside/restore-aside-20261024-223243",
       "kept_aside": [
         "inventory.db"
       ],
@@ -311,7 +311,7 @@
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 89.6,
+      "seconds": 94.3,
       "stdout": [
         "Desktop smoke: BOM explorer graph truth, fit/zoom, selection, failed read and refreshed inventory passed.",
         "Desktop smoke: BOM authoring of nested/shared definitions, update, rejection, removal confirmation, duplicate clicks, lost-response recovery, review invalidation and unchanged snapshots passed.",
@@ -328,11 +328,11 @@
       ],
       "stderr": [],
       "startup_backups": [
-        "inventory-20261024-214219-startup.db"
+        "inventory-20261024-223244-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261024-214246-manual-01.db",
-        "inventory-20261024-214246-manual.db"
+        "inventory-20261024-223319-manual.db",
+        "inventory-20261024-223320-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -346,7 +346,7 @@
         "bom_components": 14,
         "settings": 3
       },
-      "inventory_digest": "7a252cb340d0da21f8f6c6ed360627c4fe733c4c31b58bcff7db863c8c190c7b"
+      "inventory_digest": "8dca21aff5c2e6f5571bd90506938c73702ac00d1529f53af4a84a4a3ca21a16"
     },
     {
       "name": "nothing-written-outside-the-selected-inventory",
@@ -366,7 +366,15 @@
     {
       "name": "backup-does-not-exist",
       "applicable": true,
-      "message": "The backup /tmp/invsys-restore-probes-wnnli4mc/backup-does-not-exist/backups/absent.db does not exist. Nothing was changed.",
+      "message": "The backup /tmp/invsys-restore-probes-7yhmvof4/backup-does-not-exist/backups/absent.db does not exist. Nothing was changed.",
+      "database_untouched": true,
+      "no_partial_files": true,
+      "passed": true
+    },
+    {
+      "name": "backup-is-a-folder",
+      "applicable": true,
+      "message": "The backup /tmp/invsys-restore-probes-7yhmvof4/backup-is-a-folder/backups/inventory-folder.db is not a file. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true
@@ -406,7 +414,7 @@
     {
       "name": "aside-folder-cannot-be-created",
       "applicable": true,
-      "message": "Cannot create the aside folder /tmp/invsys-restore-probes-wnnli4mc/aside-folder-cannot-be-created/restore-aside/restore-aside-20261024-214350: Not a directory. Nothing was changed.",
+      "message": "Cannot create the aside folder /tmp/invsys-restore-probes-7yhmvof4/aside-folder-cannot-be-created/restore-aside/restore-aside-20261024-223419: Not a directory. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true
