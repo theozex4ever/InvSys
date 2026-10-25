@@ -192,7 +192,6 @@ def measure_launches(
                 "page_ms": probe["usable"]["page_ms"],
                 "exit_code": result["exit_code"],
                 "seconds": result["seconds"],
-                "environment": probe.get("environment"),
             }
         )
         shutil.rmtree(directory, ignore_errors=True)

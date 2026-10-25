@@ -16,8 +16,10 @@ timeout = 60
 [tool.coverage.run]
 branch = true
 source = ["inventory_control"]
-# The native smoke probes are test code driven by the desktop E2E job.
+# The native smoke probes are test code driven by the desktop E2E job; the performance
+# probe is the same kind of code, driven by the package job.
 omit = [
+    "inventory_control/desktop_perf.py",
     "inventory_control/desktop_smoke.py",
     "inventory_control/desktop_smoke_bom.py",
     "inventory_control/desktop_smoke_ui.py",

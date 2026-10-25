@@ -126,3 +126,25 @@ def test_writes_between_names_every_changed_counter(tmp_path):
     assert "transactions: 15 -> 16" in changed
     assert "balance_rows: 9 -> 10" in changed
     assert "balance_units: 63 -> 66" in changed
+
+
+def test_the_probe_only_accepts_the_two_documented_modes(tmp_path):
+    from inventory_control.desktop_perf import PerfProbe
+
+    database = create_fixture(tmp_path / "fixture")
+    PerfProbe("launch", tmp_path / "out.json", database)
+    PerfProbe("workflow", tmp_path / "out.json", database)
+    with pytest.raises(ValueError, match="launch or workflow"):
+        PerfProbe("everything", tmp_path / "out.json", database)
+
+
+def test_review_content_checks_name_what_the_python_review_failed_to_show():
+    from inventory_control.desktop_perf import PerfProbe, ProbeError
+
+    PerfProbe._check_review("standard", "Part STANDARD Stock / A Reviewed lot impact")
+    PerfProbe._check_review("kit", "Ready to ship LEAF 14 21 0")
+    PerfProbe._check_review("root", "Ready to ship PERF-00100 ... PERF-00999")
+    with pytest.raises(ProbeError, match="Ready to ship"):
+        PerfProbe._check_review("kit", "Blocked — component shortage LEAF 14")
+    with pytest.raises(ProbeError, match="PERF-00999"):
+        PerfProbe._check_review("root", "Ready to ship PERF-00100")
