@@ -68,7 +68,32 @@ TABLES = (
     "bom_components",
     "settings",
 )
-REQUIRED_TABLES = ("parts", "lots", "inventory_balances", "inventory_transactions", "shipments")
+# Every table and column that snapshot(), reconcile() and dropped_entries() read.
+REQUIRED_COLUMNS = {
+    "locations": ("id", "name"),
+    "parts": ("id", "part_number"),
+    "lots": ("id", "part_id", "lot_number"),
+    "inventory_balances": ("id", "part_id", "location_id", "lot_id", "quantity"),
+    "inventory_transactions": (
+        "id",
+        "timestamp",
+        "tx_type",
+        "part_id",
+        "lot_id",
+        "quantity_change",
+        "location_from_id",
+        "location_to_id",
+        "operator",
+        "reference",
+        "notes",
+        "shipment_id",
+    ),
+    "shipments": ("id", "shipment_number", "part_id", "quantity"),
+    "shipment_components": ("id", "shipment_id", "part_id", "lot_id", "location_id", "quantity"),
+    "bom_components": ("id",),
+    "settings": ("key", "value"),
+}
+REQUIRED_TABLES = tuple(REQUIRED_COLUMNS)
 STAMP_FORMAT = "%Y%m%d-%H%M%S"
 
 
@@ -298,6 +323,19 @@ def snapshot(database: Path) -> dict[str, Any]:
     }
 
 
+def readable_snapshot(path: Path) -> dict[str, Any]:
+    """``snapshot`` that reports a damaged or foreign file as a ``RehearsalError``."""
+    try:
+        check_backup(path)
+        return snapshot(path)
+    except RestoreRefused as exc:
+        raise RehearsalError(str(exc).replace(" Nothing was changed.", "")) from exc
+    except (sqlite3.Error, KeyError, TypeError, ValueError, IndexError) as exc:
+        raise RehearsalError(
+            f"{path.name} could not be read as an InvSys inventory ({exc})."
+        ) from exc
+
+
 def digest(state: dict[str, Any]) -> str:
     """Stable fingerprint of a snapshot (schema and rows)."""
     canonical = json.dumps(
@@ -414,12 +452,17 @@ def reconcile(state: dict[str, Any]) -> list[str]:
     return problems
 
 
+def _names(state: dict[str, Any], table: str, column: str) -> dict[int, Any]:
+    """Row id to the natural key (``part_number``, ``lot_number``, ...) of a table."""
+    return {row["id"]: row[column] for row in _table(state, table)}
+
+
 def component_trace(state: dict[str, Any]) -> dict[str, list[list[Any]]]:
     """Per-shipment component snapshots by natural keys (Part, Lot, Location, quantity)."""
-    parts = {row["id"]: row["part_number"] for row in _table(state, "parts")}
-    lots = {row["id"]: row["lot_number"] for row in _table(state, "lots")}
-    locations = {row["id"]: row["name"] for row in _table(state, "locations")}
-    numbers = {row["id"]: row["shipment_number"] for row in _table(state, "shipments")}
+    parts = _names(state, "parts", "part_number")
+    lots = _names(state, "lots", "lot_number")
+    locations = _names(state, "locations", "name")
+    numbers = _names(state, "shipments", "shipment_number")
     trace: dict[str, list[list[Any]]] = {}
     for row in _table(state, "shipment_components"):
         trace.setdefault(numbers[row["shipment_id"]], []).append(
@@ -442,10 +485,10 @@ def dropped_entries(kept: dict[str, Any], replaced: dict[str, Any]) -> dict[str,
     """
     known_transactions = set(kept["tables"]["inventory_transactions"]["rows"])
     known_shipments = set(kept["tables"]["shipments"]["rows"])
-    parts = {row["id"]: row["part_number"] for row in _table(replaced, "parts")}
-    lots = {row["id"]: row["lot_number"] for row in _table(replaced, "lots")}
-    locations = {row["id"]: row["name"] for row in _table(replaced, "locations")}
-    numbers = {row["id"]: row["shipment_number"] for row in _table(replaced, "shipments")}
+    parts = _names(replaced, "parts", "part_number")
+    lots = _names(replaced, "lots", "lot_number")
+    locations = _names(replaced, "locations", "name")
+    numbers = _names(replaced, "shipments", "shipment_number")
     transactions = [
         row
         for row in _table(replaced, "inventory_transactions")
@@ -488,23 +531,24 @@ def verify_backup_file(path: Path) -> dict[str, Any]:
     """Verify a backup independently of the application that wrote it.
 
     The original application's Settings backup only copies the file; this reopens it
-    read-only, checks SQLite integrity, the required tables, foreign keys and that every
-    balance and shipment still agrees with the ledger. Never changes ``path``.
+    read-only, checks SQLite integrity, the full table and column structure, foreign keys
+    and that every balance and shipment still agrees with the ledger. Never changes
+    ``path``; a damaged or incomplete file is a problem in the report, never an exception.
     """
+    path = path.resolve()
     report: dict[str, Any] = {"path": str(path), "problems": []}
     try:
-        check_backup(path)
-    except RestoreRefused as exc:
+        state = readable_snapshot(path)
+        report["problems"] += reconcile(state)
+    except (RehearsalError, KeyError, TypeError, ValueError, IndexError) as exc:
         report["problems"].append(str(exc))
         return report
-    state = snapshot(path)
     report["integrity_check"] = state["integrity_check"]
     report["counts"] = counts(state)
     if state["integrity_check"] != "ok":
         report["problems"].append(f"SQLite integrity check: {state['integrity_check']}.")
     if state["foreign_key_violations"]:
         report["problems"].append(f"{state['foreign_key_violations']} foreign key violation(s).")
-    report["problems"] += reconcile(state)
     return report
 
 
@@ -516,7 +560,8 @@ def _sha256(path: Path) -> str:
 
 
 def check_backup(path: Path) -> None:
-    """Refuse anything that is not a readable, intact inventory file."""
+    """Refuse anything that is not a readable, intact inventory file with the full structure."""
+    path = path.resolve()
     if not path.exists():
         raise RestoreRefused(f"The backup {path} does not exist. Nothing was changed.")
     if not path.is_file():
@@ -526,6 +571,13 @@ def check_backup(path: Path) -> None:
         with closing(sqlite3.connect(f"{path.as_uri()}?mode=ro&immutable=1", uri=True)) as copy:
             result = copy.execute("PRAGMA quick_check").fetchall()
             tables = {row[0] for row in copy.execute("SELECT name FROM sqlite_master")}
+            columns = {
+                table: {
+                    row[1] for row in copy.execute(f"PRAGMA table_info({table})")
+                }  # fixed table names
+                for table in REQUIRED_COLUMNS
+                if table in tables
+            }
     except sqlite3.Error as exc:
         raise RestoreRefused(
             f"The backup {path.name} is not a usable SQLite inventory ({exc}). Nothing was changed."
@@ -534,11 +586,22 @@ def check_backup(path: Path) -> None:
         raise RestoreRefused(
             f"The backup {path.name} failed its integrity check. Nothing was changed."
         )
-    missing = [table for table in REQUIRED_TABLES if table not in tables]
+    missing = [table for table in REQUIRED_COLUMNS if table not in tables]
     if missing:
         raise RestoreRefused(
             f"The file {path.name} is not an InvSys inventory (no {', '.join(missing)} table). "
             "Nothing was changed."
+        )
+    lacking = [
+        f"{table}.{column}"
+        for table, needed in REQUIRED_COLUMNS.items()
+        for column in needed
+        if column not in columns[table]
+    ]
+    if lacking:
+        raise RestoreRefused(
+            f"The file {path.name} is not an InvSys inventory "
+            f"(missing columns: {', '.join(lacking)}). Nothing was changed."
         )
 
 
@@ -1066,7 +1129,7 @@ def report_dropped(kept: Path, displaced: Path) -> int:
     for path in (kept, displaced):
         if not path.is_file():
             raise RehearsalError(f"{path} is not a file.")
-    dropped = dropped_entries(snapshot(kept), snapshot(displaced))
+    dropped = dropped_entries(readable_snapshot(kept), readable_snapshot(displaced))
     print(
         f"{dropped['ledger_entries']} ledger entries and {len(dropped['shipments'])} shipments "
         f"exist only in {displaced}."

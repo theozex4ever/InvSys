@@ -948,3 +948,78 @@ def shutil_copy(source: Path, destination: Path) -> None:
     import shutil
 
     shutil.copy2(source, destination)
+
+
+# ------------------------------------------------ verify-backup: paths and incomplete schemas
+
+
+def test_verify_backup_accepts_a_relative_path(inventory, monkeypatch, capsys):
+    backup = backup_database(inventory, inventory.parent / "backups", reason="manual")
+    monkeypatch.chdir(backup.parent)
+    assert rehearsal.main(["verify-backup", backup.name]) == 0
+    assert "verified" in capsys.readouterr().out
+    assert rehearsal.verify_backup_file(Path(backup.name))["problems"] == []
+
+
+def test_dropped_accepts_relative_paths(inventory, monkeypatch, capsys):
+    backup, _ = make_later_inventory(inventory)
+    rehearsal.restore_from_backup(inventory, backup, inventory.parent / "restore-aside", stamp="r")
+    monkeypatch.chdir(inventory.parent)
+    displaced = Path("restore-aside") / "restore-aside-r" / "inventory.db"
+    assert rehearsal.main(["dropped", "--kept", "inventory.db", "--displaced", str(displaced)]) == 0
+    assert "2 ledger entries" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "damage,expected",
+    [
+        ("DROP TABLE bom_components", "no bom_components table"),
+        ("DROP TABLE settings", "no settings table"),
+        ("DROP TABLE shipment_components", "no shipment_components table"),
+        ("ALTER TABLE inventory_transactions DROP COLUMN notes", "inventory_transactions.notes"),
+        ("ALTER TABLE settings DROP COLUMN value", "settings.value"),
+    ],
+)
+def test_an_incomplete_backup_is_reported_not_raised(inventory, tmp_path, capsys, damage, expected):
+    good = backup_database(inventory, inventory.parent / "backups", reason="manual")
+    broken = tmp_path / "inventory-broken.db"
+    broken.write_bytes(good.read_bytes())
+    with closing(sqlite3.connect(broken)) as connection, connection:
+        connection.execute("PRAGMA foreign_keys=OFF")
+        connection.execute(damage)
+
+    report = rehearsal.verify_backup_file(broken)
+    assert any(expected in problem for problem in report["problems"]), report
+
+    assert rehearsal.main(["verify-backup", str(broken)]) == 1
+    out = capsys.readouterr().out
+    assert "NOT VERIFIED" in out
+    assert expected in out
+    assert "Traceback" not in out
+
+
+def test_a_backup_with_unreadable_values_is_reported_not_raised(inventory, tmp_path, capsys):
+    good = backup_database(inventory, inventory.parent / "backups", reason="manual")
+    odd = tmp_path / "inventory-odd.db"
+    odd.write_bytes(good.read_bytes())
+    tamper(odd, "UPDATE inventory_transactions SET quantity_change = 'many' WHERE id = 5")
+    assert rehearsal.main(["verify-backup", str(odd)]) == 1
+    assert "NOT VERIFIED" in capsys.readouterr().out
+
+
+def test_dropped_reports_an_incomplete_inventory_instead_of_raising(inventory, tmp_path, capsys):
+    broken = tmp_path / "inventory.db"
+    broken.write_bytes(inventory.read_bytes())
+    tamper(broken, "DROP TABLE bom_components")
+    code = rehearsal.main(["dropped", "--kept", str(inventory), "--displaced", str(broken)])
+    assert code == 1
+    assert "bom_components" in capsys.readouterr().err
+
+
+def test_restore_refuses_a_backup_missing_any_table_the_inspection_needs(inventory, tmp_path):
+    good = backup_database(inventory, inventory.parent / "backups", reason="manual")
+    broken = tmp_path / "inventory-broken.db"
+    broken.write_bytes(good.read_bytes())
+    tamper(broken, "DROP TABLE bom_components")
+    with pytest.raises(rehearsal.RestoreRefused, match="bom_components"):
+        rehearsal.restore_from_backup(inventory, broken, inventory.parent / "restore-aside")
