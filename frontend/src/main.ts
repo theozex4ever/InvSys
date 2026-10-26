@@ -24,6 +24,8 @@ let searchVersion = 0;
 const PAGE = 100;
 let catalog: Part[] = [];
 let partsPage = 0;
+const pageCount = () => Math.max(1, Math.ceil(catalog.length / PAGE));
+const pageText = () => `Page ${partsPage + 1} of ${pageCount()}`;
 let dashboardVersion = 0;
 let detailVersion = 0;
 let selected = '';
@@ -153,7 +155,7 @@ ${data.low_stock.length ? data.low_stock.slice(0, 5).map(p => `<div class="atten
   } catch (error) { if (version === dashboardVersion) $('#dashboard-data').innerHTML = status(message(error), true); if (strict) throw error; }
 }
 function renderParts() {
-  $('#parts-data').innerHTML = catalog.length ? `<div class="table-wrap"><table><thead><tr><th>Part</th><th>Description</th><th class="num">Stock</th><th class="num">Minimum</th><th>State</th></tr></thead><tbody>${catalog.slice(partsPage * PAGE, (partsPage + 1) * PAGE).map(p => `<tr ${selected === p.part_number ? 'class="selected"' : ''}><td><button class="part-id" data-part="${esc(p.part_number)}">${esc(p.part_number)}</button></td><td class="description">${esc(p.description)}</td><td class="num">${p.quantity}</td><td class="num">${p.minimum_quantity}</td><td>${badges(p)}</td></tr>`).join('')}</tbody></table></div><div class="table-footer">${catalog.length} parts · Page ${partsPage + 1} of ${Math.ceil(catalog.length / PAGE)}<div><button class="btn small" data-parts-page="${partsPage - 1}" ${partsPage ? '' : 'disabled'}>Previous</button> <button class="btn small" data-parts-page="${partsPage + 1}" ${(partsPage + 1) * PAGE >= catalog.length ? 'disabled' : ''}>Next</button></div></div>` : status('No parts match these filters. Clear filters or create a part.');
+  $('#parts-data').innerHTML = catalog.length ? `<div class="table-wrap"><table><thead><tr><th>Part</th><th>Description</th><th class="num">Stock</th><th class="num">Minimum</th><th>State</th></tr></thead><tbody>${catalog.slice(partsPage * PAGE, (partsPage + 1) * PAGE).map(p => `<tr ${selected === p.part_number ? 'class="selected"' : ''}><td><button class="part-id" data-part="${esc(p.part_number)}">${esc(p.part_number)}</button></td><td class="description">${esc(p.description)}</td><td class="num">${p.quantity}</td><td class="num">${p.minimum_quantity}</td><td>${badges(p)}</td></tr>`).join('')}</tbody></table></div><div class="table-footer">${catalog.length} parts · ${pageText()}<div><button class="btn small" data-pg="${partsPage - 1}" ${partsPage ? '' : 'disabled'}>Previous</button> <button class="btn small" data-pg="${partsPage + 1}" ${(partsPage + 1) * PAGE >= catalog.length ? 'disabled' : ''}>Next</button></div></div>` : status('No parts match these filters. Clear filters or create a part.');
 }
 async function loadParts(strict = false) {
   const version = ++searchVersion;
@@ -164,7 +166,7 @@ async function loadParts(strict = false) {
     if (version !== searchVersion) { if (strict) throw new Error('Another refresh started while reconciling. Check the outcome again.'); return; }
     if (uncertain && !$<HTMLDialogElement>('#create-dialog').open) await reconcileCreation();
     if (version !== searchVersion) { if (strict) throw new Error('Another refresh started while reconciling. Check the outcome again.'); return; }
-    catalog = parts; partsPage = Math.min(partsPage, Math.max(0, Math.ceil(parts.length / PAGE) - 1)); renderParts();
+    catalog = parts; partsPage = Math.min(partsPage, pageCount() - 1); renderParts();
   } catch (error) { if (version === searchVersion) $('#parts-data').innerHTML = status(message(error), true); if (strict) throw error; }
 }
 // Reads the submitted Part, then waits for the operator's explicit decision.
@@ -246,8 +248,13 @@ document.addEventListener('click', event => {
   if (target.classList.contains('refresh') && api) void (page === 'dashboard' ? loadDashboard() : loadParts());
 });
 $('#parts-data').addEventListener('click', event => {
-  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-parts-page]');
-  if (button) { partsPage = Number(button.dataset.partsPage); renderParts(); }
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-pg]');
+  if (!button) return;
+  const target = Number(button.dataset.pg), forward = target > partsPage;
+  partsPage = target; renderParts();
+  // The pager is rebuilt: keep focus on the same direction, or on the other button at either end.
+  Array.from($('#parts-data').querySelectorAll<HTMLButtonElement>('[data-pg]:not(:disabled)')).at(forward ? -1 : 0)?.focus();
+  notice(pageText());
 });
 $('#drawer-data').onclick = event => {
   const target = (event.target as HTMLElement).closest<HTMLElement>('button');

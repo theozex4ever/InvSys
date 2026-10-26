@@ -106,8 +106,9 @@ shared helpers replaced per-module copies (CSS 8 KB, HTML 1 KB unchanged). Revie
 added explicit Part creation and backup recovery decisions; about 0.4 KB of
 headroom remains; further increases need another explicit decision. The performance
 work of ticket #55 (paged Parts, explorer text level of detail, Ship review folding) fits
-in the same budget: 33,950 B, **50 B of headroom**, so the next frontend change needs
-its own size decision.
+in the same budget: 34,000 B, **exactly at the budget with no headroom** (pager focus
+and announcement were the last bytes), so the next frontend change needs its own size
+decision.
 
 ## Standalone bundle
 
@@ -198,7 +199,8 @@ grows with that Part's own history. Catalog search retains Python's Unicode
 case folding and the existing sort order. The Parts page shows the result 100 rows
 at a time (Previous/Next, with the total in the footer): Python still filters and
 sorts the whole catalog, and the page only limits how many rows the web view renders
-(10,000 rows exhausted its memory). History text search keeps the same Unicode case
+(10,000 rows exhausted its memory). Previous/Next keep keyboard focus on the pager and announce
+the page in the status region. History text search keeps the same Unicode case
 folding; ASCII values use SQLite's identical ASCII fold as a fast path.
 
 The read snapshot does not reserve stock or authorize a later shipment; mutations

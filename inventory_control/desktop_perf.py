@@ -32,9 +32,8 @@ STEP_TIMEOUT_SECONDS = 30
 POLL_SECONDS = 0.01
 
 # Installed once per page. ``perfTimed`` runs ``start`` and polls ``ready`` until it holds, then
-# waits two animation frames so the result has been laid out and painted. The 250 ms timer only
-# bounds a window that never paints (it cannot fire before a long layout finished, because it
-# queues behind it). ``window.perfResult`` carries the elapsed time for Python to read.
+# requires two animation frames so the result has been laid out and painted; a window that never
+# paints is an error at the step's deadline. ``window.perfResult`` carries the result for Python.
 HELPERS = r"""
 window.P = {
   $: s => document.querySelector(s),
@@ -52,23 +51,28 @@ window.perfResult = null;
 // pywebview's own polling for bridge answers): the page's visibility is recorded with every step,
 // and a hidden page fails the run instead of passing as a slow result.
 window.perfYield = fn => setTimeout(fn, 0);
+// A result is only "laid out and painted" once two animation frames have followed it. There is
+// no shortcut for a renderer that stalls: missing frames fail at the deadline instead of passing.
+window.perfFrames = (deadline, done, fail) => {
+  let frames = 0;
+  requestAnimationFrame(() => { frames = 1; requestAnimationFrame(() => { frames = 2; }); });
+  const wait = () => {
+    if (frames >= 2) done(frames);
+    else if (performance.now() > deadline) fail(frames);
+    else window.perfYield(wait);
+  };
+  wait();
+};
+window.perfNoFrames = frames => 'no animation frames after the state was reached (' + frames + ' of 2): the window is not painting';
 window.perfTimed = (start, ready, timeoutMs) => {
   window.perfResult = null; window.perfMarks = {};
   let settled = false;
   const finish = value => { if (!settled) { settled = true; window.perfResult = JSON.stringify({ visibility: document.visibilityState, ...value }); } };
   window.perfT0 = performance.now();
   const t0 = window.perfT0;
-  // Two animation frames after the state is reached means it was laid out and painted; a window
-  // that never produces frames is bounded by 250 ms of the page's own clock.
-  const painted = (now) => {
-    let frames = 0;
-    requestAnimationFrame(() => requestAnimationFrame(() => { frames = 2; }));
-    const wait = () => {
-      if (frames >= 2 || performance.now() - now > 250) finish({ ms: performance.now() - t0, ready_ms: now - t0, marks: window.perfMarks });
-      else window.perfYield(wait);
-    };
-    wait();
-  };
+  const painted = now => window.perfFrames(t0 + timeoutMs,
+    frames => finish({ ms: performance.now() - t0, ready_ms: now - t0, frames, marks: window.perfMarks }),
+    frames => finish({ timeout: true, ms: performance.now() - t0, frames, problem: window.perfNoFrames(frames) }));
   const check = () => {
     if (settled) return;
     let ok = false, problem = '';
@@ -97,23 +101,32 @@ window.perfWrapApi = () => {
   }
 };
 window.perfUsableAt = null;
-window.perfWatchUsable = (active, parts) => {
-  window.perfUsableAt = null;
+window.perfUsableError = null;
+window.perfWatchUsable = (active, parts, timeoutMs = 60000) => {
+  window.perfUsableAt = null; window.perfUsableError = null;
+  const deadline = performance.now() + timeoutMs;
   const stat = () => Array.from(document.querySelectorAll('#dashboard-data .stat')).find(e => /Active parts/.test(e.textContent));
   const ok = () => !!stat() && stat().querySelector('.stat-value')?.textContent.trim() === String(active)
     && P.n('#parts-data tbody tr') === Math.min(parts, 100) && P.text('#parts-data .table-footer').startsWith(parts + ' parts') && P.n('#history-data tbody tr') === 50 && !P.loading()
     && ['#query', '#operator', '#global-search', '#theme', '#history-query'].every(s => !P.$(s)?.disabled)
     && P.actionable(P.$('[data-page=parts]')) && P.actionable(P.$('[data-page=history]'));
   const poll = () => {
-    if (!ok()) { window.perfYield(poll); return; }
-    const now = performance.now(); let frames = 0;
-    requestAnimationFrame(() => requestAnimationFrame(() => { frames = 2; }));
-    const wait = () => { if (frames >= 2 || performance.now() - now > 250) window.perfUsableAt = performance.now(); else window.perfYield(wait); };
-    wait();
+    if (ok()) window.perfFrames(deadline, () => { window.perfUsableAt = performance.now(); }, frames => { window.perfUsableError = window.perfNoFrames(frames); });
+    else if (performance.now() > deadline) window.perfUsableError = 'the dashboard never became usable';
+    else window.perfYield(poll);
   };
   poll();
 };
 """
+
+
+# The cell text of the confirmation dialog's tables (a line break becomes a newline).
+READ_TABLES = r"""JSON.stringify(Array.from(document.querySelectorAll('#ship-confirm-data .table-wrap')).map(
+  wrap => Array.from(wrap.querySelectorAll('tbody tr')).map(row => Array.from(row.cells).map(cell => {
+    const copy = cell.cloneNode(true);
+    copy.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+    return copy.textContent;
+  }))))"""
 
 
 class ProbeError(RuntimeError):
@@ -206,6 +219,11 @@ class PerfProbe:
                 f"{step_id}: expected state not reached ({result.get('problem') or 'condition false'}). "
                 f"{self._state()}"
             )
+        if result.get("frames") != 2:
+            raise ProbeError(
+                f"{step_id}: the page reported {result.get('frames')} of 2 animation frames "
+                "after the expected state, so the result is not known to be painted."
+            )
         if result.get("visibility") != "visible":
             raise ProbeError(
                 f"{step_id}: the page was {result.get('visibility')}, not visible: timings would "
@@ -215,6 +233,7 @@ class PerfProbe:
             "run": run,
             "ms": round(result["ms"], 1),
             "ready_ms": round(result["ready_ms"], 1),
+            "frames": result["frames"],
             # Python-side wall time around the same step: adds the evaluate/poll overhead.
             "external_ms": round(external, 1),
         }
@@ -254,6 +273,8 @@ class PerfProbe:
         self._js(f"perfWatchUsable({self.truth['active_parts']}, {self.truth['parts']})")
         deadline = began + 60
         while time.monotonic() < deadline:
+            if error := self._js("window.perfUsableError"):
+                raise ProbeError(f"The dashboard is not usable: {error} {self._state()}")
             if self._js("window.perfUsableAt") is not None:
                 break
             time.sleep(POLL_SECONDS)
@@ -285,7 +306,7 @@ class PerfProbe:
     def _workflow(self) -> None:
         # After the launch measurement: the stamps add a microtask per bridge call.
         self._js("perfWrapApi()")
-        before = perf.fixture_truth(self.database)
+        before = perf.protected_state(self.database)
         store = InventoryStore(self.database, seed=False)
         bridge = InventoryBridge(store)
         try:
@@ -298,9 +319,8 @@ class PerfProbe:
             if not self.only or "P04" in self.only:
                 self._explorer()
         finally:
-            after = perf.fixture_truth(self.database)
-            if changed := perf.writes_between(before, after):
-                self.errors.append(f"read-only scenarios wrote to the database: {changed}")
+            if changed := perf.writes_between(before, perf.protected_state(self.database)):
+                self.errors.append(f"read-only scenarios changed the database: {changed}")
             store.engine.dispose()
 
     def _go(self, page: str) -> None:
@@ -383,7 +403,7 @@ class PerfProbe:
             )
             self._timed(
                 "P01.next_page",
-                "window.perfFirst = P.$('#parts-data [data-part]').dataset.part; P.click('#parts-data [data-parts-page=\"1\"]')",
+                "window.perfFirst = P.$('#parts-data [data-part]').dataset.part; P.click('#parts-data [data-pg=\"1\"]')",
                 f"{rows} === {page_rows} && P.$('#parts-data [data-part]').dataset.part !== window.perfFirst "
                 "&& P.text('#parts-data .table-footer').includes('Page 2 of')",
                 run,
@@ -477,7 +497,17 @@ class PerfProbe:
                 run,
             )
 
-        def review(run: int, key: str, quantity: int, expected: str, snapshot: str) -> None:
+        def review(run: int, key: str, quantity: int) -> None:
+            expected = "P.text('#ship-confirm-data').includes('Reviewed lot impact')"
+            if key != "standard":
+                # A BOM review shows exactly the expected requirement and Lot allocation rows.
+                plan = self._plan(key)
+                counts = [len(plan["requirements"]), len(plan["allocations"])]
+                expected = (
+                    "P.text('#ship-confirm-data').includes('Ready to ship') "
+                    "&& JSON.stringify(Array.from(document.querySelectorAll('#ship-confirm-data .table-wrap'))"
+                    f".map(wrap => wrap.querySelectorAll('tbody tr').length)) === '{json.dumps(counts, separators=(',', ':'))}'"
+                )
             self._js(
                 "P.set('#ship-quantity', "
                 f"'{quantity}'); P.set('#ship-recipient', 'Performance customer')"
@@ -489,9 +519,10 @@ class PerfProbe:
                 run,
             )
             text = str(self._js("P.$('#ship-confirm-data').innerText"))
+            tables = json.loads(str(self._js(READ_TABLES)))
             if run == perf.WARMUPS:
-                self.snapshots[f"P03.review_{key}"] = text
-            self._check_review(snapshot, text)
+                self.snapshots[f"P03.review_{key}"] = text[:2000]
+            self._check_review(key, text, tables)
             self._js("P.click('#ship-cancel')")
             self._wait("!P.$('#ship-confirmation').open", "the review dialog to close")
 
@@ -509,29 +540,21 @@ class PerfProbe:
             self._js(
                 "P.set('#ship-location', 'Stock', 'change'); P.set('#ship-lot_number', 'A', 'change')"
             )
-            review(
-                run,
-                "standard",
-                2,
-                "P.text('#ship-confirm-data').includes('Reviewed lot impact')",
-                "standard",
-            )
+            review(run, "standard", 2)
             select(run, "kit", "KIT", True)
-            review(run, "kit", 2, "P.text('#ship-confirm-data').includes('Ready to ship')", "kit")
+            review(run, "kit", 2)
             select(run, "root", "PERF-ROOT", True)
-            review(
-                run,
-                "root",
-                1,
-                "P.text('#ship-confirm-data').includes('Ready to ship') && P.n('#ship-confirm-data tbody tr') >= 900",
-                "root",
-            )
+            review(run, "root", 1)
 
         self._repeat("P03", sequence)
 
-    def _check_review(self, kind: str, text: str) -> None:
-        """Content the Python review must have produced, against stock read from SQLite."""
-        # Rendered text puts each label and its value on separate lines or tab-separated.
+    def _plan(self, kind: str) -> perf.ExpectedPlan:
+        """The review a BOM shipment must show, derived from the BOM rows and stock in SQLite."""
+        root, quantity = {"kit": ("KIT", 2), "root": ("PERF-ROOT", 1)}[kind]
+        return perf.expected_plan(self.database, root, quantity, "Stock")
+
+    def _check_review(self, kind: str, text: str, tables: list[list[list[str]]]) -> None:
+        """The rendered review against stock, BOM and Lot allocation read from SQLite."""
         if kind == "standard":
             # Lot A holds 10 after the baseline shipment of 2; shipping 2 leaves 8.
             patterns = [
@@ -539,30 +562,19 @@ class PerfProbe:
                 r"Stock\s*/\s*A\b",
                 r"Before\s+10\s+Shipping\s+2\s+Lot remaining after shipment\s+8\b",
             ]
-        elif kind == "kit":
-            # KIT x2 needs 14 LEAF (7 per KIT), all from lot B once lot A is exhausted.
-            capacity = perf.smallest_stock(self.database, ["LEAF"], "Stock") // 7
-            patterns = [
-                r"Ready to ship",
-                rf"BOM build capacity at this location\s+{capacity}\b",
-                r"LEAF\s+Acceptance LEAF\s+14\s+21\s+0\b",
-                r"LEAF\s+B\s+Stock\s+14\s+21\b",
-            ]
+            differences: list[str] = []
         else:
-            # One PERF-ROOT needs one of each of the 900 Leaf materials: capacity is the
-            # smallest Leaf stock, and the first and last Leaf rows are present.
+            plan = self._plan(kind)
             patterns = [
                 r"Ready to ship",
-                rf"BOM build capacity at this location\s+{self._root_capacity()}\b",
-                r"PERF-00100\s+Performance PERF-00100\s+1\s+\d+\s+0\b",
-                r"PERF-00999\s+Performance PERF-00999\s+1\s+\d+\s+0\b",
+                rf"BOM build capacity at this location\s+{plan['buildable']}\b",
             ]
-        if missing := [pattern for pattern in patterns if not re.search(pattern, text)]:
-            raise ProbeError(f"The {kind} review lacks {missing}: {text[:300]!r}")
-
-    def _root_capacity(self) -> int:
-        leaves = [f"PERF-{index:05d}" for index in range(100, 1000)]
-        return perf.smallest_stock(self.database, leaves, "Stock")
+            differences = perf.plan_differences(plan, tables)
+        problems = [f"missing {pattern}" for pattern in patterns if not re.search(pattern, text)]
+        if problems or differences:
+            raise ProbeError(
+                f"The {kind} review is wrong: {(problems + differences)[:5]} in {text[:200]!r}"
+            )
 
     def _explorer(self) -> None:
         nodes = "P.n('#bomx-canvas .bomx-node')"
@@ -590,7 +602,7 @@ class PerfProbe:
                 run,
             )
             summary = str(self._js("P.$('#bomx-result').innerText"))
-            capacity = self._root_capacity()
+            capacity = self._plan("root")["buildable"]
             if (
                 "No material shortage" not in summary
                 or "900 Leaf materials" not in summary

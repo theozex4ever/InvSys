@@ -38,9 +38,13 @@ disposable `--database`).
 * **Usable completion, not backend latency.** A step starts at the operator's action
   (an input event, a click, a form submit) and ends when the *expected, correct* state
   is on screen **and two animation frames have been produced after it**, timed in the
-  page with `performance.now()`. Waiting conditions include the content (row counts
-  and the footer total against SQLite read directly, the exact record, the Python
-  review's allocations, 1,000 laid-out nodes and 900 Leaf rows, an applied zoom).
+  page with `performance.now()`. Frames are required, not optional: a renderer that
+  produces fewer than two by the step's 30 s deadline fails the step (a stalled window
+  can no longer return a quick "success"), each sample records `frames: 2`, and the
+  helpers are tested with a stalled `requestAnimationFrame`. Waiting conditions include
+  the content (row counts and the footer total against SQLite read directly, the exact
+  record, the Python review's allocations, 1,000 laid-out nodes and 900 Leaf rows, an
+  applied zoom).
   `external_ms` is the same step timed by the probe's Python side and adds its
   polling; `api_ms` marks when the last bridge answer arrived, separating Python's
   read and transfer from rendering.
@@ -56,13 +60,21 @@ disposable `--database`).
   stock read from SQLite independently of the store: the Parts and History footers'
   totals (10,000 Parts, 451 inactive, 100,000 transactions, one `PERF-RECEIPT-050000`,
   the RECEIVE count), the standard review's lot and remainder (lot A: 10 → 8), the KIT
-  review's capacity and 14 Leaf units from lot B, the PERF-ROOT review's and explorer's
-  Build capacity (the smallest Leaf stock) with the first and last of the 900 Leaf
-  rows, and 1,000 laid-out nodes. "Visible focus" in the acceptance wording is only
+  review's capacity and Lot allocation, and 1,000 laid-out nodes. For both BOM reviews the
+  probe derives the whole expected plan from the BOM rows and balances in SQLite
+  (`perf.expected_plan`: Leaf requirements over every path, stock per Location, positive
+  Lots consumed in Lot-number order) and compares **every row of both dialog tables**
+  (900 requirement rows and the Lot allocation rows for PERF-ROOT) in order; a missing
+  table, a missing or extra row, a wrong Lot or a wrong quantity fails the run. Explorer
+  capacity comes from the same derivation. "Visible focus" in the acceptance wording is
   checked as far as moving focus to the control and into the opened drawer; the
-  rendered focus ring was audited separately (see [acceptance.md](acceptance.md)).
-* **Read-only scenarios stay read-only.** The probe compares ledger, balance,
-  shipment and BOM counters read from SQLite before and after P01–P04.
+  rendered focus ring and keyboard paging of the catalog are covered by the native smoke
+  (see [acceptance.md](acceptance.md)).
+* **Read-only scenarios stay read-only.** Before and after P01–P04 the probe compares the
+  counts and sums read from SQLite **and a SHA-256 of every column of every row** of the
+  parts, locations, lots, balances, transactions, shipments, shipment snapshots and BOM
+  tables, so an overwritten reference, a re-assigned Lot or two offsetting balance edits
+  are changes too (settings are excluded: preferences may legitimately change).
 * Raw timings of every repeat, min/median/max, the machine, the bundle (hash,
   manifest, source commit), the fixture and the browser version go into the JSON
   record (`perf-evidence.json`, uploaded by the package job for 90 days).
@@ -114,7 +126,9 @@ Changes an operator can see (all are presentation limits; Python still decides w
 the data is):
 
 * The Parts page shows 100 rows per page with Previous/Next and the total; filters and
-  sorts still apply to the whole catalog.
+  sorts still apply to the whole catalog. Activating Previous or Next keeps keyboard focus
+  on the pager (the same direction, or the other button at either end) and announces
+  "Page N of M" in the status region; the native smoke pages with real keys.
 * Below 25 % zoom the BOM explorer shows boxes without text; the text appears when the
   view is zoomed in (the 1,000-node fit is 2 %). Node names remain in the accessibility
   tree and the inspector.
@@ -126,8 +140,8 @@ the data is):
   or Refresh availability does. A Part created elsewhere appears after that.
 
 The JavaScript size budget (34,000 B gzip) was not changed: the frontend is now
-33,950 B, **50 B under it**, so any further frontend change needs an explicit size
-decision (see [desktop.md](desktop.md)).
+34,000 B, **exactly at it, with no headroom**, so any further frontend change needs an
+explicit size decision (see [desktop.md](desktop.md)).
 
 Not changed, and why it matters: opening Ship still reads and builds a 10,000-option
 list for the Part (about 1.2 s locally, 0.9 s of it Python's answer and transfer). It

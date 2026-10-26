@@ -7,13 +7,14 @@ packaged launch to a usable dashboard 10 s. The probe that measures them
 share these definitions, so a missing measurement can never read as a pass.
 """
 
+import hashlib
 import sqlite3
 from collections.abc import Mapping, Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
-from typing import Any
+from typing import Any, TypedDict
 
 # One warm-up then five measured repeats per step, and the same for cold launches.
 WARMUPS = 1
@@ -180,26 +181,144 @@ def type_count(database: Path, tx_type: str) -> int:
     return int(row[0])
 
 
-def smallest_stock(database: Path, part_numbers: Sequence[str], location: str) -> int:
-    """The least stock at ``location`` over these Parts (a Part with no balance counts as 0).
+# Everything an operator's traceability rests on. Settings are left out on purpose: the
+# operator name and theme are preferences that a session may legitimately change.
+PROTECTED_TABLES = (
+    "parts",
+    "locations",
+    "lots",
+    "inventory_balances",
+    "inventory_transactions",
+    "shipments",
+    "shipment_components",
+    "bom_components",
+)
 
-    For a BOM whose Leaf materials need one unit each per build, this is the Build capacity
-    the explorer and the shipment review must report, computed without the store.
+
+def protected_digests(database: Path) -> dict[str, str]:
+    """A row count and a SHA-256 of the full content of every protected table.
+
+    Counts and sums cannot see an overwritten reference, a re-assigned Lot or two balances
+    that offset each other; hashing every column of every row can.
     """
-    placeholders = ",".join("?" * len(part_numbers))
-    sql = (
-        "SELECT COALESCE(SUM(b.quantity), 0) FROM parts p "  # noqa: S608  # only "?" markers are interpolated; every value is bound
-        "LEFT JOIN inventory_balances b ON b.part_id = p.id AND b.location_id = "
-        "(SELECT id FROM locations WHERE name = ?) "
-        f"WHERE p.part_number IN ({placeholders}) GROUP BY p.id"
-    )
+    digests: dict[str, str] = {}
     with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as connection:
-        totals = [int(row[0]) for row in connection.execute(sql, (location, *part_numbers))]
-    return min(totals)
+        for table in PROTECTED_TABLES:
+            digest = hashlib.sha256()
+            rows = 0
+            # The table names are the constants above, never input.
+            for row in connection.execute(f"SELECT * FROM {table} ORDER BY rowid"):  # noqa: S608
+                digest.update(repr(row).encode())
+                rows += 1
+            digests[f"{table}_digest"] = f"{rows} rows, sha256 {digest.hexdigest()}"
+    return digests
 
 
-def writes_between(before: Mapping[str, int], after: Mapping[str, int]) -> list[str]:
-    """Names of every counter that changed; a read-only scenario must return an empty list."""
+def protected_state(database: Path) -> dict[str, int | str]:
+    """Counts, sums and full-content digests: what a read-only scenario must leave unchanged."""
+    return {**fixture_truth(database), **protected_digests(database)}
+
+
+class ExpectedPlan(TypedDict):
+    """A BOM shipment review derived from the BOM rows and balances alone."""
+
+    requirements: list[tuple[str, int, int, int]]  # part, required, available, shortage
+    allocations: list[tuple[str, str, str, int, int]]  # part, lot, location, consume, lot stock
+    buildable: int
+
+
+def expected_plan(database: Path, root: str, quantity: int, location: str) -> ExpectedPlan:
+    """What the review of shipping ``quantity`` of ``root`` from ``location`` must show.
+
+    Deliberately a second, simple implementation read straight from SQLite: Leaf materials
+    aggregated over every path, stock summed over a Part's Lots at the Location, and the
+    positive-stock Lots consumed in Lot-number order. A Part without a BOM is its own Leaf.
+    """
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as connection:
+        children: dict[str, list[tuple[str, int]]] = {}
+        for parent, child, per in connection.execute(
+            "SELECT p.part_number, c.part_number, b.quantity_per FROM bom_components b "
+            "JOIN parts p ON p.id = b.parent_part_id JOIN parts c ON c.id = b.component_part_id"
+        ):
+            children.setdefault(parent, []).append((child, per))
+        required: dict[str, int] = {}
+        pending = [(root, quantity)]
+        while pending:
+            part, need = pending.pop()
+            if part in children:
+                pending.extend((child, need * per) for child, per in children[part])
+            else:
+                required[part] = required.get(part, 0) + need
+        lots: dict[str, list[tuple[str, int]]] = {part: [] for part in required}
+        for part, lot, units in connection.execute(
+            "SELECT p.part_number, l.lot_number, b.quantity FROM inventory_balances b "
+            "JOIN parts p ON p.id = b.part_id JOIN lots l ON l.id = b.lot_id "
+            "JOIN locations loc ON loc.id = b.location_id WHERE loc.name = ? "
+            "ORDER BY p.part_number, l.lot_number",
+            (location,),
+        ):
+            if part in lots:
+                lots[part].append((lot, int(units)))
+    requirements: list[tuple[str, int, int, int]] = []
+    allocations: list[tuple[str, str, str, int, int]] = []
+    buildable = None
+    for part in sorted(required):
+        available = sum(units for _, units in lots[part])
+        requirements.append((part, required[part], available, max(required[part] - available, 0)))
+        per_build = required[part] // quantity
+        buildable = (
+            min(buildable, available // per_build)
+            if buildable is not None
+            else available // per_build
+        )
+        remaining = required[part]
+        for lot, units in lots[part]:
+            if units > 0 and remaining > 0:
+                taken = min(remaining, units)
+                allocations.append((part, lot, location, taken, units))
+                remaining -= taken
+    return {"requirements": requirements, "allocations": allocations, "buildable": buildable or 0}
+
+
+def plan_differences(plan: ExpectedPlan, tables: Sequence[Sequence[Sequence[str]]]) -> list[str]:
+    """Every way the rendered review tables differ from the expected plan (empty = identical).
+
+    ``tables`` is the cell text of the dialog's two tables: requirements, then allocations.
+    Row order matters (Part, then Lot number), and extra or missing rows are differences.
+    """
+    if len(tables) != 2:
+        return [
+            f"expected a requirements table and an allocations table, found {len(tables)} table(s)"
+        ]
+    differences: list[str] = []
+    wanted_requirements = [
+        [part, str(required), str(available), f"{short} short" if short else "0"]
+        for part, required, available, short in plan["requirements"]
+    ]
+    shown_requirements = [[row[0].split("\n")[0], *row[1:]] for row in tables[0] if len(row) == 4]
+    if len(tables[0]) != len(shown_requirements):
+        differences.append("a requirement row did not have four cells")
+    differences += _row_differences("requirement", wanted_requirements, shown_requirements)
+    wanted_allocations = [
+        [part, f"{lot}\n{location}", str(taken), str(units)]
+        for part, lot, location, taken, units in plan["allocations"]
+    ]
+    shown_allocations = [list(row) for row in tables[1]]
+    return differences + _row_differences("allocation", wanted_allocations, shown_allocations)
+
+
+def _row_differences(kind: str, wanted: list[list[str]], shown: list[list[str]]) -> list[str]:
+    if len(wanted) != len(shown):
+        return [f"expected {len(wanted)} {kind} rows, found {len(shown)}"]
+    return [
+        f"{kind} row {index}: expected {want}, found {have}"
+        for index, (want, have) in enumerate(zip(wanted, shown, strict=True))
+        if want != have
+    ][:5]
+
+
+def writes_between(before: Mapping[str, int | str], after: Mapping[str, int | str]) -> list[str]:
+    """Every counter, sum or content digest that changed; read-only scenarios give an empty list."""
     return [
         f"{name}: {before[name]} -> {after[name]}"
         for name in before
