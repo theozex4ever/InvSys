@@ -266,7 +266,9 @@ def install_fixture(target: Path, fixture: Path = FIXTURE) -> None:
     if not script.startswith(FIXTURE_HEADER):
         raise RehearsalError(f"{fixture} is not a pre-migration fixture.")
     with closing(sqlite3.connect(target)) as connection:
-        connection.executescript(script)
+        # One transaction: autocommitting every INSERT costs one disk flush each, which
+        # made the install (run for every probe and test) take seconds on Windows.
+        connection.executescript(f"BEGIN;\n{script}\nCOMMIT;")
 
 
 # ----------------------------------------------------------------- snapshots
