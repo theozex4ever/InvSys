@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-10-25T12:07:44+00:00",
+  "recorded_at": "2026-10-26T21:05:50+00:00",
   "machine": {
     "platform": "Windows-2025Server-10.0.26100-SP0",
     "machine": "AMD64",
@@ -8,7 +8,7 @@
     "display": "windows-desktop-session",
     "ci_image": "win25-vs2026 20261021.278.1",
     "os": "Windows 10.0.26100 (ServerDatacenter)",
-    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
     "memory": "16771836 kB"
   },
   "application": {
@@ -16,11 +16,11 @@
     "directory": "invsys-desktop",
     "file_count": 3026,
     "size_bytes": 593946327,
-    "executable_sha256": "7072f0634165d9f68222f77f8626aa021e3a5d136a53f16c307953eb60a105bb",
+    "executable_sha256": "da77559b7c7f835457287af7a73792fefa6aba0cd3d558f2658cefee24a7f6af",
     "manifest": {
       "app": "invsys-desktop",
       "source": {
-        "commit": "c30e6d6fe3a51221e3e689d881d9f0109681178d",
+        "commit": "003ac320793bebb6a38124bc5ee2df508cd33977",
         "uncommitted_changes": false
       },
       "python": "3.12.10",
@@ -119,7 +119,7 @@
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 118.1,
+      "seconds": 109.3,
       "stdout": [
         "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
         "Desktop smoke: visible Explorer navigation verified: D:\\a\\_temp\\invsys-upgrade-rehearsal\\inventory\\exports",
@@ -135,16 +135,16 @@
         "Desktop smoke: restart persistence and backup content passed; no HTTP server."
       ],
       "stderr": [
-        "[6032:6832:1025/120943.539:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
-        "[6032:6832:1025/120943.539:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
-        "[6032:6832:1025/120943.539:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox."
+        "[6372:4996:1026/210740.295:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[6372:4996:1026/210740.295:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[6372:4996:1026/210740.295:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox."
       ],
       "startup_backups": [
-        "inventory-20261025-120746-startup.db"
+        "inventory-20261026-210551-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-120808-manual.db",
-        "inventory-20261025-120811-manual.db"
+        "inventory-20261026-210612-manual.db",
+        "inventory-20261026-210615-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -158,14 +158,14 @@
         "bom_components": 14,
         "settings": 3
       },
-      "inventory_digest": "c6bbd009cf7d1bc2615010ebd642219956874fecad55a159eb72e315975769a4"
+      "inventory_digest": "779d0d811094f020e8c3d54838381ff2648f46edc038951f7ce7d0fead18ec9a"
     },
     {
       "name": "restart-and-workflows",
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 114.7,
+      "seconds": 109.8,
       "stdout": [
         "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
         "Desktop smoke: visible Explorer navigation verified: D:\\a\\_temp\\invsys-upgrade-rehearsal\\inventory\\exports",
@@ -176,17 +176,22 @@
         "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
         "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
         "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
-        "Desktop smoke: Ctrl+1\ufffd9/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2843 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: Ctrl+1\ufffd9/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2862 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
         "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
         "Desktop smoke: restart persistence and backup content passed; no HTTP server."
       ],
-      "stderr": [],
+      "stderr": [
+        "[3320:3348:1026/210930.153:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[3320:3348:1026/210930.153:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[3320:3348:1026/210930.153:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[3320:3348:1026/210930.153:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox."
+      ],
       "startup_backups": [
-        "inventory-20261025-120944-startup.db"
+        "inventory-20261026-210740-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-121006-manual.db",
-        "inventory-20261025-121009-manual.db"
+        "inventory-20261026-210802-manual.db",
+        "inventory-20261026-210804-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -200,15 +205,15 @@
         "bom_components": 22,
         "settings": 3
       },
-      "inventory_digest": "b1e01d04af4010c70b36cd013b88944d274db172c46f43a097718be43847eabd"
+      "inventory_digest": "b068c79a89965616465d6d9aa236fa793674f643620bd8f04b18b45451051d0d"
     },
     {
       "name": "closed-app-restore-of-the-pre-upgrade-backup",
       "passed": true,
       "problems": [],
-      "restored_from": "inventory-20261025-120746-startup.db",
+      "restored_from": "inventory-20261026-210551-startup.db",
       "backup_sha256": "1346b5ab661733070e57ddb1396645c13306cf6526b2d1625295dae77f33102c",
-      "aside_directory": "D:\\a\\_temp\\invsys-upgrade-rehearsal\\inventory\\restore-aside\\restore-aside-20261025-121138",
+      "aside_directory": "D:\\a\\_temp\\invsys-upgrade-rehearsal\\inventory\\restore-aside\\restore-aside-20261026-210930",
       "kept_aside": [
         "inventory.db"
       ],
@@ -308,25 +313,25 @@
           "SHIP_BOM": 8
         },
         "shipments": [
-          "SHP-20261025-0001",
-          "SHP-20261025-0002",
-          "SHP-20261025-0003",
-          "SHP-20261025-0004",
-          "SHP-20261025-0005",
-          "SHP-20261025-0006",
-          "SHP-20261025-0007",
-          "SHP-20261025-0008",
-          "SHP-20261025-0009",
-          "SHP-20261025-0010",
-          "SHP-20261025-0011",
-          "SHP-20261025-0012"
+          "SHP-20261026-0001",
+          "SHP-20261026-0002",
+          "SHP-20261026-0003",
+          "SHP-20261026-0004",
+          "SHP-20261026-0005",
+          "SHP-20261026-0006",
+          "SHP-20261026-0007",
+          "SHP-20261026-0008",
+          "SHP-20261026-0009",
+          "SHP-20261026-0010",
+          "SHP-20261026-0011",
+          "SHP-20261026-0012"
         ],
         "entries": [
           {
             "id": 29,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-BOM-1792930066165588200",
+            "part_number": "DESKTOP-BOM-1793048751498883000",
             "lot_number": "PARENT",
             "quantity_change": 10,
             "location_from": "",
@@ -338,9 +343,9 @@
           },
           {
             "id": 30,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-SUB-1792930066165588200",
+            "part_number": "DESKTOP-SUB-1793048751498883000",
             "lot_number": "INTERMEDIATE",
             "quantity_change": 10,
             "location_from": "",
@@ -352,9 +357,9 @@
           },
           {
             "id": 31,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-LEAF-1792930066165588200",
+            "part_number": "DESKTOP-LEAF-1793048751498883000",
             "lot_number": "A",
             "quantity_change": 5,
             "location_from": "",
@@ -366,9 +371,9 @@
           },
           {
             "id": 32,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-LEAF-1792930066165588200",
+            "part_number": "DESKTOP-LEAF-1793048751498883000",
             "lot_number": "B",
             "quantity_change": 15,
             "location_from": "",
@@ -380,7 +385,7 @@
           },
           {
             "id": 33,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "RECEIVE",
             "part_number": "000-UI-PREVIEW",
             "lot_number": "PREVIEW",
@@ -394,7 +399,7 @@
           },
           {
             "id": 34,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "SMOKE-A",
@@ -408,7 +413,7 @@
           },
           {
             "id": 35,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "SMOKE-B",
@@ -422,7 +427,7 @@
           },
           {
             "id": 36,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "SHIP",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "SMOKE-A",
@@ -430,13 +435,13 @@
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0001",
+            "reference": "SHP-20261026-0001",
             "notes": "",
-            "shipment_number": "SHP-20261025-0001"
+            "shipment_number": "SHP-20261026-0001"
           },
           {
             "id": 37,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "SMOKE-LOST",
@@ -450,7 +455,7 @@
           },
           {
             "id": 38,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "SHIP",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "SMOKE-B",
@@ -458,13 +463,13 @@
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0002",
+            "reference": "SHP-20261026-0002",
             "notes": "",
-            "shipment_number": "SHP-20261025-0002"
+            "shipment_number": "SHP-20261026-0002"
           },
           {
             "id": 39,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -478,7 +483,7 @@
           },
           {
             "id": 40,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "MOVE_OUT",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -492,7 +497,7 @@
           },
           {
             "id": 41,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "MOVE_IN",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -506,7 +511,7 @@
           },
           {
             "id": 42,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "MOVE_OUT",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -520,7 +525,7 @@
           },
           {
             "id": 43,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "MOVE_IN",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -534,7 +539,7 @@
           },
           {
             "id": 44,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "MOVE_OUT",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -548,7 +553,7 @@
           },
           {
             "id": 45,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "MOVE_IN",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -562,9 +567,9 @@
           },
           {
             "id": 46,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-LEAF-1792930066165588200",
+            "part_number": "DESKTOP-LEAF-1793048751498883000",
             "lot_number": "0",
             "quantity_change": 2,
             "location_from": "",
@@ -576,63 +581,63 @@
           },
           {
             "id": 47,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-LEAF-1792930066165588200",
+            "part_number": "DESKTOP-LEAF-1793048751498883000",
             "lot_number": "0",
             "quantity_change": -2,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0003",
-            "notes": "Used by DESKTOP-BOM-1792930066165588200 x2",
-            "shipment_number": "SHP-20261025-0003"
+            "reference": "SHP-20261026-0003",
+            "notes": "Used by DESKTOP-BOM-1793048751498883000 x2",
+            "shipment_number": "SHP-20261026-0003"
           },
           {
             "id": 48,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-LEAF-1792930066165588200",
+            "part_number": "DESKTOP-LEAF-1793048751498883000",
             "lot_number": "A",
             "quantity_change": -5,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0003",
-            "notes": "Used by DESKTOP-BOM-1792930066165588200 x2",
-            "shipment_number": "SHP-20261025-0003"
+            "reference": "SHP-20261026-0003",
+            "notes": "Used by DESKTOP-BOM-1793048751498883000 x2",
+            "shipment_number": "SHP-20261026-0003"
           },
           {
             "id": 49,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-LEAF-1792930066165588200",
+            "part_number": "DESKTOP-LEAF-1793048751498883000",
             "lot_number": "B",
             "quantity_change": -7,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0003",
-            "notes": "Used by DESKTOP-BOM-1792930066165588200 x2",
-            "shipment_number": "SHP-20261025-0003"
+            "reference": "SHP-20261026-0003",
+            "notes": "Used by DESKTOP-BOM-1793048751498883000 x2",
+            "shipment_number": "SHP-20261026-0003"
           },
           {
             "id": 50,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:05",
             "tx_type": "SHIP_BOM",
-            "part_number": "DESKTOP-BOM-1792930066165588200",
+            "part_number": "DESKTOP-BOM-1793048751498883000",
             "lot_number": "",
             "quantity_change": -2,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0003",
+            "reference": "SHP-20261026-0003",
             "notes": "Shipment fulfilled by BOM component consumption.",
-            "shipment_number": "SHP-20261025-0003"
+            "shipment_number": "SHP-20261026-0003"
           },
           {
             "id": 51,
-            "timestamp": "2026-10-25 12:07",
+            "timestamp": "2026-10-26 21:06",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-EDIT",
             "lot_number": "EDIT",
@@ -646,7 +651,7 @@
           },
           {
             "id": 52,
-            "timestamp": "2026-10-25 12:08",
+            "timestamp": "2026-10-26 21:06",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "REFRESH",
@@ -660,9 +665,9 @@
           },
           {
             "id": 53,
-            "timestamp": "2026-10-25 12:08",
+            "timestamp": "2026-10-26 21:06",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-LEAF-1792930066165588200",
+            "part_number": "DESKTOP-LEAF-1793048751498883000",
             "lot_number": "RECOVERY",
             "quantity_change": 7,
             "location_from": "",
@@ -674,37 +679,37 @@
           },
           {
             "id": 54,
-            "timestamp": "2026-10-25 12:08",
+            "timestamp": "2026-10-26 21:06",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-LEAF-1792930066165588200",
+            "part_number": "DESKTOP-LEAF-1793048751498883000",
             "lot_number": "B",
             "quantity_change": -7,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0004",
-            "notes": "Used by DESKTOP-BOM-1792930066165588200 x1",
-            "shipment_number": "SHP-20261025-0004"
+            "reference": "SHP-20261026-0004",
+            "notes": "Used by DESKTOP-BOM-1793048751498883000 x1",
+            "shipment_number": "SHP-20261026-0004"
           },
           {
             "id": 55,
-            "timestamp": "2026-10-25 12:08",
+            "timestamp": "2026-10-26 21:06",
             "tx_type": "SHIP_BOM",
-            "part_number": "DESKTOP-BOM-1792930066165588200",
+            "part_number": "DESKTOP-BOM-1793048751498883000",
             "lot_number": "",
             "quantity_change": -1,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0004",
+            "reference": "SHP-20261026-0004",
             "notes": "Shipment fulfilled by BOM component consumption.",
-            "shipment_number": "SHP-20261025-0004"
+            "shipment_number": "SHP-20261026-0004"
           },
           {
             "id": 56,
-            "timestamp": "2026-10-25 12:08",
+            "timestamp": "2026-10-26 21:06",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-LEAF-1792930066165588200",
+            "part_number": "DESKTOP-LEAF-1793048751498883000",
             "lot_number": "EXPLORE",
             "quantity_change": 70,
             "location_from": "",
@@ -716,9 +721,9 @@
           },
           {
             "id": 57,
-            "timestamp": "2026-10-25 12:08",
+            "timestamp": "2026-10-26 21:06",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-AUTH-LEAF-1792930084461758200",
+            "part_number": "DESKTOP-AUTH-LEAF-1793048769383347600",
             "lot_number": "AUTH",
             "quantity_change": 20,
             "location_from": "",
@@ -730,37 +735,37 @@
           },
           {
             "id": 58,
-            "timestamp": "2026-10-25 12:08",
+            "timestamp": "2026-10-26 21:06",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-AUTH-LEAF-1792930084461758200",
+            "part_number": "DESKTOP-AUTH-LEAF-1793048769383347600",
             "lot_number": "AUTH",
             "quantity_change": -9,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0005",
-            "notes": "Used by DESKTOP-AUTH-PARENT-1792930084461758200 x1",
-            "shipment_number": "SHP-20261025-0005"
+            "reference": "SHP-20261026-0005",
+            "notes": "Used by DESKTOP-AUTH-PARENT-1793048769383347600 x1",
+            "shipment_number": "SHP-20261026-0005"
           },
           {
             "id": 59,
-            "timestamp": "2026-10-25 12:08",
+            "timestamp": "2026-10-26 21:06",
             "tx_type": "SHIP_BOM",
-            "part_number": "DESKTOP-AUTH-PARENT-1792930084461758200",
+            "part_number": "DESKTOP-AUTH-PARENT-1793048769383347600",
             "lot_number": "",
             "quantity_change": -1,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0005",
+            "reference": "SHP-20261026-0005",
             "notes": "Shipment fulfilled by BOM component consumption.",
-            "shipment_number": "SHP-20261025-0005"
+            "shipment_number": "SHP-20261026-0005"
           },
           {
             "id": 60,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-ADJUST-1792930164692143100",
+            "part_number": "DESKTOP-ADJUST-1793048843520303600",
             "lot_number": "ADJ-A",
             "quantity_change": 25,
             "location_from": "",
@@ -772,9 +777,9 @@
           },
           {
             "id": 61,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-ADJUST-1792930164692143100",
+            "part_number": "DESKTOP-ADJUST-1793048843520303600",
             "lot_number": "ADJ-ZERO",
             "quantity_change": 1,
             "location_from": "",
@@ -786,9 +791,9 @@
           },
           {
             "id": 62,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "COUNT_CORRECTION",
-            "part_number": "DESKTOP-ADJUST-1792930164692143100",
+            "part_number": "DESKTOP-ADJUST-1793048843520303600",
             "lot_number": "ADJ-ZERO",
             "quantity_change": -1,
             "location_from": "Stock",
@@ -800,9 +805,9 @@
           },
           {
             "id": 63,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "COUNT_CORRECTION",
-            "part_number": "DESKTOP-ADJUST-1792930164692143100",
+            "part_number": "DESKTOP-ADJUST-1793048843520303600",
             "lot_number": "ADJ-ZERO",
             "quantity_change": 4,
             "location_from": "Stock",
@@ -814,9 +819,9 @@
           },
           {
             "id": 64,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "COUNT_CORRECTION",
-            "part_number": "DESKTOP-ADJUST-1792930164692143100",
+            "part_number": "DESKTOP-ADJUST-1793048843520303600",
             "lot_number": "ADJ-A",
             "quantity_change": -20,
             "location_from": "Stock",
@@ -828,9 +833,9 @@
           },
           {
             "id": 65,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "COUNT_CORRECTION",
-            "part_number": "DESKTOP-ADJUST-1792930164692143100",
+            "part_number": "DESKTOP-ADJUST-1793048843520303600",
             "lot_number": "ADJ-A",
             "quantity_change": 1,
             "location_from": "Stock",
@@ -842,10 +847,10 @@
           },
           {
             "id": 66,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-IMPORT-1792930167515108800",
-            "lot_number": "SMOKE-RCV-1792930170586691300-A",
+            "part_number": "DESKTOP-IMPORT-1793048845735059800",
+            "lot_number": "SMOKE-RCV-1793048848579762500-A",
             "quantity_change": 4,
             "location_from": "",
             "location_to": "Stock",
@@ -856,10 +861,10 @@
           },
           {
             "id": 67,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-IMPORT-1792930167515108800",
-            "lot_number": "SMOKE-RCV-1792930170586691300-B",
+            "part_number": "DESKTOP-IMPORT-1793048845735059800",
+            "lot_number": "SMOKE-RCV-1793048848579762500-B",
             "quantity_change": 3,
             "location_from": "",
             "location_to": "Receiving",
@@ -870,9 +875,9 @@
           },
           {
             "id": 68,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-BOMIMP-LEAF-1792930172939893600",
+            "part_number": "DESKTOP-BOMIMP-LEAF-1793048850631624400",
             "lot_number": "IMPORT",
             "quantity_change": 40,
             "location_from": "",
@@ -884,37 +889,37 @@
           },
           {
             "id": 69,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-BOMIMP-LEAF-1792930172939893600",
+            "part_number": "DESKTOP-BOMIMP-LEAF-1793048850631624400",
             "lot_number": "IMPORT",
             "quantity_change": -11,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0006",
-            "notes": "Used by DESKTOP-BOMIMP-PARENT-1792930172939893600 x1",
-            "shipment_number": "SHP-20261025-0006"
+            "reference": "SHP-20261026-0006",
+            "notes": "Used by DESKTOP-BOMIMP-PARENT-1793048850631624400 x1",
+            "shipment_number": "SHP-20261026-0006"
           },
           {
             "id": 70,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "SHIP_BOM",
-            "part_number": "DESKTOP-BOMIMP-PARENT-1792930172939893600",
+            "part_number": "DESKTOP-BOMIMP-PARENT-1793048850631624400",
             "lot_number": "",
             "quantity_change": -1,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0006",
+            "reference": "SHP-20261026-0006",
             "notes": "Shipment fulfilled by BOM component consumption.",
-            "shipment_number": "SHP-20261025-0006"
+            "shipment_number": "SHP-20261026-0006"
           },
           {
             "id": 71,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-BOM-1792930184282827900",
+            "part_number": "DESKTOP-BOM-1793048860880759800",
             "lot_number": "PARENT",
             "quantity_change": 10,
             "location_from": "",
@@ -926,9 +931,9 @@
           },
           {
             "id": 72,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-SUB-1792930184282827900",
+            "part_number": "DESKTOP-SUB-1793048860880759800",
             "lot_number": "INTERMEDIATE",
             "quantity_change": 10,
             "location_from": "",
@@ -940,9 +945,9 @@
           },
           {
             "id": 73,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-LEAF-1792930184282827900",
+            "part_number": "DESKTOP-LEAF-1793048860880759800",
             "lot_number": "A",
             "quantity_change": 5,
             "location_from": "",
@@ -954,9 +959,9 @@
           },
           {
             "id": 74,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-LEAF-1792930184282827900",
+            "part_number": "DESKTOP-LEAF-1793048860880759800",
             "lot_number": "B",
             "quantity_change": 15,
             "location_from": "",
@@ -968,7 +973,7 @@
           },
           {
             "id": 75,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "SMOKE-A",
@@ -982,7 +987,7 @@
           },
           {
             "id": 76,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "SMOKE-B",
@@ -996,7 +1001,7 @@
           },
           {
             "id": 77,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "SHIP",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "SMOKE-A",
@@ -1004,13 +1009,13 @@
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0007",
+            "reference": "SHP-20261026-0007",
             "notes": "",
-            "shipment_number": "SHP-20261025-0007"
+            "shipment_number": "SHP-20261026-0007"
           },
           {
             "id": 78,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "SMOKE-LOST",
@@ -1024,7 +1029,7 @@
           },
           {
             "id": 79,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "SHIP",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "SMOKE-B",
@@ -1032,13 +1037,13 @@
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0008",
+            "reference": "SHP-20261026-0008",
             "notes": "",
-            "shipment_number": "SHP-20261025-0008"
+            "shipment_number": "SHP-20261026-0008"
           },
           {
             "id": 80,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -1052,7 +1057,7 @@
           },
           {
             "id": 81,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "MOVE_OUT",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -1066,7 +1071,7 @@
           },
           {
             "id": 82,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "MOVE_IN",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -1080,7 +1085,7 @@
           },
           {
             "id": 83,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "MOVE_OUT",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -1094,7 +1099,7 @@
           },
           {
             "id": 84,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "MOVE_IN",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -1108,7 +1113,7 @@
           },
           {
             "id": 85,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "MOVE_OUT",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -1122,7 +1127,7 @@
           },
           {
             "id": 86,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "MOVE_IN",
             "part_number": "DESKTOP-MOVE",
             "lot_number": "MOVE-A",
@@ -1136,9 +1141,9 @@
           },
           {
             "id": 87,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-LEAF-1792930184282827900",
+            "part_number": "DESKTOP-LEAF-1793048860880759800",
             "lot_number": "0",
             "quantity_change": 2,
             "location_from": "",
@@ -1150,63 +1155,63 @@
           },
           {
             "id": 88,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-LEAF-1792930184282827900",
+            "part_number": "DESKTOP-LEAF-1793048860880759800",
             "lot_number": "0",
             "quantity_change": -2,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0009",
-            "notes": "Used by DESKTOP-BOM-1792930184282827900 x2",
-            "shipment_number": "SHP-20261025-0009"
+            "reference": "SHP-20261026-0009",
+            "notes": "Used by DESKTOP-BOM-1793048860880759800 x2",
+            "shipment_number": "SHP-20261026-0009"
           },
           {
             "id": 89,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-LEAF-1792930184282827900",
+            "part_number": "DESKTOP-LEAF-1793048860880759800",
             "lot_number": "A",
             "quantity_change": -5,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0009",
-            "notes": "Used by DESKTOP-BOM-1792930184282827900 x2",
-            "shipment_number": "SHP-20261025-0009"
+            "reference": "SHP-20261026-0009",
+            "notes": "Used by DESKTOP-BOM-1793048860880759800 x2",
+            "shipment_number": "SHP-20261026-0009"
           },
           {
             "id": 90,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-LEAF-1792930184282827900",
+            "part_number": "DESKTOP-LEAF-1793048860880759800",
             "lot_number": "B",
             "quantity_change": -7,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0009",
-            "notes": "Used by DESKTOP-BOM-1792930184282827900 x2",
-            "shipment_number": "SHP-20261025-0009"
+            "reference": "SHP-20261026-0009",
+            "notes": "Used by DESKTOP-BOM-1793048860880759800 x2",
+            "shipment_number": "SHP-20261026-0009"
           },
           {
             "id": 91,
-            "timestamp": "2026-10-25 12:09",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "SHIP_BOM",
-            "part_number": "DESKTOP-BOM-1792930184282827900",
+            "part_number": "DESKTOP-BOM-1793048860880759800",
             "lot_number": "",
             "quantity_change": -2,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0009",
+            "reference": "SHP-20261026-0009",
             "notes": "Shipment fulfilled by BOM component consumption.",
-            "shipment_number": "SHP-20261025-0009"
+            "shipment_number": "SHP-20261026-0009"
           },
           {
             "id": 92,
-            "timestamp": "2026-10-25 12:10",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
             "part_number": "DESKTOP-SMOKE",
             "lot_number": "REFRESH",
@@ -1220,9 +1225,9 @@
           },
           {
             "id": 93,
-            "timestamp": "2026-10-25 12:10",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-LEAF-1792930184282827900",
+            "part_number": "DESKTOP-LEAF-1793048860880759800",
             "lot_number": "RECOVERY",
             "quantity_change": 7,
             "location_from": "",
@@ -1234,37 +1239,37 @@
           },
           {
             "id": 94,
-            "timestamp": "2026-10-25 12:10",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-LEAF-1792930184282827900",
+            "part_number": "DESKTOP-LEAF-1793048860880759800",
             "lot_number": "B",
             "quantity_change": -7,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0010",
-            "notes": "Used by DESKTOP-BOM-1792930184282827900 x1",
-            "shipment_number": "SHP-20261025-0010"
+            "reference": "SHP-20261026-0010",
+            "notes": "Used by DESKTOP-BOM-1793048860880759800 x1",
+            "shipment_number": "SHP-20261026-0010"
           },
           {
             "id": 95,
-            "timestamp": "2026-10-25 12:10",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "SHIP_BOM",
-            "part_number": "DESKTOP-BOM-1792930184282827900",
+            "part_number": "DESKTOP-BOM-1793048860880759800",
             "lot_number": "",
             "quantity_change": -1,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0010",
+            "reference": "SHP-20261026-0010",
             "notes": "Shipment fulfilled by BOM component consumption.",
-            "shipment_number": "SHP-20261025-0010"
+            "shipment_number": "SHP-20261026-0010"
           },
           {
             "id": 96,
-            "timestamp": "2026-10-25 12:10",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-LEAF-1792930184282827900",
+            "part_number": "DESKTOP-LEAF-1793048860880759800",
             "lot_number": "EXPLORE",
             "quantity_change": 70,
             "location_from": "",
@@ -1276,9 +1281,9 @@
           },
           {
             "id": 97,
-            "timestamp": "2026-10-25 12:10",
+            "timestamp": "2026-10-26 21:07",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-AUTH-LEAF-1792930202519184700",
+            "part_number": "DESKTOP-AUTH-LEAF-1793048878928722200",
             "lot_number": "AUTH",
             "quantity_change": 20,
             "location_from": "",
@@ -1290,37 +1295,37 @@
           },
           {
             "id": 98,
-            "timestamp": "2026-10-25 12:10",
+            "timestamp": "2026-10-26 21:08",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-AUTH-LEAF-1792930202519184700",
+            "part_number": "DESKTOP-AUTH-LEAF-1793048878928722200",
             "lot_number": "AUTH",
             "quantity_change": -9,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0011",
-            "notes": "Used by DESKTOP-AUTH-PARENT-1792930202519184700 x1",
-            "shipment_number": "SHP-20261025-0011"
+            "reference": "SHP-20261026-0011",
+            "notes": "Used by DESKTOP-AUTH-PARENT-1793048878928722200 x1",
+            "shipment_number": "SHP-20261026-0011"
           },
           {
             "id": 99,
-            "timestamp": "2026-10-25 12:10",
+            "timestamp": "2026-10-26 21:08",
             "tx_type": "SHIP_BOM",
-            "part_number": "DESKTOP-AUTH-PARENT-1792930202519184700",
+            "part_number": "DESKTOP-AUTH-PARENT-1793048878928722200",
             "lot_number": "",
             "quantity_change": -1,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0011",
+            "reference": "SHP-20261026-0011",
             "notes": "Shipment fulfilled by BOM component consumption.",
-            "shipment_number": "SHP-20261025-0011"
+            "shipment_number": "SHP-20261026-0011"
           },
           {
             "id": 100,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-ADJUST-1792930280119478500",
+            "part_number": "DESKTOP-ADJUST-1793048952609885200",
             "lot_number": "ADJ-A",
             "quantity_change": 25,
             "location_from": "",
@@ -1332,9 +1337,9 @@
           },
           {
             "id": 101,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-ADJUST-1792930280119478500",
+            "part_number": "DESKTOP-ADJUST-1793048952609885200",
             "lot_number": "ADJ-ZERO",
             "quantity_change": 1,
             "location_from": "",
@@ -1346,9 +1351,9 @@
           },
           {
             "id": 102,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "COUNT_CORRECTION",
-            "part_number": "DESKTOP-ADJUST-1792930280119478500",
+            "part_number": "DESKTOP-ADJUST-1793048952609885200",
             "lot_number": "ADJ-ZERO",
             "quantity_change": -1,
             "location_from": "Stock",
@@ -1360,9 +1365,9 @@
           },
           {
             "id": 103,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "COUNT_CORRECTION",
-            "part_number": "DESKTOP-ADJUST-1792930280119478500",
+            "part_number": "DESKTOP-ADJUST-1793048952609885200",
             "lot_number": "ADJ-ZERO",
             "quantity_change": 4,
             "location_from": "Stock",
@@ -1374,9 +1379,9 @@
           },
           {
             "id": 104,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "COUNT_CORRECTION",
-            "part_number": "DESKTOP-ADJUST-1792930280119478500",
+            "part_number": "DESKTOP-ADJUST-1793048952609885200",
             "lot_number": "ADJ-A",
             "quantity_change": -20,
             "location_from": "Stock",
@@ -1388,9 +1393,9 @@
           },
           {
             "id": 105,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "COUNT_CORRECTION",
-            "part_number": "DESKTOP-ADJUST-1792930280119478500",
+            "part_number": "DESKTOP-ADJUST-1793048952609885200",
             "lot_number": "ADJ-A",
             "quantity_change": 1,
             "location_from": "Stock",
@@ -1402,10 +1407,10 @@
           },
           {
             "id": 106,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-IMPORT-1792930282574351400",
-            "lot_number": "SMOKE-RCV-1792930285368128000-A",
+            "part_number": "DESKTOP-IMPORT-1793048955206753100",
+            "lot_number": "SMOKE-RCV-1793048957989887300-A",
             "quantity_change": 4,
             "location_from": "",
             "location_to": "Stock",
@@ -1416,10 +1421,10 @@
           },
           {
             "id": 107,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-IMPORT-1792930282574351400",
-            "lot_number": "SMOKE-RCV-1792930285368128000-B",
+            "part_number": "DESKTOP-IMPORT-1793048955206753100",
+            "lot_number": "SMOKE-RCV-1793048957989887300-B",
             "quantity_change": 3,
             "location_from": "",
             "location_to": "Receiving",
@@ -1430,9 +1435,9 @@
           },
           {
             "id": 108,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "RECEIVE",
-            "part_number": "DESKTOP-BOMIMP-LEAF-1792930287739568900",
+            "part_number": "DESKTOP-BOMIMP-LEAF-1793048960085298800",
             "lot_number": "IMPORT",
             "quantity_change": 40,
             "location_from": "",
@@ -1444,31 +1449,31 @@
           },
           {
             "id": 109,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "BOM_CONSUME",
-            "part_number": "DESKTOP-BOMIMP-LEAF-1792930287739568900",
+            "part_number": "DESKTOP-BOMIMP-LEAF-1793048960085298800",
             "lot_number": "IMPORT",
             "quantity_change": -11,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0012",
-            "notes": "Used by DESKTOP-BOMIMP-PARENT-1792930287739568900 x1",
-            "shipment_number": "SHP-20261025-0012"
+            "reference": "SHP-20261026-0012",
+            "notes": "Used by DESKTOP-BOMIMP-PARENT-1793048960085298800 x1",
+            "shipment_number": "SHP-20261026-0012"
           },
           {
             "id": 110,
-            "timestamp": "2026-10-25 12:11",
+            "timestamp": "2026-10-26 21:09",
             "tx_type": "SHIP_BOM",
-            "part_number": "DESKTOP-BOMIMP-PARENT-1792930287739568900",
+            "part_number": "DESKTOP-BOMIMP-PARENT-1793048960085298800",
             "lot_number": "",
             "quantity_change": -1,
             "location_from": "Stock",
             "location_to": "",
             "operator": "Desktop smoke",
-            "reference": "SHP-20261025-0012",
+            "reference": "SHP-20261026-0012",
             "notes": "Shipment fulfilled by BOM component consumption.",
-            "shipment_number": "SHP-20261025-0012"
+            "shipment_number": "SHP-20261026-0012"
           }
         ]
       }
@@ -1478,7 +1483,7 @@
       "passed": true,
       "problems": [],
       "exit_code": 0,
-      "seconds": 114.2,
+      "seconds": 109.1,
       "stdout": [
         "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
         "Desktop smoke: visible Explorer navigation verified: D:\\a\\_temp\\invsys-upgrade-rehearsal\\inventory\\exports",
@@ -1489,22 +1494,17 @@
         "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
         "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
         "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
-        "Desktop smoke: Ctrl+1\ufffd9/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2703 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: Ctrl+1\ufffd9/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2722 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
         "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
         "Desktop smoke: restart persistence and backup content passed; no HTTP server."
       ],
-      "stderr": [
-        "[2948:3020:1025/121332.572:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
-        "[2948:3020:1025/121332.572:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
-        "[2948:3020:1025/121332.572:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
-        "[2948:3020:1025/121332.572:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox."
-      ],
+      "stderr": [],
       "startup_backups": [
-        "inventory-20261025-121139-startup.db"
+        "inventory-20261026-210930-startup.db"
       ],
       "manual_backups": [
-        "inventory-20261025-121200-manual.db",
-        "inventory-20261025-121203-manual.db"
+        "inventory-20261026-210952-manual.db",
+        "inventory-20261026-210954-manual.db"
       ],
       "startup_backup_identical_to_previous_state": true,
       "inventory_counts": {
@@ -1518,7 +1518,7 @@
         "bom_components": 14,
         "settings": 3
       },
-      "inventory_digest": "a246dc6205b53b3b98230e35b9991be2f884bbf89364e35799e29d4ed59485b4"
+      "inventory_digest": "cc73a6f8e53bd3f2e8a6ec860ca9b98c0cae56209cff18e40b427f5fb172d05c"
     },
     {
       "name": "nothing-written-outside-the-selected-inventory",
@@ -1553,7 +1553,7 @@
     {
       "name": "backup-does-not-exist",
       "applicable": true,
-      "message": "The backup C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\invsys-restore-probes-wqu84bj3\\backup-does-not-exist\\backups\\absent.db does not exist. Nothing was changed.",
+      "message": "The backup C:\\Users\\runneradmin\\AppData\\Local\\Temp\\invsys-restore-probes-errgv2or\\backup-does-not-exist\\backups\\absent.db does not exist. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true
@@ -1561,7 +1561,7 @@
     {
       "name": "backup-is-a-folder",
       "applicable": true,
-      "message": "The backup C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\invsys-restore-probes-wqu84bj3\\backup-is-a-folder\\backups\\inventory-folder.db is not a file. Nothing was changed.",
+      "message": "The backup C:\\Users\\runneradmin\\AppData\\Local\\Temp\\invsys-restore-probes-errgv2or\\backup-is-a-folder\\backups\\inventory-folder.db is not a file. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true
@@ -1585,7 +1585,7 @@
     {
       "name": "backup-is-another-kind-of-database",
       "applicable": true,
-      "message": "The file inventory-other.db is not an InvSys inventory (no parts, lots, inventory_balances, inventory_transactions, shipments table). Nothing was changed.",
+      "message": "The file inventory-other.db is not an InvSys inventory (no locations, parts, lots, inventory_balances, inventory_transactions, shipments, shipment_components, bom_components, settings table). Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true
@@ -1601,7 +1601,7 @@
     {
       "name": "aside-folder-cannot-be-created",
       "applicable": true,
-      "message": "Cannot create the aside folder C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\invsys-restore-probes-wqu84bj3\\aside-folder-cannot-be-created\\restore-aside\\restore-aside-20261025-121352: Cannot create a file when that file already exists. Nothing was changed.",
+      "message": "Cannot create the aside folder C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\invsys-restore-probes-errgv2or\\aside-folder-cannot-be-created\\restore-aside\\restore-aside-20261026-211119: Cannot create a file when that file already exists. Nothing was changed.",
       "database_untouched": true,
       "no_partial_files": true,
       "passed": true

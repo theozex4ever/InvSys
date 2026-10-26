@@ -580,26 +580,25 @@ backup, and a reopen of the restored inventory. Fixture: 8 Parts, 8 Lots, 11 bal
 inactive Part, preferences; snapshot digest `8bfb5a77…cb390bb`, text SHA-256
 `ea6da4ea…d67861`.
 
-CI run [40191189300](https://github.com/theozex4ever/InvSys/actions/runs/40191189300)
-on PR #79 head `e90030d0c3a5e0c53cee807a6ccfd68a486465f2` (the earlier head merged with
-`main` at `9a6610f`, which bumped `filelock` and `setuptools` in the CI and package
-locks, so the bundles were rebuilt). GitHub tested the clean integration merge
-`c30e6d6fe3a51221e3e689d881d9f0109681178d`, whose tree (`ef4f0864…`) is identical to the
-head's; that merge is the source commit in each bundle manifest. Every job, `CI gate`
-and `Dependency audit` included, passed on its first attempt. The records below are unmodified from the
-`package-evidence-*` artifacts, first attempt of every job; the evidence-retention
-commit that adds them changes documentation and evidence files only, and its own CI
-run must be checked on the PR.
+CI run [40398282702](https://github.com/theozex4ever/InvSys/actions/runs/40398282702)
+on PR #79 head `ba494f1761d4f4a492b04bec4d918e9396d0fffa` (includes `main` at `9a6610f`
+with the `filelock`/`setuptools` bumps). GitHub tested the clean integration merge
+`003ac320793bebb6a38124bc5ee2df508cd33977`, whose tree (`dfe78061…`) is identical to the
+head's; that merge is the source commit in each bundle manifest. Linux and macOS are the
+first attempt of their jobs; **Windows is attempt 2** (attempt 1 failed in the existing
+package smoke, see the run history). The records are unmodified from the
+`package-evidence-*` artifacts, and were produced by the current
+`scripts/upgrade_rehearsal.py`; the evidence-retention commit that adds them changes
+documentation and evidence files only, and its own CI run must be checked on the PR.
 
 | Environment | Record | Bundle | Result |
 | --- | --- | --- | --- |
-| GitHub `ubuntu-24.04` (Ubuntu 24.04.5, image 20261023.334.3, AMD EPYC, Xvfb, empty network namespace; Python 3.12.15) | [`upgrade-linux-package-2026-10-25.json`](evidence/upgrade-linux-package-2026-10-25.json) | 3,063 files, 634,300,716 bytes, `invsys-desktop` SHA-256 `4f41fcba…` | passed; launches 70.6 / 71.1 / 71.3 s |
-| GitHub `windows-2025` (Server 2025 10.0.26100, image win25-vs2026 20261021.278.1, firewall-isolated; Python 3.12.10) | [`upgrade-windows-package-2026-10-25.json`](evidence/upgrade-windows-package-2026-10-25.json) | 3,026 files, 593,946,327 bytes, `invsys-desktop.exe` SHA-256 `7072f063…` | passed; 118.1 / 114.7 / 114.2 s |
-| GitHub `macos-15` (macOS 15.7.9, Apple M1 virtual, arm64, image 20260907.0337.1; Python 3.12.10) | [`upgrade-macos-package-2026-10-25.json`](evidence/upgrade-macos-package-2026-10-25.json) | 3,314 files, 534,917,956 bytes, `invsys-desktop` SHA-256 `08caebb6…` | passed; 118.6 / 122.9 / 118.4 s |
+| GitHub `ubuntu-24.04` (Ubuntu 24.04.5, image 20261023.334.3, AMD EPYC, Xvfb, empty network namespace; Python 3.12.15) | [`upgrade-linux-package-2026-10-26.json`](evidence/upgrade-linux-package-2026-10-26.json) | 3,063 files, 634,300,716 bytes, `invsys-desktop` SHA-256 `4f41fcba…` | passed; launches 77.3 / 77.5 / 76.8 s |
+| GitHub `windows-2025` (Server 2025 10.0.26100, image win25-vs2026 20261021.278.1, firewall-isolated; Python 3.12.10) | [`upgrade-windows-package-2026-10-26.json`](evidence/upgrade-windows-package-2026-10-26.json) | 3,026 files, 593,946,327 bytes, `invsys-desktop.exe` SHA-256 `da77559b…` | passed; 109.3 / 109.8 / 109.1 s |
+| GitHub `macos-15` (macOS 15.7.9, Apple M1 virtual, arm64, image 20260907.0337.1; Python 3.12.10) | [`upgrade-macos-package-2026-10-26.json`](evidence/upgrade-macos-package-2026-10-26.json) | 3,314 files, 534,917,956 bytes, `invsys-desktop` SHA-256 `585f7663…` | passed; 120.3 / 120.6 / 122.2 s |
 | Local Linux (Ubuntu 24.04.5, kernel 7.0.0-38-generic, Intel i7-7700HQ, 7.8 GB, real X11 session) | [`upgrade-linux-source-local-2026-10-25.json`](evidence/upgrade-linux-source-local-2026-10-25.json) | **source launch** (Python 3.12.3, PySide6 6.11.2, pywebview 6.2.1) of clean commit **`f8a7dc8`** (an earlier head); not a frozen bundle | passed; 108.9 / 93.8 / 94.3 s |
 
-The local record is for `f8a7dc8`, not the current head: a rerun on `1fb6276` (before
-the merge) timed out in its first two launches (the 300 s limit, under the shared 3 GB memory cap
+The local record is for `f8a7dc8`, not the current head: a rerun on `1fb6276` timed out in its first two launches (the 300 s limit, under the shared 3 GB memory cap
 while another lane was measuring) before reaching any changed code, so it is **not**
 evidence and is not retained. Fixture SHA-256 (line endings normalized) and snapshot
 digest were identical in all four retained records. Toolchain in the CI records:
@@ -652,6 +651,17 @@ Run history, stated plainly.
   painted frames after each resize before measuring (the assertion is unchanged, not
   retried) and uploads the rehearsal's captures. If it recurs the geometry will say
   why; treat it as an open intermittent Windows failure until then.
+- Later heads: `2cddf87`'s Windows *test* leg hit the 60 s per-test timeout in the
+  full-rehearsal test (a slow runner, and the fixture install committed every INSERT
+  separately); the install is now one transaction (about 0.5 s down to 6 ms here;
+  fixed in `ba494f1`). On `ba494f1` the Windows package smoke failed once in the
+  existing navigation check (Ctrl+K left focus on New part instead of the search
+  box, a lost or ineffective native key like the earlier Shift+Tab case), before the
+  rehearsal step ran, on code this ticket has not touched since `1fb6276`; it passed
+  on re-running that job, which is the attempt recorded above. That makes five
+  intermittent failures of the existing Windows native smoke across this PR's runs
+  (Explorer folder check, Parts drawer waits, drawer reachability, Ctrl+K focus; plus the
+  Linux Shift+Tab case); none is root-caused and they are not hidden by retries in code.
 - On `d75ef48` the Windows package smoke failed once in the existing smoke's Settings
   "Open backups folder" Explorer check (also pre-existing).
 - `Dependency audit` failed on `filelock` 4.0.12 advisories on every run until `main`
