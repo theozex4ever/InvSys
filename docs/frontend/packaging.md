@@ -654,14 +654,19 @@ Run history, stated plainly.
 - Later heads: `2cddf87`'s Windows *test* leg hit the 60 s per-test timeout in the
   full-rehearsal test (a slow runner, and the fixture install committed every INSERT
   separately); the install is now one transaction (about 0.5 s down to 6 ms here;
-  fixed in `ba494f1`). On `ba494f1` the Windows package smoke failed once in the
-  existing navigation check (Ctrl+K left focus on New part instead of the search
-  box, a lost or ineffective native key like the earlier Shift+Tab case), before the
-  rehearsal step ran, on code this ticket has not touched since `1fb6276`; it passed
-  on re-running that job, which is the attempt recorded above. That makes five
-  intermittent failures of the existing Windows native smoke across this PR's runs
-  (Explorer folder check, Parts drawer waits, drawer reachability, Ctrl+K focus; plus the
-  Linux Shift+Tab case); none is root-caused and they are not hidden by retries in code.
+  fixed in `ba494f1`). On `ba494f1` the Windows package smoke failed once, and on `94408d0` (docs and
+  evidence only) the macOS package smoke failed once, in the same existing
+  navigation check: after Ctrl+K the page changed to Parts but focus was on the New part
+  button, not the search box. Both ran before the rehearsal step, in code this ticket has
+  not touched since `1fb6276`; re-running the Windows job passed. Unverified lead, not a
+  finding: the create dialog's `close` handler (`frontend/src/main.ts`) focuses its
+  opener unconditionally when its queued `close` event fires, so on a slow runner a
+  late event can take focus back from the search box after Ctrl+K moved it. If that
+  is the cause it is an application focus race outside this ticket's data scope, and
+  it is not fixed here. That makes six intermittent failures of the existing native
+  smoke across this PR's runs (Linux Shift+Tab; Windows Explorer folder check, Parts
+  drawer wait, drawer reachability; Windows and macOS Ctrl+K focus); none is
+  root-caused and none is hidden by a retry in code.
 - On `d75ef48` the Windows package smoke failed once in the existing smoke's Settings
   "Open backups folder" Explorer check (also pre-existing).
 - `Dependency audit` failed on `filelock` 4.0.12 advisories on every run until `main`
