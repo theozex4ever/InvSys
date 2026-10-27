@@ -332,7 +332,7 @@ def readable_snapshot(path: Path) -> dict[str, Any]:
         return snapshot(path)
     except RestoreRefused as exc:
         raise RehearsalError(str(exc).replace(" Nothing was changed.", "")) from exc
-    except (sqlite3.Error, KeyError, TypeError, ValueError, IndexError) as exc:
+    except (OSError, sqlite3.Error, KeyError, TypeError, ValueError, IndexError) as exc:
         raise RehearsalError(
             f"{path.name} could not be read as an InvSys inventory ({exc})."
         ) from exc

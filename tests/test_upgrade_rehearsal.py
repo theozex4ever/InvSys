@@ -973,6 +973,20 @@ def test_dropped_accepts_a_crashed_set_whose_schema_exists_only_in_the_wal(
     assert sqlite_files(crashed) == before
 
 
+def test_verify_backup_reports_a_file_that_cannot_be_read_without_a_traceback(
+    inventory, monkeypatch, capsys
+):
+    backup = backup_database(inventory, inventory.parent / "backups", reason="manual")
+
+    def refused(source, destination):
+        raise PermissionError(13, "Permission denied", str(source))
+
+    monkeypatch.setattr(rehearsal.shutil, "copy2", refused)
+
+    assert rehearsal.main(["verify-backup", str(backup)]) == 1
+    assert "NOT VERIFIED" in capsys.readouterr().out
+
+
 def shutil_copy(source: Path, destination: Path) -> None:
     import shutil
 
