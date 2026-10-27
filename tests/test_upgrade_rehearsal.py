@@ -944,6 +944,35 @@ def test_committed_records_that_exist_only_in_the_wal_need_the_whole_displaced_s
     assert rehearsal.digest(rehearsal.snapshot(copied)) == rehearsal.digest(whole)
 
 
+def test_dropped_accepts_a_crashed_set_whose_schema_exists_only_in_the_wal(
+    inventory, tmp_path, capsys
+):
+    """The store enables WAL before creating its schema, so a crash can leave both in it."""
+    crashed = tmp_path / "crashed"
+    crashed.mkdir()
+    live = tmp_path / "live" / "inventory.db"
+    live.parent.mkdir()
+    with closing(sqlite3.connect(live)) as connection:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA wal_autocheckpoint=0")
+        script = rehearsal.FIXTURE.read_text(encoding="utf-8")
+        connection.executescript(f"BEGIN;\n{script}\nCOMMIT;")
+        for suffix in ("", "-wal", "-shm"):
+            shutil_copy(live.with_name("inventory.db" + suffix), crashed)
+    # The main file alone holds no schema, so only a WAL-aware check can accept the set.
+    lone_uri = f"{(crashed / 'inventory.db').as_uri()}?immutable=1"
+    with closing(sqlite3.connect(lone_uri, uri=True)) as lone:
+        assert lone.execute("SELECT count(*) FROM sqlite_master").fetchone() == (0,)
+    before = sqlite_files(crashed)
+
+    code = rehearsal.main(
+        ["dropped", "--kept", str(inventory), "--displaced", str(crashed / "inventory.db")]
+    )
+
+    assert code == 0, capsys.readouterr().out
+    assert sqlite_files(crashed) == before
+
+
 def shutil_copy(source: Path, destination: Path) -> None:
     import shutil
 

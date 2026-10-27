@@ -38,7 +38,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Callable, Iterator
-from contextlib import closing, contextmanager, suppress
+from contextlib import ExitStack, closing, contextmanager, suppress
 from datetime import UTC, datetime, tzinfo
 from pathlib import Path
 from typing import Any
@@ -328,7 +328,7 @@ def snapshot(database: Path) -> dict[str, Any]:
 def readable_snapshot(path: Path) -> dict[str, Any]:
     """``snapshot`` that reports a damaged or foreign file as a ``RehearsalError``."""
     try:
-        check_backup(path)
+        check_backup(path, with_wal=True)
         return snapshot(path)
     except RestoreRefused as exc:
         raise RehearsalError(str(exc).replace(" Nothing was changed.", "")) from exc
@@ -561,16 +561,28 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def check_backup(path: Path) -> None:
-    """Refuse anything that is not a readable, intact inventory file with the full structure."""
+def check_backup(path: Path, *, with_wal: bool = False) -> None:
+    """Refuse anything that is not a readable, intact inventory file with the full structure.
+
+    By default only the file itself is checked, which is all a restore copies. With
+    ``with_wal`` the matching ``-wal``/``-shm`` files are checked with it, on a scratch copy.
+    """
     path = path.resolve()
     if not path.exists():
         raise RestoreRefused(f"The backup {path} does not exist. Nothing was changed.")
     if not path.is_file():
         raise RestoreRefused(f"The backup {path} is not a file. Nothing was changed.")
     try:
-        # immutable=1: checking a backup must not create WAL sidecars beside it.
-        with closing(sqlite3.connect(f"{path.as_uri()}?mode=ro&immutable=1", uri=True)) as copy:
+        with ExitStack() as stack:
+            if with_wal:
+                # A crashed database can hold its schema only in the WAL, so recover it
+                # normally, but on a copy: reading must never change the original.
+                scratch = stack.enter_context(_scratch_copy(path))
+                copy = stack.enter_context(closing(sqlite3.connect(scratch)))
+            else:
+                # immutable=1: checking a backup must not create WAL sidecars beside it.
+                uri = f"{path.as_uri()}?mode=ro&immutable=1"
+                copy = stack.enter_context(closing(sqlite3.connect(uri, uri=True)))
             result = copy.execute("PRAGMA quick_check").fetchall()
             tables = {row[0] for row in copy.execute("SELECT name FROM sqlite_master")}
             columns = {
