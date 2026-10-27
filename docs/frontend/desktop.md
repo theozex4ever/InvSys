@@ -501,7 +501,9 @@ rollback are covered by public bridge tests rather than the native smoke.
 
 ## Restore and rollback (closed app only)
 
-There is no in-app restore. To restore a backup:
+There is no in-app restore. [Cutover, restore and rollback](cutover.md) is the
+complete, rehearsed procedure (cutover checklist, failure behaviour, rollback and
+ledger reconciliation). The short form:
 
 1. Close the application (and the original application) so nothing holds the database.
 2. In the folder holding the database (`data/` for source launch, or the folder of the

@@ -53,6 +53,44 @@ class _GuiActions(QObject):
             raise self.error
 
 
+def shift_tab_to_previous_export(press: Any, wait: Any, run: Any) -> None:
+    """Send exactly one Shift+Tab once the page has finished restoring focus, then require it.
+
+    A key that was delivered but had no effect (swallowed, or focus stolen back) must fail
+    the check, so it is never resent. The key is sent only after native focus and the page's
+    own focus restoration have settled: two painted frames with focus back on Export Inventory.
+    """
+    wait("document.hasFocus()")
+    run(
+        "window.smokeSettled=false; requestAnimationFrame(() => requestAnimationFrame(() => { window.smokeSettled=true; }));"
+    )
+    wait("window.smokeSettled && document.activeElement.dataset.exportKind === 'inventory'")
+    press()
+    wait("document.activeElement.dataset.exportKind === 'parts'")
+
+
+def check_graph_keyboard_view(key: Any, wait: Any, run: Any) -> None:
+    """Require native pan, zoom and Fit to agree with the visible Fit control."""
+    # The initial render can precede the native resize and ResizeObserver delivery.
+    # Establish the reference at the current size, rather than recording that old fit.
+    run(
+        "window.smokeGraphPainted=false; requestAnimationFrame(() => requestAnimationFrame(() => { window.smokeGraphPainted=true; }));"
+    )
+    wait("window.smokeGraphPainted")
+    run(
+        "document.querySelector('[data-bomx=fit]').click(); document.querySelector('#bomx-viewport').focus()"
+    )
+    run("window.smokeGraphFit=document.querySelector('#bomx-canvas').getAttribute('transform')")
+    key(Qt.Key.Key_Right)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') !== smokeGraphFit")
+    key(Qt.Key.Key_0)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') === smokeGraphFit")
+    key(Qt.Key.Key_Plus)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') !== smokeGraphFit")
+    key(Qt.Key.Key_0)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') === smokeGraphFit")
+
+
 def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
     import json
 
@@ -76,6 +114,10 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
 
     def key(code: Any, modifiers: Any = Qt.KeyboardModifier.NoModifier) -> None:
         actions.run(lambda: QTest.keyClick(window.native.webview.focusProxy(), code, modifiers))
+
+    def key_shift_tab() -> None:
+        actions.run(activate)
+        key(Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
 
     def capture(target: Path) -> None:
         # Geometry updates precede Chromium painting; capture the completed frame.
@@ -107,6 +149,8 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
         key(Qt.Key.Key_Escape)
         wait(f"!document.querySelector('#{dialog_id}').open")
 
+    slack: list[float] = []
+
     def capture_dialog(dialog_id: str) -> None:
         for theme in ("light", "dark"):
             # Modal dialogs make the shell's theme button inert.
@@ -117,6 +161,11 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             for width, height in ((1366, 768), (1920, 1080), (800, 650), (640, 480)):
                 window.resize(width, height)
                 time.sleep(0.15)
+                # The window manager may clamp the size; let the relayout paint before measuring.
+                run(
+                    "window.smokeLaidOut=false; requestAnimationFrame(() => requestAnimationFrame(() => { window.smokeLaidOut=true; }));"
+                )
+                wait("window.smokeLaidOut")
                 require(
                     "document.documentElement.scrollWidth <= innerWidth",
                     f"{dialog_id}: page width",
@@ -131,9 +180,18 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
                 run(
                     f"Array.from(document.querySelectorAll('#{dialog_id} button')).filter(e => e.getClientRects().length).at(-1).scrollIntoView({{block:'nearest'}})"
                 )
+                # Recorded for every size so a failure (and the margin of every pass) is diagnosable.
+                geometry = run(
+                    f"""(() => {{
+                        const dialog = document.querySelector('#{dialog_id}');
+                        const last = Array.from(dialog.querySelectorAll('button')).filter(e => e.getClientRects().length).at(-1).getBoundingClientRect();
+                        return {{top: last.top, bottom: last.bottom, innerHeight, innerWidth, scrollTop: dialog.scrollTop, scrollHeight: dialog.scrollHeight, clientHeight: dialog.clientHeight}};
+                    }})()"""
+                )
+                slack.append(round(geometry["innerHeight"] - geometry["bottom"], 2))
                 require(
                     f"Array.from(document.querySelectorAll('#{dialog_id} button')).filter(e => e.getClientRects().length).slice(-1).every(e => e.getBoundingClientRect().top >= 0 && e.getBoundingClientRect().bottom <= innerHeight)",
-                    f"{dialog_id}: last action reachable by scrolling",
+                    f"{dialog_id} {theme} {width}x{height}: last action reachable by scrolling {geometry}",
                 )
                 target = captures / f"{dialog_id}-{theme}-{width}.png"
                 capture(target)
@@ -227,20 +285,12 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
     wait("document.querySelector('#bomx-canvas .bomx-node')")
     actions.run(activate)
     wait("document.hasFocus()")
-    run(
-        "window.smokeGraphFit=document.querySelector('#bomx-canvas').getAttribute('transform'); document.querySelector('#bomx-viewport').focus()"
-    )
+    run("document.querySelector('#bomx-viewport').focus()")
     require(
         "getComputedStyle(document.activeElement).outlineStyle !== 'none'",
         "graph viewport shows keyboard focus",
     )
-    key(Qt.Key.Key_Right)
-    wait("document.querySelector('#bomx-canvas').getAttribute('transform') !== smokeGraphFit")
-    key(Qt.Key.Key_0)
-    wait("document.querySelector('#bomx-canvas').getAttribute('transform') === smokeGraphFit")
-    key(Qt.Key.Key_Plus)
-    wait("document.querySelector('#bomx-canvas').getAttribute('transform') !== smokeGraphFit")
-    key(Qt.Key.Key_0)
+    check_graph_keyboard_view(key, wait, run)
     key(Qt.Key.Key_Tab)
     wait("document.activeElement.classList.contains('bomx-node')")
     require(
@@ -283,8 +333,7 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             "document.querySelector('#settings-result').textContent.startsWith('Exported Inventory') && document.querySelectorAll('#settings button:disabled').length === 0"
         )
         wait("document.activeElement.dataset.exportKind === 'inventory'")
-        key(Qt.Key.Key_Tab, Qt.KeyboardModifier.ShiftModifier)
-        wait("document.activeElement.dataset.exportKind === 'parts'")
+        shift_tab_to_previous_export(key_shift_tab, wait, run)
         capture(captures / f"export-keyboard-{theme}.png")
     window.resize(1366, 768)
 
@@ -299,6 +348,10 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
             "Desktop smoke: reduced-motion preference inactive; rerun with QTWEBENGINE_CHROMIUM_FLAGS=--force-prefers-reduced-motion to exercise it.",
             flush=True,
         )
+    print(
+        f"Desktop smoke: dialog last-action margin below the viewport, min {min(slack)} px over {len(slack)} checks.",
+        flush=True,
+    )
     print(
         "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
         flush=True,

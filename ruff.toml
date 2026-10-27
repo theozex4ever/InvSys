@@ -65,6 +65,9 @@ ignore = [
 # The bundle tool is a CLI that reports progress on stdout and drives subprocesses
 # built from fixed arguments (annotated per call).
 "scripts/package_bundle.py" = ["T201"]
+# The upgrade rehearsal is a CLI that reports progress on stdout and launches the
+# application under test (annotated per call).
+"scripts/upgrade_rehearsal.py" = ["T201"]
 # Same CLI shape; the probe prints the single marker line the runner times.
 "scripts/package_perf.py" = ["T201"]
 "inventory_control/desktop_perf.py" = ["T201"]

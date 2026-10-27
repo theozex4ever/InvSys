@@ -29,6 +29,10 @@ scenario, approved workload and retirement evidence gate from tickets #39/#40.
 | 11 | PySide6 retirement | Not Started |
 | 12 | Scripted native navigation/safety/layout acceptance, rendered contrast/name audit and the packaged performance envelope on Windows, Linux and macOS ([performance.md](performance.md)) delivered; human screen-reader review, operator-designated workstation timings and release hardening remain | In Progress |
 
+The documented [cutover, restore and rollback](cutover.md) procedure and its copied-data
+upgrade/restore rehearsal (ticket #56) are retirement gates for phase 11; their evidence
+is recorded in [packaging.md](packaging.md#recorded-copied-data-upgrade-and-restore-evidence).
+
 Update this table when a phase meaningfully changes.
 
 ## Migration rules

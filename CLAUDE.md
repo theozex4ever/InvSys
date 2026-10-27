@@ -27,6 +27,11 @@ The standalone Linux, Windows and macOS bundles are built and smoke-tested with
 `scripts/package_bundle.py` (locked `requirements-package.lock.txt`); see
 `docs/frontend/packaging.md`. CI runs it as `package-smoke`.
 
+Copied-data upgrade, closed-app restore and rollback are documented in
+`docs/frontend/cutover.md` and rehearsed on disposable copies of a pre-migration
+fixture by `scripts/upgrade_rehearsal.py` (also a `package-smoke` step); never
+rehearse against operational data.
+
 Gate rules to keep green:
 
 - pytest config lives in `pyproject.toml`: random order, warnings are errors,
