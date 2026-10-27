@@ -217,7 +217,7 @@ $<HTMLDialogElement>('#drawer').addEventListener('close', () => { ++detailVersio
 $('#close-drawer').onclick = async () => { if (await editor.mayClose()) $<HTMLDialogElement>('#drawer').close(); };
 $<HTMLDialogElement>('#drawer').addEventListener('cancel', event => { if (editor.active()) { event.preventDefault(); $('#close-drawer').click(); } });
 $('#add-part').onclick = () => openCreate($('#add-part'));
-$<HTMLDialogElement>('#create-dialog').addEventListener('close', () => { if (createReturnFocus?.isConnected) createReturnFocus.focus({ preventScroll: true }); });
+$<HTMLDialogElement>('#create-dialog').addEventListener('close', () => { createReturnFocus?.focus({ preventScroll: true }); });
 $('#close-create').onclick = () => { if (!creating) $<HTMLDialogElement>('#create-dialog').close(); };
 $<HTMLDialogElement>('#create-dialog').addEventListener('cancel', event => { if (creating) event.preventDefault(); });
 document.addEventListener('click', event => {
