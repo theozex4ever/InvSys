@@ -6,9 +6,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Select, desc, func, or_, select
+from sqlalchemy import LargeBinary, Select, case, cast, desc, func, or_, select
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, aliased, joinedload, sessionmaker
+from sqlalchemy.orm import Session, aliased, contains_eager, joinedload, sessionmaker
 
 from inventory_control import ledger
 from inventory_control.db import create_inventory_engine, create_session_factory
@@ -567,6 +567,22 @@ class InventoryStore:
         "reference",
     )
 
+    @staticmethod
+    def _folded_contains(column: Any, needle: str) -> Any:
+        """Unicode case-folded containment; ASCII text skips the (slow) Python function.
+
+        ``needle`` is already case-folded. Folding ASCII text equals SQLite's ASCII
+        ``lower()``, so for an ASCII-only value and needle the native ``instr`` is
+        exact. Any other value still goes through Python's ``casefold``, so "ß" and
+        friends keep matching exactly as before. (length of the text equals the length
+        of its bytes exactly when it is ASCII.)
+        """
+        folded = func.py_casefold(column).contains(needle, autoescape=True)
+        if not needle.isascii():
+            return folded
+        ascii_only = func.length(column) == func.length(cast(column, LargeBinary))
+        return case((ascii_only, func.instr(func.lower(column), needle) > 0), else_=folded)
+
     def search_history(
         self,
         query: str,
@@ -604,10 +620,11 @@ class InventoryStore:
                 "reference": InventoryTransactionRecord.reference,
             }
             if query:
+                needle = query.casefold()
                 statement = statement.where(
                     or_(
                         *(
-                            func.py_casefold(column).contains(query.casefold(), autoescape=True)
+                            self._folded_contains(column, needle)
                             for name, column in (
                                 *columns.items(),
                                 ("notes", InventoryTransactionRecord.notes),
@@ -620,14 +637,38 @@ class InventoryStore:
                 )
             if tx_type:
                 statement = statement.where(InventoryTransactionRecord.tx_type == tx_type)
-            matching = session.scalar(select(func.count()).select_from(statement.subquery()))
             # The record ID keeps equal values in a stable order across pages.
-            order = (columns[sort], InventoryTransactionRecord.id)
-            records = session.execute(
-                statement.order_by(*(desc(column) if descending else column for column in order))
-                .offset(page * 50)
-                .limit(50)
+            order = tuple(
+                desc(column) if descending else column
+                for column in (columns[sort], InventoryTransactionRecord.id)
             )
+            if query:
+                # A text match is expensive to evaluate: take the match count from the same
+                # pass that selects the page instead of filtering the ledger twice.
+                rows = session.execute(
+                    statement.add_columns(func.count().over())
+                    .order_by(*order)
+                    .offset(page * 50)
+                    .limit(50)
+                ).all()
+                if rows:
+                    matching = rows[0][2]
+                elif page == 0:
+                    matching = 0
+                else:
+                    # A page past the last row carries no count: ask for it.
+                    matching = session.scalar(
+                        select(func.count()).select_from(statement.subquery())
+                    )
+                records = [(row, number) for row, number, _ in rows]
+            else:
+                matching = session.scalar(select(func.count()).select_from(statement.subquery()))
+                records = [
+                    (row, number)
+                    for row, number in session.execute(
+                        statement.order_by(*order).offset(page * 50).limit(50)
+                    )
+                ]
             return {
                 "records": [self._history_record(row, number) for row, number in records],
                 "types": list(
@@ -1444,7 +1485,11 @@ class InventoryStore:
         part = self._part(session, part_number)
         if part is None:
             raise ValueError("Part not found.")
-        if not allow_inactive and not part.active:
+        return part if allow_inactive else self._require_active(part)
+
+    @staticmethod
+    def _require_active(part: PartRecord) -> PartRecord:
+        if not part.active:
             raise ValueError(
                 f"Part {part.part_number} is inactive. Reactivate it before recording inventory activity."
             )
@@ -1681,16 +1726,19 @@ class InventoryStore:
                     "This BOM is too large to display once fully expanded. Explore a smaller assembly."
                 )
         parts[part.part_number] = part
+        # One query per node: the component Parts arrive with their links rather than
+        # being looked up again one by one (a 1,000-node BOM would otherwise run 3,000).
         children = session.scalars(
             select(BOMComponentRecord)
             .where(BOMComponentRecord.parent_part_id == part.id)
             .join(BOMComponentRecord.component_part)
+            .options(contains_eager(BOMComponentRecord.component_part))
             .order_by(PartRecord.part_number)
         ).all()
         child_nodes = [
             self._bom_structure(
                 session,
-                self._require_part(session, child.component_part.part_number),
+                self._require_active(child.component_part),
                 qty_required * child.quantity_per,
                 child.quantity_per,
                 requirements,

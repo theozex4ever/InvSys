@@ -351,7 +351,7 @@ application logs and archive checksums for 90 days, including failed-step output
 A passing macOS job also uploads the intact archive and `SHA256SUMS` as
 `macos-standalone-bundle` for seven days so native-panel acceptance can use the
 exact tested bundle. This is a CI artifact, not a release publication. Linux and
-Windows archives are not uploaded. All three legs are part of **CI gate**.
+Windows archives are not uploaded. The same job then runs `scripts/package_perf.py` on the extracted bundle against a freshly built large inventory and uploads `perf-evidence.json` (see [performance.md](performance.md)). All three legs are part of **CI gate**.
 
 ## Extending packaging
 
@@ -368,7 +368,7 @@ See the recorded Linux, Windows and macOS runs and pending manual acceptance bel
 by these tickets:
 Windows 10/11 desktop editions, Linux distributions and macOS versions other than the recorded
 ones, Intel Macs, the glibc compatibility matrix, Gatekeeper approval of a
-quarantined download, performance targets (P05 packaged launch time), human
+quarantined download, performance on designated workstations (measured on the hosted runners and one local Linux machine: [performance.md](performance.md)), human
 operator acceptance, Developer ID signing, notarization, installers, auto-update
 and release publication.
 

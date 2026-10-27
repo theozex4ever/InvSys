@@ -104,7 +104,11 @@ The complete frontend uses about 33.6 KB gzipped JavaScript (33,609 bytes). Tick
 numbered destinations, History search/sort and a distinct Adjust icon, after
 shared helpers replaced per-module copies (CSS 8 KB, HTML 1 KB unchanged). Review
 added explicit Part creation and backup recovery decisions; about 0.4 KB of
-headroom remains; further increases need another explicit decision.
+headroom remains; further increases need another explicit decision. The performance
+work of ticket #55 (paged Parts, explorer text level of detail, Ship review folding) fits
+in the same budget: 34,000 B, **exactly at the budget with no headroom** (pager focus
+and announcement were the last bytes), so the next frontend change needs its own size
+decision.
 
 ## Standalone bundle
 
@@ -192,7 +196,12 @@ the selected Part's balances and audit records directly. Stock context retains
 that Part's complete transaction and shipment lists, newest first, because
 uncertain-submission recovery depends on their lengths. Response size still
 grows with that Part's own history. Catalog search retains Python's Unicode
-case folding and the existing sort order.
+case folding and the existing sort order. The Parts page shows the result 100 rows
+at a time (Previous/Next, with the total in the footer): Python still filters and
+sorts the whole catalog, and the page only limits how many rows the web view renders
+(10,000 rows exhausted its memory). Previous/Next keep keyboard focus on the pager and announce
+the page in the status region. History text search keeps the same Unicode case
+folding; ASCII values use SQLite's identical ASCII fold as a fast path.
 
 The read snapshot does not reserve stock or authorize a later shipment; mutations
 still validate at submission. The original PySide6 screens retain their existing
@@ -212,6 +221,11 @@ shipping eligibility (for example an inactive assembly) is decided at shipment r
 returned as a single node. Inactive root parts can be explored; inactive
 components, circular definitions and BOMs expanding past 5,000 nodes return a
 `VALIDATION` error instead of a graph. Exploring never writes inventory.
+
+A graph drawn below 25 % zoom does not lay out node or quantity text (it is
+unreadable there and laying out thousands of text runs dominated the 1,000-node
+render); the text appears as soon as the view is zoomed in. Nodes keep their
+accessible names, and selecting a node shows its details in the inspector.
 
 The graph is hand-built SVG (no graph library). Drag or the arrow keys pan the
 focused graph, Ctrl + wheel or +/− zoom, 0 or Fit fits, and arrow keys on a node move

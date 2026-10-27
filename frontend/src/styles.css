@@ -166,6 +166,8 @@ tbody tr:hover { background: var(--surface-soft); }
 .operator .btn { margin-left: 8px; }
 dialog { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 0; width: min(560px, 95vw); max-height: 94vh; box-shadow: var(--shadow); }
 dialog::backdrop { background: #0f172a70; backdrop-filter: blur(3px); }
+/* A BOM review can list hundreds of Leaf lots: skip laying out and painting what is scrolled far out of view. */
+#ship-confirm-data .table-wrap { content-visibility: auto; contain-intrinsic-size: auto 30000px; }
 dialog.drawer { margin: 0 0 0 auto; height: 100dvh; max-height: 100dvh; width: min(520px, 95vw); border-radius: 0; }
 .detail-pair { display: flex; justify-content: space-between; gap: 20px; padding: 13px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
 .detail-pair span { color: var(--secondary); }
@@ -235,6 +237,7 @@ dialog.drawer[open] { animation-name: drawer-in; }
 .bomx-edge.level-ready { stroke: var(--success); }
 .bomx-qty { font-size: 12px; font-weight: 700; fill: var(--secondary); }
 .bomx-node { cursor: pointer; outline: none; }
+.bomx-far text { display: none; }
 .bomx-node text { fill: var(--text); font-size: 12px; pointer-events: none; }
 .bomx-card { fill: var(--surface); stroke: var(--border-control); stroke-width: 1.5; }
 .bomx-node.level-critical .bomx-card { fill: var(--danger-soft); stroke: var(--danger); stroke-width: 3; }

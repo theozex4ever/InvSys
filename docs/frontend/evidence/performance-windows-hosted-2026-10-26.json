@@ -1,0 +1,2420 @@
+{
+  "recorded_at": "2026-10-26T20:56:41+00:00",
+  "result": "passed",
+  "verdict": {
+    "passed": true,
+    "failed_steps": [],
+    "missing_steps": [],
+    "errors": []
+  },
+  "targets_ms": {
+    "interaction": 2000,
+    "graph": 5000,
+    "launch": 10000
+  },
+  "method": {
+    "warmups": 1,
+    "measured_repeats": 5,
+    "timing": "in-page performance.now() from the action to two painted frames after the expected, correct state (external_ms adds this runner's polling); launch is process spawn to the usable marker on the runner's monotonic clock",
+    "cache": "warm OS file cache after the warm-up run; no cache dropping",
+    "shared_runner_note": "GitHub-hosted runners are shared virtual machines: timings are noisy"
+  },
+  "machine": {
+    "platform": "Windows-2025Server-10.0.26100-SP0",
+    "machine": "AMD64",
+    "kernel": "2025Server",
+    "logical_cpus": 4,
+    "display": "windows-desktop-session",
+    "ci_image": "win25-vs2026 20261021.278.1",
+    "os": "Windows 10.0.26100 (ServerDatacenter)",
+    "cpu": "Intel(R) Xeon(R) 6973P-C",
+    "memory": "16771836 kB"
+  },
+  "bundle": {
+    "directory": "invsys-desktop",
+    "file_count": 3026,
+    "size_bytes": 593978019,
+    "executable_sha256": "77b474668937197579b7030e8cdab1b806287482f216149d67bd087fceac9690",
+    "manifest": {
+      "app": "invsys-desktop",
+      "source": {
+        "commit": "bf8ff8a83c688f593d475819f33ad49feee1f3d7",
+        "uncommitted_changes": false
+      },
+      "python": "3.12.10",
+      "platform": "win32-AMD64",
+      "packages": {
+        "pyinstaller": "6.22.3",
+        "pyinstaller-hooks-contrib": "2026.8",
+        "PySide6": "6.11.2",
+        "pywebview": "6.2.1",
+        "QtPy": "2.4.3"
+      },
+      "assets": {
+        "app.js": "1e6606dc09c6274d771ae3dd5de69daf006a0e3ad3463cde30075da9a047a2d9",
+        "index.html": "9311ff079756f70d629845d224fdbb60d4b01d3cdfb4020a123628123f57ea2c",
+        "style.css": "34176552257111586b6fa5a00ffa948de30c238a03b5305a50bc95628f1e6b2c"
+      }
+    }
+  },
+  "fixture": {
+    "database_sha256": "c51b03b6b9e23d4109b2523e729c75e7783c9c65574c2e27237fc8847ee3f585",
+    "size_bytes": 18923520,
+    "manifest": {
+      "version": 1,
+      "profile": "large",
+      "database": "inventory.db",
+      "parts": 10000,
+      "transactions": 100000,
+      "expanded_bom_nodes": 1000,
+      "bom_root": "PERF-ROOT",
+      "shipments": [
+        "SHP-20261026-0001",
+        "SHP-20261026-0002"
+      ]
+    },
+    "truth": {
+      "parts": 10000,
+      "active_parts": 9549,
+      "inactive_parts": 451,
+      "transactions": 100000,
+      "shipments": 2,
+      "bom_components": 1002,
+      "balance_rows": 2709,
+      "balance_units": 100048,
+      "ledger_units": 100046
+    },
+    "storage": "D:\\a\\_temp\\invsys-package-perf\\fixture"
+  },
+  "probe_environment": {
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) QtWebEngine/6.11.2 Chrome/140.0.0.0 Safari/537.36",
+    "window": "1028x749",
+    "pixel_ratio": 1,
+    "screen": "1024x768",
+    "reduced_motion": true
+  },
+  "steps": [
+    {
+      "id": "P01.search",
+      "scenario": "P01",
+      "label": "Search PERF-00999",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        441.0
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        429.1,
+        613.0,
+        447.8,
+        454.7,
+        381.5
+      ],
+      "min_ms": 381.5,
+      "median_ms": 447.8,
+      "max_ms": 613.0,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 441,
+          "ready_ms": 372.8,
+          "frames": 2,
+          "external_ms": 453.0,
+          "marks": {
+            "api_ms": 368.3
+          }
+        },
+        {
+          "run": 1,
+          "ms": 429.1,
+          "ready_ms": 362.5,
+          "frames": 2,
+          "external_ms": 438.0,
+          "marks": {
+            "api_ms": 359.1
+          }
+        },
+        {
+          "run": 2,
+          "ms": 613,
+          "ready_ms": 465.4,
+          "frames": 2,
+          "external_ms": 610.0,
+          "marks": {
+            "api_ms": 459.4
+          }
+        },
+        {
+          "run": 3,
+          "ms": 447.8,
+          "ready_ms": 424,
+          "frames": 2,
+          "external_ms": 453.0,
+          "marks": {
+            "api_ms": 421.3
+          }
+        },
+        {
+          "run": 4,
+          "ms": 454.7,
+          "ready_ms": 382.9,
+          "frames": 2,
+          "external_ms": 469.0,
+          "marks": {
+            "api_ms": 380.4
+          }
+        },
+        {
+          "run": 5,
+          "ms": 381.5,
+          "ready_ms": 376.5,
+          "frames": 2,
+          "external_ms": 390.0,
+          "marks": {
+            "api_ms": 373.1
+          }
+        }
+      ]
+    },
+    {
+      "id": "P01.open_part",
+      "scenario": "P01",
+      "label": "Open the Part drawer",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        141.4
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        138.3,
+        419.4,
+        142.0,
+        138.3,
+        140.5
+      ],
+      "min_ms": 138.3,
+      "median_ms": 140.5,
+      "max_ms": 419.4,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 141.4,
+          "ready_ms": 18.8,
+          "frames": 2,
+          "external_ms": 156.0,
+          "marks": {
+            "api_ms": 16.7
+          }
+        },
+        {
+          "run": 1,
+          "ms": 138.3,
+          "ready_ms": 10.7,
+          "frames": 2,
+          "external_ms": 141.0,
+          "marks": {
+            "api_ms": 9.9
+          }
+        },
+        {
+          "run": 2,
+          "ms": 419.4,
+          "ready_ms": 10.3,
+          "frames": 2,
+          "external_ms": 422.0,
+          "marks": {
+            "api_ms": 9.6
+          }
+        },
+        {
+          "run": 3,
+          "ms": 142,
+          "ready_ms": 10,
+          "frames": 2,
+          "external_ms": 140.0,
+          "marks": {
+            "api_ms": 9.4
+          }
+        },
+        {
+          "run": 4,
+          "ms": 138.3,
+          "ready_ms": 11.6,
+          "frames": 2,
+          "external_ms": 141.0,
+          "marks": {
+            "api_ms": 11
+          }
+        },
+        {
+          "run": 5,
+          "ms": 140.5,
+          "ready_ms": 9.4,
+          "frames": 2,
+          "external_ms": 157.0,
+          "marks": {
+            "api_ms": 8.8
+          }
+        }
+      ]
+    },
+    {
+      "id": "P01.clear",
+      "scenario": "P01",
+      "label": "Clear the search",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        592.2
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        448.1,
+        544.6,
+        443.8,
+        464.0,
+        459.8
+      ],
+      "min_ms": 443.8,
+      "median_ms": 459.8,
+      "max_ms": 544.6,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 592.2,
+          "ready_ms": 325.5,
+          "frames": 2,
+          "external_ms": 594.0,
+          "marks": {
+            "api_ms": 321.8
+          }
+        },
+        {
+          "run": 1,
+          "ms": 448.1,
+          "ready_ms": 314.1,
+          "frames": 2,
+          "external_ms": 453.0,
+          "marks": {
+            "api_ms": 311.9
+          }
+        },
+        {
+          "run": 2,
+          "ms": 544.6,
+          "ready_ms": 300.1,
+          "frames": 2,
+          "external_ms": 547.0,
+          "marks": {
+            "api_ms": 297.6
+          }
+        },
+        {
+          "run": 3,
+          "ms": 443.8,
+          "ready_ms": 284.1,
+          "frames": 2,
+          "external_ms": 453.0,
+          "marks": {
+            "api_ms": 281.5
+          }
+        },
+        {
+          "run": 4,
+          "ms": 464,
+          "ready_ms": 314.7,
+          "frames": 2,
+          "external_ms": 469.0,
+          "marks": {
+            "api_ms": 312.6
+          }
+        },
+        {
+          "run": 5,
+          "ms": 459.8,
+          "ready_ms": 302.1,
+          "frames": 2,
+          "external_ms": 468.0,
+          "marks": {
+            "api_ms": 299
+          }
+        }
+      ]
+    },
+    {
+      "id": "P01.inactive",
+      "scenario": "P01",
+      "label": "Filter inactive Parts",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        424.7
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        322.8,
+        307.0,
+        305.0,
+        316.7,
+        307.7
+      ],
+      "min_ms": 305.0,
+      "median_ms": 307.7,
+      "max_ms": 322.8,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 424.7,
+          "ready_ms": 217.6,
+          "frames": 2,
+          "external_ms": 421.0,
+          "marks": {
+            "api_ms": 215.4
+          }
+        },
+        {
+          "run": 1,
+          "ms": 322.8,
+          "ready_ms": 236.7,
+          "frames": 2,
+          "external_ms": 344.0,
+          "marks": {
+            "api_ms": 234.8
+          }
+        },
+        {
+          "run": 2,
+          "ms": 307,
+          "ready_ms": 231.6,
+          "frames": 2,
+          "external_ms": 312.0,
+          "marks": {
+            "api_ms": 229.4
+          }
+        },
+        {
+          "run": 3,
+          "ms": 305,
+          "ready_ms": 220.8,
+          "frames": 2,
+          "external_ms": 313.0,
+          "marks": {
+            "api_ms": 219
+          }
+        },
+        {
+          "run": 4,
+          "ms": 316.7,
+          "ready_ms": 251.8,
+          "frames": 2,
+          "external_ms": 328.0,
+          "marks": {
+            "api_ms": 249.5
+          }
+        },
+        {
+          "run": 5,
+          "ms": 307.7,
+          "ready_ms": 217.2,
+          "frames": 2,
+          "external_ms": 312.0,
+          "marks": {
+            "api_ms": 214.9
+          }
+        }
+      ]
+    },
+    {
+      "id": "P01.active",
+      "scenario": "P01",
+      "label": "Filter active Parts",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        342.7
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        347.1,
+        380.9,
+        340.4,
+        380.6,
+        420.9
+      ],
+      "min_ms": 340.4,
+      "median_ms": 380.6,
+      "max_ms": 420.9,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 342.7,
+          "ready_ms": 328.2,
+          "frames": 2,
+          "external_ms": 360.0,
+          "marks": {
+            "api_ms": 284.1
+          }
+        },
+        {
+          "run": 1,
+          "ms": 347.1,
+          "ready_ms": 284.5,
+          "frames": 2,
+          "external_ms": 359.0,
+          "marks": {
+            "api_ms": 282.2
+          }
+        },
+        {
+          "run": 2,
+          "ms": 380.9,
+          "ready_ms": 340.5,
+          "frames": 2,
+          "external_ms": 406.0,
+          "marks": {
+            "api_ms": 338.3
+          }
+        },
+        {
+          "run": 3,
+          "ms": 340.4,
+          "ready_ms": 299.4,
+          "frames": 2,
+          "external_ms": 359.0,
+          "marks": {
+            "api_ms": 296
+          }
+        },
+        {
+          "run": 4,
+          "ms": 380.6,
+          "ready_ms": 364.4,
+          "frames": 2,
+          "external_ms": 391.0,
+          "marks": {
+            "api_ms": 320.8
+          }
+        },
+        {
+          "run": 5,
+          "ms": 420.9,
+          "ready_ms": 410.6,
+          "frames": 2,
+          "external_ms": 422.0,
+          "marks": {
+            "api_ms": 371.9
+          }
+        }
+      ]
+    },
+    {
+      "id": "P01.low_stock",
+      "scenario": "P01",
+      "label": "Filter Low stock",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        341.2
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        340.2,
+        380.2,
+        384.7,
+        324.5,
+        360.7
+      ],
+      "min_ms": 324.5,
+      "median_ms": 360.7,
+      "max_ms": 384.7,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 341.2,
+          "ready_ms": 290.3,
+          "frames": 2,
+          "external_ms": 359.0,
+          "marks": {
+            "api_ms": 287.7
+          }
+        },
+        {
+          "run": 1,
+          "ms": 340.2,
+          "ready_ms": 331.7,
+          "frames": 2,
+          "external_ms": 344.0,
+          "marks": {
+            "api_ms": 287.2
+          }
+        },
+        {
+          "run": 2,
+          "ms": 380.2,
+          "ready_ms": 338.6,
+          "frames": 2,
+          "external_ms": 391.0,
+          "marks": {
+            "api_ms": 336.1
+          }
+        },
+        {
+          "run": 3,
+          "ms": 384.7,
+          "ready_ms": 378.3,
+          "frames": 2,
+          "external_ms": 391.0,
+          "marks": {
+            "api_ms": 337
+          }
+        },
+        {
+          "run": 4,
+          "ms": 324.5,
+          "ready_ms": 282.6,
+          "frames": 2,
+          "external_ms": 344.0,
+          "marks": {
+            "api_ms": 280.1
+          }
+        },
+        {
+          "run": 5,
+          "ms": 360.7,
+          "ready_ms": 349.3,
+          "frames": 2,
+          "external_ms": 375.0,
+          "marks": {
+            "api_ms": 303.2
+          }
+        }
+      ]
+    },
+    {
+      "id": "P01.clear_filters",
+      "scenario": "P01",
+      "label": "Clear filters",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        348.9
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        381.6,
+        359.6,
+        357.2,
+        352.4,
+        339.5
+      ],
+      "min_ms": 339.5,
+      "median_ms": 357.2,
+      "max_ms": 381.6,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 348.9,
+          "ready_ms": 308.2,
+          "frames": 2,
+          "external_ms": 360.0,
+          "marks": {
+            "api_ms": 306
+          }
+        },
+        {
+          "run": 1,
+          "ms": 381.6,
+          "ready_ms": 339.6,
+          "frames": 2,
+          "external_ms": 391.0,
+          "marks": {
+            "api_ms": 337.2
+          }
+        },
+        {
+          "run": 2,
+          "ms": 359.6,
+          "ready_ms": 322.5,
+          "frames": 2,
+          "external_ms": 375.0,
+          "marks": {
+            "api_ms": 318.7
+          }
+        },
+        {
+          "run": 3,
+          "ms": 357.2,
+          "ready_ms": 352.7,
+          "frames": 2,
+          "external_ms": 375.0,
+          "marks": {
+            "api_ms": 312.6
+          }
+        },
+        {
+          "run": 4,
+          "ms": 352.4,
+          "ready_ms": 306.5,
+          "frames": 2,
+          "external_ms": 359.0,
+          "marks": {
+            "api_ms": 303.2
+          }
+        },
+        {
+          "run": 5,
+          "ms": 339.5,
+          "ready_ms": 293,
+          "frames": 2,
+          "external_ms": 360.0,
+          "marks": {
+            "api_ms": 290.3
+          }
+        }
+      ]
+    },
+    {
+      "id": "P01.sort",
+      "scenario": "P01",
+      "label": "Sort by Stock, descending",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        348.0
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        352.5,
+        311.8,
+        353.2,
+        311.6,
+        322.0
+      ],
+      "min_ms": 311.6,
+      "median_ms": 322.0,
+      "max_ms": 353.2,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 348,
+          "ready_ms": 288.5,
+          "frames": 2,
+          "external_ms": 359.0,
+          "marks": {
+            "api_ms": 286.3
+          }
+        },
+        {
+          "run": 1,
+          "ms": 352.5,
+          "ready_ms": 343.1,
+          "frames": 2,
+          "external_ms": 359.0,
+          "marks": {
+            "api_ms": 306.1
+          }
+        },
+        {
+          "run": 2,
+          "ms": 311.8,
+          "ready_ms": 266.6,
+          "frames": 2,
+          "external_ms": 313.0,
+          "marks": {
+            "api_ms": 264.7
+          }
+        },
+        {
+          "run": 3,
+          "ms": 353.2,
+          "ready_ms": 311.2,
+          "frames": 2,
+          "external_ms": 359.0,
+          "marks": {
+            "api_ms": 309.1
+          }
+        },
+        {
+          "run": 4,
+          "ms": 311.6,
+          "ready_ms": 268.5,
+          "frames": 2,
+          "external_ms": 312.0,
+          "marks": {
+            "api_ms": 266.6
+          }
+        },
+        {
+          "run": 5,
+          "ms": 322,
+          "ready_ms": 280,
+          "frames": 2,
+          "external_ms": 328.0,
+          "marks": {
+            "api_ms": 276.7
+          }
+        }
+      ]
+    },
+    {
+      "id": "P01.next_page",
+      "scenario": "P01",
+      "label": "Next 100-row catalog page",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        144.0
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        161.4,
+        146.7,
+        144.3,
+        146.1,
+        139.8
+      ],
+      "min_ms": 139.8,
+      "median_ms": 146.1,
+      "max_ms": 161.4,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 144,
+          "ready_ms": 24.2,
+          "frames": 2,
+          "external_ms": 156.0
+        },
+        {
+          "run": 1,
+          "ms": 161.4,
+          "ready_ms": 23.8,
+          "frames": 2,
+          "external_ms": 172.0
+        },
+        {
+          "run": 2,
+          "ms": 146.7,
+          "ready_ms": 24,
+          "frames": 2,
+          "external_ms": 156.0
+        },
+        {
+          "run": 3,
+          "ms": 144.3,
+          "ready_ms": 22.2,
+          "frames": 2,
+          "external_ms": 156.0
+        },
+        {
+          "run": 4,
+          "ms": 146.1,
+          "ready_ms": 29.1,
+          "frames": 2,
+          "external_ms": 156.0
+        },
+        {
+          "run": 5,
+          "ms": 139.8,
+          "ready_ms": 21.5,
+          "frames": 2,
+          "external_ms": 156.0
+        }
+      ]
+    },
+    {
+      "id": "P02.open",
+      "scenario": "P02",
+      "label": "Open History",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        409.8
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        449.4,
+        438.7,
+        432.6,
+        427.8,
+        436.1
+      ],
+      "min_ms": 427.8,
+      "median_ms": 436.1,
+      "max_ms": 449.4,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 409.8,
+          "ready_ms": 369.5,
+          "frames": 2,
+          "external_ms": 422.0,
+          "marks": {
+            "api_ms": 349.9
+          }
+        },
+        {
+          "run": 1,
+          "ms": 449.4,
+          "ready_ms": 348.4,
+          "frames": 2,
+          "external_ms": 453.0,
+          "marks": {
+            "api_ms": 330.3
+          }
+        },
+        {
+          "run": 2,
+          "ms": 438.7,
+          "ready_ms": 340.2,
+          "frames": 2,
+          "external_ms": 453.0,
+          "marks": {
+            "api_ms": 319.5
+          }
+        },
+        {
+          "run": 3,
+          "ms": 432.6,
+          "ready_ms": 352.3,
+          "frames": 2,
+          "external_ms": 453.0,
+          "marks": {
+            "api_ms": 327.7
+          }
+        },
+        {
+          "run": 4,
+          "ms": 427.8,
+          "ready_ms": 321.7,
+          "frames": 2,
+          "external_ms": 438.0,
+          "marks": {
+            "api_ms": 305.1
+          }
+        },
+        {
+          "run": 5,
+          "ms": 436.1,
+          "ready_ms": 356.4,
+          "frames": 2,
+          "external_ms": 454.0,
+          "marks": {
+            "api_ms": 339
+          }
+        }
+      ]
+    },
+    {
+      "id": "P02.search",
+      "scenario": "P02",
+      "label": "Search PERF-RECEIPT-050000",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        650.4
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        638.8,
+        681.4,
+        632.5,
+        645.3,
+        660.5
+      ],
+      "min_ms": 632.5,
+      "median_ms": 645.3,
+      "max_ms": 681.4,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 650.4,
+          "ready_ms": 499.1,
+          "frames": 2,
+          "external_ms": 657.0,
+          "marks": {
+            "api_ms": 494.3
+          }
+        },
+        {
+          "run": 1,
+          "ms": 638.8,
+          "ready_ms": 500.9,
+          "frames": 2,
+          "external_ms": 640.0,
+          "marks": {
+            "api_ms": 496.5
+          }
+        },
+        {
+          "run": 2,
+          "ms": 681.4,
+          "ready_ms": 541.1,
+          "frames": 2,
+          "external_ms": 687.0,
+          "marks": {
+            "api_ms": 536.6
+          }
+        },
+        {
+          "run": 3,
+          "ms": 632.5,
+          "ready_ms": 491.1,
+          "frames": 2,
+          "external_ms": 625.0,
+          "marks": {
+            "api_ms": 486.2
+          }
+        },
+        {
+          "run": 4,
+          "ms": 645.3,
+          "ready_ms": 494.4,
+          "frames": 2,
+          "external_ms": 640.0,
+          "marks": {
+            "api_ms": 489.7
+          }
+        },
+        {
+          "run": 5,
+          "ms": 660.5,
+          "ready_ms": 512.9,
+          "frames": 2,
+          "external_ms": 671.0,
+          "marks": {
+            "api_ms": 508.1
+          }
+        }
+      ]
+    },
+    {
+      "id": "P02.open_record",
+      "scenario": "P02",
+      "label": "Open the exact History record",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        417.2
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        811.9,
+        411.4,
+        812.1,
+        419.4,
+        40.8
+      ],
+      "min_ms": 40.8,
+      "median_ms": 419.4,
+      "max_ms": 812.1,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 417.2,
+          "ready_ms": 16.9,
+          "frames": 2,
+          "external_ms": 421.0,
+          "marks": {
+            "api_ms": 13.5
+          }
+        },
+        {
+          "run": 1,
+          "ms": 811.9,
+          "ready_ms": 14.1,
+          "frames": 2,
+          "external_ms": 829.0,
+          "marks": {
+            "api_ms": 10.8
+          }
+        },
+        {
+          "run": 2,
+          "ms": 411.4,
+          "ready_ms": 15,
+          "frames": 2,
+          "external_ms": 422.0,
+          "marks": {
+            "api_ms": 12.6
+          }
+        },
+        {
+          "run": 3,
+          "ms": 812.1,
+          "ready_ms": 14.4,
+          "frames": 2,
+          "external_ms": 829.0,
+          "marks": {
+            "api_ms": 11.6
+          }
+        },
+        {
+          "run": 4,
+          "ms": 419.4,
+          "ready_ms": 14.8,
+          "frames": 2,
+          "external_ms": 422.0,
+          "marks": {
+            "api_ms": 12.6
+          }
+        },
+        {
+          "run": 5,
+          "ms": 40.8,
+          "ready_ms": 24.2,
+          "frames": 2,
+          "external_ms": 47.0,
+          "marks": {
+            "api_ms": 19.2
+          }
+        }
+      ]
+    },
+    {
+      "id": "P02.clear",
+      "scenario": "P02",
+      "label": "Clear History filters",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        542.8
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        149.0,
+        402.9,
+        146.5,
+        402.3,
+        813.5
+      ],
+      "min_ms": 146.5,
+      "median_ms": 402.3,
+      "max_ms": 813.5,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 542.8,
+          "ready_ms": 103.1,
+          "frames": 2,
+          "external_ms": 547.0,
+          "marks": {
+            "api_ms": 86.2
+          }
+        },
+        {
+          "run": 1,
+          "ms": 149,
+          "ready_ms": 101.8,
+          "frames": 2,
+          "external_ms": 156.0,
+          "marks": {
+            "api_ms": 85
+          }
+        },
+        {
+          "run": 2,
+          "ms": 402.9,
+          "ready_ms": 99.9,
+          "frames": 2,
+          "external_ms": 406.0,
+          "marks": {
+            "api_ms": 83.6
+          }
+        },
+        {
+          "run": 3,
+          "ms": 146.5,
+          "ready_ms": 104.5,
+          "frames": 2,
+          "external_ms": 156.0,
+          "marks": {
+            "api_ms": 87.6
+          }
+        },
+        {
+          "run": 4,
+          "ms": 402.3,
+          "ready_ms": 112.6,
+          "frames": 2,
+          "external_ms": 406.0,
+          "marks": {
+            "api_ms": 95.8
+          }
+        },
+        {
+          "run": 5,
+          "ms": 813.5,
+          "ready_ms": 116.2,
+          "frames": 2,
+          "external_ms": 812.0,
+          "marks": {
+            "api_ms": 94.9
+          }
+        }
+      ]
+    },
+    {
+      "id": "P02.next_page",
+      "scenario": "P02",
+      "label": "Next 50-row page",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        156.7
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        144.9,
+        271.4,
+        150.2,
+        142.3,
+        267.0
+      ],
+      "min_ms": 142.3,
+      "median_ms": 150.2,
+      "max_ms": 271.4,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 156.7,
+          "ready_ms": 120.9,
+          "frames": 2,
+          "external_ms": 172.0,
+          "marks": {
+            "api_ms": 106.8
+          }
+        },
+        {
+          "run": 1,
+          "ms": 144.9,
+          "ready_ms": 110,
+          "frames": 2,
+          "external_ms": 156.0,
+          "marks": {
+            "api_ms": 96.1
+          }
+        },
+        {
+          "run": 2,
+          "ms": 271.4,
+          "ready_ms": 111.5,
+          "frames": 2,
+          "external_ms": 281.0,
+          "marks": {
+            "api_ms": 93.3
+          }
+        },
+        {
+          "run": 3,
+          "ms": 150.2,
+          "ready_ms": 111.5,
+          "frames": 2,
+          "external_ms": 172.0,
+          "marks": {
+            "api_ms": 93.6
+          }
+        },
+        {
+          "run": 4,
+          "ms": 142.3,
+          "ready_ms": 99.2,
+          "frames": 2,
+          "external_ms": 156.0,
+          "marks": {
+            "api_ms": 85
+          }
+        },
+        {
+          "run": 5,
+          "ms": 267,
+          "ready_ms": 115,
+          "frames": 2,
+          "external_ms": 266.0,
+          "marks": {
+            "api_ms": 96
+          }
+        }
+      ]
+    },
+    {
+      "id": "P02.type_filter",
+      "scenario": "P02",
+      "label": "Filter by transaction type",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        173.8
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        286.8,
+        145.5,
+        133.2,
+        262.2,
+        144.9
+      ],
+      "min_ms": 133.2,
+      "median_ms": 145.5,
+      "max_ms": 286.8,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 173.8,
+          "ready_ms": 125.3,
+          "frames": 2,
+          "external_ms": 172.0,
+          "marks": {
+            "api_ms": 103.9
+          }
+        },
+        {
+          "run": 1,
+          "ms": 286.8,
+          "ready_ms": 113.6,
+          "frames": 2,
+          "external_ms": 281.0,
+          "marks": {
+            "api_ms": 99.5
+          }
+        },
+        {
+          "run": 2,
+          "ms": 145.5,
+          "ready_ms": 117.4,
+          "frames": 2,
+          "external_ms": 141.0,
+          "marks": {
+            "api_ms": 100.4
+          }
+        },
+        {
+          "run": 3,
+          "ms": 133.2,
+          "ready_ms": 99.3,
+          "frames": 2,
+          "external_ms": 140.0,
+          "marks": {
+            "api_ms": 85.8
+          }
+        },
+        {
+          "run": 4,
+          "ms": 262.2,
+          "ready_ms": 119.5,
+          "frames": 2,
+          "external_ms": 281.0,
+          "marks": {
+            "api_ms": 101.9
+          }
+        },
+        {
+          "run": 5,
+          "ms": 144.9,
+          "ready_ms": 114.6,
+          "frames": 2,
+          "external_ms": 156.0,
+          "marks": {
+            "api_ms": 101.2
+          }
+        }
+      ]
+    },
+    {
+      "id": "P03.open_ship",
+      "scenario": "P03",
+      "label": "Open Ship",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        810.4
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        998.2,
+        871.1,
+        886.8,
+        855.0,
+        839.9
+      ],
+      "min_ms": 839.9,
+      "median_ms": 871.1,
+      "max_ms": 998.2,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 810.4,
+          "ready_ms": 787.2,
+          "frames": 2,
+          "external_ms": 813.0,
+          "marks": {
+            "api_ms": 592.1
+          }
+        },
+        {
+          "run": 1,
+          "ms": 998.2,
+          "ready_ms": 968.4,
+          "frames": 2,
+          "external_ms": 1000.0,
+          "marks": {
+            "api_ms": 965.4
+          }
+        },
+        {
+          "run": 2,
+          "ms": 871.1,
+          "ready_ms": 849.1,
+          "frames": 2,
+          "external_ms": 875.0,
+          "marks": {
+            "api_ms": 844.4
+          }
+        },
+        {
+          "run": 3,
+          "ms": 886.8,
+          "ready_ms": 865.8,
+          "frames": 2,
+          "external_ms": 890.0,
+          "marks": {
+            "api_ms": 857.5
+          }
+        },
+        {
+          "run": 4,
+          "ms": 855,
+          "ready_ms": 840.7,
+          "frames": 2,
+          "external_ms": 859.0,
+          "marks": {
+            "api_ms": 837.5
+          }
+        },
+        {
+          "run": 5,
+          "ms": 839.9,
+          "ready_ms": 816.1,
+          "frames": 2,
+          "external_ms": 844.0,
+          "marks": {
+            "api_ms": 808.1
+          }
+        }
+      ]
+    },
+    {
+      "id": "P03.select_standard",
+      "scenario": "P03",
+      "label": "Select STANDARD for review",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        36.6
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        114.9,
+        108.2,
+        90.4,
+        111.8,
+        116.7
+      ],
+      "min_ms": 90.4,
+      "median_ms": 111.8,
+      "max_ms": 116.7,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 36.6,
+          "ready_ms": 32.2,
+          "frames": 2,
+          "external_ms": 47.0,
+          "marks": {
+            "api_ms": 26.1
+          }
+        },
+        {
+          "run": 1,
+          "ms": 114.9,
+          "ready_ms": 18.4,
+          "frames": 2,
+          "external_ms": 125.0,
+          "marks": {
+            "api_ms": 11.5
+          }
+        },
+        {
+          "run": 2,
+          "ms": 108.2,
+          "ready_ms": 17.4,
+          "frames": 2,
+          "external_ms": 125.0,
+          "marks": {
+            "api_ms": 12.8
+          }
+        },
+        {
+          "run": 3,
+          "ms": 90.4,
+          "ready_ms": 17,
+          "frames": 2,
+          "external_ms": 94.0,
+          "marks": {
+            "api_ms": 12.8
+          }
+        },
+        {
+          "run": 4,
+          "ms": 111.8,
+          "ready_ms": 16.5,
+          "frames": 2,
+          "external_ms": 125.0,
+          "marks": {
+            "api_ms": 12.3
+          }
+        },
+        {
+          "run": 5,
+          "ms": 116.7,
+          "ready_ms": 17.6,
+          "frames": 2,
+          "external_ms": 125.0,
+          "marks": {
+            "api_ms": 12
+          }
+        }
+      ]
+    },
+    {
+      "id": "P03.review_standard",
+      "scenario": "P03",
+      "label": "Review STANDARD lot A, quantity 2",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        422.2
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        401.4,
+        418.0,
+        504.9,
+        400.0,
+        434.5
+      ],
+      "min_ms": 400.0,
+      "median_ms": 418.0,
+      "max_ms": 504.9,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 422.2,
+          "ready_ms": 411.1,
+          "frames": 2,
+          "external_ms": 437.0,
+          "marks": {
+            "api_ms": 93.5
+          }
+        },
+        {
+          "run": 1,
+          "ms": 401.4,
+          "ready_ms": 396.9,
+          "frames": 2,
+          "external_ms": 407.0,
+          "marks": {
+            "api_ms": 81.3
+          }
+        },
+        {
+          "run": 2,
+          "ms": 418,
+          "ready_ms": 408.1,
+          "frames": 2,
+          "external_ms": 422.0,
+          "marks": {
+            "api_ms": 92.5
+          }
+        },
+        {
+          "run": 3,
+          "ms": 504.9,
+          "ready_ms": 493.9,
+          "frames": 2,
+          "external_ms": 515.0,
+          "marks": {
+            "api_ms": 208.4
+          }
+        },
+        {
+          "run": 4,
+          "ms": 400,
+          "ready_ms": 385.1,
+          "frames": 2,
+          "external_ms": 407.0,
+          "marks": {
+            "api_ms": 79.5
+          }
+        },
+        {
+          "run": 5,
+          "ms": 434.5,
+          "ready_ms": 424.9,
+          "frames": 2,
+          "external_ms": 437.0,
+          "marks": {
+            "api_ms": 81.2
+          }
+        }
+      ]
+    },
+    {
+      "id": "P03.select_kit",
+      "scenario": "P03",
+      "label": "Select KIT for review",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        531.1
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        398.3,
+        503.0,
+        507.6,
+        275.1,
+        472.9
+      ],
+      "min_ms": 275.1,
+      "median_ms": 472.9,
+      "max_ms": 507.6,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 531.1,
+          "ready_ms": 95.1,
+          "frames": 2,
+          "external_ms": 532.0,
+          "marks": {
+            "api_ms": 90.5
+          }
+        },
+        {
+          "run": 1,
+          "ms": 398.3,
+          "ready_ms": 17.4,
+          "frames": 2,
+          "external_ms": 407.0,
+          "marks": {
+            "api_ms": 12.7
+          }
+        },
+        {
+          "run": 2,
+          "ms": 503,
+          "ready_ms": 95,
+          "frames": 2,
+          "external_ms": 516.0,
+          "marks": {
+            "api_ms": 89.9
+          }
+        },
+        {
+          "run": 3,
+          "ms": 507.6,
+          "ready_ms": 114.6,
+          "frames": 2,
+          "external_ms": 516.0,
+          "marks": {
+            "api_ms": 108.8
+          }
+        },
+        {
+          "run": 4,
+          "ms": 275.1,
+          "ready_ms": 16.6,
+          "frames": 2,
+          "external_ms": 281.0,
+          "marks": {
+            "api_ms": 11.5
+          }
+        },
+        {
+          "run": 5,
+          "ms": 472.9,
+          "ready_ms": 97.5,
+          "frames": 2,
+          "external_ms": 485.0,
+          "marks": {
+            "api_ms": 93
+          }
+        }
+      ]
+    },
+    {
+      "id": "P03.review_kit",
+      "scenario": "P03",
+      "label": "Review KIT BOM shipment, quantity 2",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        417.9
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        422.2,
+        431.0,
+        438.6,
+        447.5,
+        421.0
+      ],
+      "min_ms": 421.0,
+      "median_ms": 431.0,
+      "max_ms": 447.5,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 417.9,
+          "ready_ms": 401.6,
+          "frames": 2,
+          "external_ms": 438.0,
+          "marks": {
+            "api_ms": 91.2
+          }
+        },
+        {
+          "run": 1,
+          "ms": 422.2,
+          "ready_ms": 394.7,
+          "frames": 2,
+          "external_ms": 437.0,
+          "marks": {
+            "api_ms": 80.6
+          }
+        },
+        {
+          "run": 2,
+          "ms": 431,
+          "ready_ms": 404.5,
+          "frames": 2,
+          "external_ms": 437.0,
+          "marks": {
+            "api_ms": 84.1
+          }
+        },
+        {
+          "run": 3,
+          "ms": 438.6,
+          "ready_ms": 414.1,
+          "frames": 2,
+          "external_ms": 453.0,
+          "marks": {
+            "api_ms": 83.4
+          }
+        },
+        {
+          "run": 4,
+          "ms": 447.5,
+          "ready_ms": 421.8,
+          "frames": 2,
+          "external_ms": 453.0,
+          "marks": {
+            "api_ms": 85.1
+          }
+        },
+        {
+          "run": 5,
+          "ms": 421,
+          "ready_ms": 396.4,
+          "frames": 2,
+          "external_ms": 422.0,
+          "marks": {
+            "api_ms": 81.4
+          }
+        }
+      ]
+    },
+    {
+      "id": "P03.select_root",
+      "scenario": "P03",
+      "label": "Select PERF-ROOT for review",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        330.1
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        696.0,
+        338.9,
+        691.5,
+        675.3,
+        673.6
+      ],
+      "min_ms": 338.9,
+      "median_ms": 675.3,
+      "max_ms": 696.0,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 330.1,
+          "ready_ms": 96.3,
+          "frames": 2,
+          "external_ms": 343.0,
+          "marks": {
+            "api_ms": 11.4
+          }
+        },
+        {
+          "run": 1,
+          "ms": 696,
+          "ready_ms": 93,
+          "frames": 2,
+          "external_ms": 703.0,
+          "marks": {
+            "api_ms": 10.1
+          }
+        },
+        {
+          "run": 2,
+          "ms": 338.9,
+          "ready_ms": 102.4,
+          "frames": 2,
+          "external_ms": 343.0,
+          "marks": {
+            "api_ms": 10.5
+          }
+        },
+        {
+          "run": 3,
+          "ms": 691.5,
+          "ready_ms": 98,
+          "frames": 2,
+          "external_ms": 703.0,
+          "marks": {
+            "api_ms": 9.7
+          }
+        },
+        {
+          "run": 4,
+          "ms": 675.3,
+          "ready_ms": 94.8,
+          "frames": 2,
+          "external_ms": 672.0,
+          "marks": {
+            "api_ms": 10.8
+          }
+        },
+        {
+          "run": 5,
+          "ms": 673.6,
+          "ready_ms": 99.2,
+          "frames": 2,
+          "external_ms": 687.0,
+          "marks": {
+            "api_ms": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "P03.review_root",
+      "scenario": "P03",
+      "label": "Review PERF-ROOT BOM shipment, quantity 1",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        991.7
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        981.9,
+        1024.9,
+        1037.9,
+        1030.7,
+        896.5
+      ],
+      "min_ms": 896.5,
+      "median_ms": 1024.9,
+      "max_ms": 1037.9,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 991.7,
+          "ready_ms": 986.2,
+          "frames": 2,
+          "external_ms": 1000.0,
+          "marks": {
+            "api_ms": 526.5
+          }
+        },
+        {
+          "run": 1,
+          "ms": 981.9,
+          "ready_ms": 977,
+          "frames": 2,
+          "external_ms": 1000.0,
+          "marks": {
+            "api_ms": 509.5
+          }
+        },
+        {
+          "run": 2,
+          "ms": 1024.9,
+          "ready_ms": 1020.2,
+          "frames": 2,
+          "external_ms": 1031.0,
+          "marks": {
+            "api_ms": 548.4
+          }
+        },
+        {
+          "run": 3,
+          "ms": 1037.9,
+          "ready_ms": 1025.1,
+          "frames": 2,
+          "external_ms": 1046.0,
+          "marks": {
+            "api_ms": 584
+          }
+        },
+        {
+          "run": 4,
+          "ms": 1030.7,
+          "ready_ms": 1019.7,
+          "frames": 2,
+          "external_ms": 1047.0,
+          "marks": {
+            "api_ms": 577.9
+          }
+        },
+        {
+          "run": 5,
+          "ms": 896.5,
+          "ready_ms": 891.3,
+          "frames": 2,
+          "external_ms": 891.0,
+          "marks": {
+            "api_ms": 451.9
+          }
+        }
+      ]
+    },
+    {
+      "id": "P04.explore",
+      "scenario": "P04",
+      "label": "PERF-ROOT explorer: 1,000 nodes laid out and usable",
+      "target_ms": 5000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        1110.4
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        936.7,
+        891.9,
+        908.1,
+        1049.4,
+        926.1
+      ],
+      "min_ms": 891.9,
+      "median_ms": 926.1,
+      "max_ms": 1049.4,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 1110.4,
+          "ready_ms": 853.8,
+          "frames": 2,
+          "external_ms": 1110.0,
+          "marks": {
+            "api_ms": 275.4,
+            "rendered": 813
+          }
+        },
+        {
+          "run": 1,
+          "ms": 936.7,
+          "ready_ms": 815.3,
+          "frames": 2,
+          "external_ms": 953.0,
+          "marks": {
+            "api_ms": 274.7,
+            "rendered": 775.5
+          }
+        },
+        {
+          "run": 2,
+          "ms": 891.9,
+          "ready_ms": 754.4,
+          "frames": 2,
+          "external_ms": 906.0,
+          "marks": {
+            "api_ms": 275.8,
+            "rendered": 721.9
+          }
+        },
+        {
+          "run": 3,
+          "ms": 908.1,
+          "ready_ms": 779.8,
+          "frames": 2,
+          "external_ms": 922.0,
+          "marks": {
+            "api_ms": 275.1,
+            "rendered": 742.8
+          }
+        },
+        {
+          "run": 4,
+          "ms": 1049.4,
+          "ready_ms": 793,
+          "frames": 2,
+          "external_ms": 1062.0,
+          "marks": {
+            "api_ms": 283.8,
+            "rendered": 755.3
+          }
+        },
+        {
+          "run": 5,
+          "ms": 926.1,
+          "ready_ms": 800.2,
+          "frames": 2,
+          "external_ms": 938.0,
+          "marks": {
+            "api_ms": 269.5,
+            "rendered": 762.1
+          }
+        }
+      ]
+    },
+    {
+      "id": "P04.zoom",
+      "scenario": "P04",
+      "label": "Zoom the 1,000-node graph",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        29.3
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        91.4,
+        133.0,
+        138.4,
+        29.4,
+        142.1
+      ],
+      "min_ms": 29.4,
+      "median_ms": 133.0,
+      "max_ms": 142.1,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 29.3,
+          "ready_ms": 0.6,
+          "frames": 2,
+          "external_ms": 31.0
+        },
+        {
+          "run": 1,
+          "ms": 91.4,
+          "ready_ms": 0.6,
+          "frames": 2,
+          "external_ms": 110.0
+        },
+        {
+          "run": 2,
+          "ms": 133,
+          "ready_ms": 0.5,
+          "frames": 2,
+          "external_ms": 140.0
+        },
+        {
+          "run": 3,
+          "ms": 138.4,
+          "ready_ms": 0.5,
+          "frames": 2,
+          "external_ms": 156.0
+        },
+        {
+          "run": 4,
+          "ms": 29.4,
+          "ready_ms": 0.5,
+          "frames": 2,
+          "external_ms": 47.0
+        },
+        {
+          "run": 5,
+          "ms": 142.1,
+          "ready_ms": 0.4,
+          "frames": 2,
+          "external_ms": 141.0
+        }
+      ]
+    },
+    {
+      "id": "P04.pan",
+      "scenario": "P04",
+      "label": "Pan the 1,000-node graph",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        46.7
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        49.8,
+        43.1,
+        45.5,
+        41.8,
+        48.3
+      ],
+      "min_ms": 41.8,
+      "median_ms": 45.5,
+      "max_ms": 49.8,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 46.7,
+          "ready_ms": 2.5,
+          "frames": 2,
+          "external_ms": 63.0
+        },
+        {
+          "run": 1,
+          "ms": 49.8,
+          "ready_ms": 1.8,
+          "frames": 2,
+          "external_ms": 46.0
+        },
+        {
+          "run": 2,
+          "ms": 43.1,
+          "ready_ms": 1.6,
+          "frames": 2,
+          "external_ms": 47.0
+        },
+        {
+          "run": 3,
+          "ms": 45.5,
+          "ready_ms": 1.8,
+          "frames": 2,
+          "external_ms": 47.0
+        },
+        {
+          "run": 4,
+          "ms": 41.8,
+          "ready_ms": 1.6,
+          "frames": 2,
+          "external_ms": 31.0
+        },
+        {
+          "run": 5,
+          "ms": 48.3,
+          "ready_ms": 1.6,
+          "frames": 2,
+          "external_ms": 47.0
+        }
+      ]
+    },
+    {
+      "id": "P04.fit",
+      "scenario": "P04",
+      "label": "Fit the 1,000-node graph",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        41.0
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        46.7,
+        46.5,
+        43.8,
+        42.7,
+        45.9
+      ],
+      "min_ms": 42.7,
+      "median_ms": 45.9,
+      "max_ms": 46.7,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 41,
+          "ready_ms": 0.8,
+          "frames": 2,
+          "external_ms": 31.0
+        },
+        {
+          "run": 1,
+          "ms": 46.7,
+          "ready_ms": 0.6,
+          "frames": 2,
+          "external_ms": 63.0
+        },
+        {
+          "run": 2,
+          "ms": 46.5,
+          "ready_ms": 0.4,
+          "frames": 2,
+          "external_ms": 47.0
+        },
+        {
+          "run": 3,
+          "ms": 43.8,
+          "ready_ms": 0.4,
+          "frames": 2,
+          "external_ms": 47.0
+        },
+        {
+          "run": 4,
+          "ms": 42.7,
+          "ready_ms": 0.4,
+          "frames": 2,
+          "external_ms": 47.0
+        },
+        {
+          "run": 5,
+          "ms": 45.9,
+          "ready_ms": 0.6,
+          "frames": 2,
+          "external_ms": 47.0
+        }
+      ]
+    },
+    {
+      "id": "P04.select",
+      "scenario": "P04",
+      "label": "Select a node in the 1,000-node graph",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        224.5
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        216.3,
+        222.5,
+        214.4,
+        223.3,
+        216.9
+      ],
+      "min_ms": 214.4,
+      "median_ms": 216.9,
+      "max_ms": 223.3,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 224.5,
+          "ready_ms": 11.3,
+          "frames": 2,
+          "external_ms": 250.0
+        },
+        {
+          "run": 1,
+          "ms": 216.3,
+          "ready_ms": 10.2,
+          "frames": 2,
+          "external_ms": 219.0
+        },
+        {
+          "run": 2,
+          "ms": 222.5,
+          "ready_ms": 10.9,
+          "frames": 2,
+          "external_ms": 234.0
+        },
+        {
+          "run": 3,
+          "ms": 214.4,
+          "ready_ms": 11.9,
+          "frames": 2,
+          "external_ms": 219.0
+        },
+        {
+          "run": 4,
+          "ms": 223.3,
+          "ready_ms": 10.8,
+          "frames": 2,
+          "external_ms": 250.0
+        },
+        {
+          "run": 5,
+          "ms": 216.9,
+          "ready_ms": 12.8,
+          "frames": 2,
+          "external_ms": 235.0
+        }
+      ]
+    },
+    {
+      "id": "P04.labels",
+      "scenario": "P04",
+      "label": "Zoom to 100% so every node's text is laid out",
+      "target_ms": 2000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        328.7
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        293.8,
+        312.7,
+        307.7,
+        299.4,
+        307.1
+      ],
+      "min_ms": 293.8,
+      "median_ms": 307.1,
+      "max_ms": 312.7,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 328.7,
+          "ready_ms": 72.3,
+          "frames": 2,
+          "external_ms": 328.0
+        },
+        {
+          "run": 1,
+          "ms": 293.8,
+          "ready_ms": 71.3,
+          "frames": 2,
+          "external_ms": 297.0
+        },
+        {
+          "run": 2,
+          "ms": 312.7,
+          "ready_ms": 73,
+          "frames": 2,
+          "external_ms": 313.0
+        },
+        {
+          "run": 3,
+          "ms": 307.7,
+          "ready_ms": 79.9,
+          "frames": 2,
+          "external_ms": 312.0
+        },
+        {
+          "run": 4,
+          "ms": 299.4,
+          "ready_ms": 70.4,
+          "frames": 2,
+          "external_ms": 297.0
+        },
+        {
+          "run": 5,
+          "ms": 307.1,
+          "ready_ms": 65.5,
+          "frames": 2,
+          "external_ms": 312.0
+        }
+      ]
+    },
+    {
+      "id": "P05.launch",
+      "scenario": "P05",
+      "label": "Launch to a usable dashboard",
+      "target_ms": 10000,
+      "status": "pass",
+      "reason": "",
+      "warmup_ms": [
+        1844.0
+      ],
+      "warmup_over_target": false,
+      "measured_ms": [
+        1859.0,
+        2000.0,
+        1906.0,
+        1812.0,
+        1891.0
+      ],
+      "min_ms": 1812.0,
+      "median_ms": 1891.0,
+      "max_ms": 2000.0,
+      "samples": [
+        {
+          "run": 0,
+          "ms": 1844.0,
+          "page_ms": 849.9,
+          "exit_code": 0,
+          "seconds": 2.0
+        },
+        {
+          "run": 1,
+          "ms": 1859.0,
+          "page_ms": 906.9,
+          "exit_code": 0,
+          "seconds": 2.0
+        },
+        {
+          "run": 2,
+          "ms": 2000.0,
+          "page_ms": 1023.1,
+          "exit_code": 0,
+          "seconds": 2.1
+        },
+        {
+          "run": 3,
+          "ms": 1906.0,
+          "page_ms": 940.9,
+          "exit_code": 0,
+          "seconds": 2.0
+        },
+        {
+          "run": 4,
+          "ms": 1812.0,
+          "page_ms": 890.7,
+          "exit_code": 0,
+          "seconds": 1.9
+        },
+        {
+          "run": 5,
+          "ms": 1891.0,
+          "page_ms": 907.5,
+          "exit_code": 0,
+          "seconds": 2.0
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "snapshots": {
+    "P03.review_standard": "Part\nSTANDARD\nLocation / lot\nStock / A\nReviewed lot impact\nBefore\n10\nShipping\n2\nLot remaining after shipment\n8\nTotal location stock\n16\nQuantity\n2\nRecipient\nPerformance customer\nOperator\nAcceptance operator\nCarrier\n\u2014\nTracking\n\u2014\nReference\n\u2014\n\nConfirmation creates a real shipment. Python rechecks available stock at submission.",
+    "P03.review_kit": "Part\nKIT\nLocation / lot\nStock / Automatic component lots\nReady to ship\nBOM build capacity at this location\n3\nAggregated leaf requirements\nMATERIAL\tREQUIRED\tAVAILABLE\tSHORTAGE\nLEAF\nAcceptance LEAF\t14\t21\t0\nLeaf lot allocations\nMATERIAL\tLOT / LOCATION\tCONSUME\tLOT STOCK\nLEAF\tB\nStock\t14\t21\n\nParent and intermediate assembly stock stays unchanged. Only these leaf lots are consumed.\n\nQuantity\n2\nRecipient\nPerformance customer\nOperator\nAcceptance operator\nCarrier\n\u2014\nTracking\n\u2014\nReference\n\u2014\n\nConfirmation creates a real shipment. Python rechecks available stock at submission.",
+    "P03.review_root": "Part\nPERF-ROOT\nLocation / lot\nStock / Automatic component lots\nReady to ship\nBOM build capacity at this location\n111\nAggregated leaf requirements\nMATERIAL\tREQUIRED\tAVAILABLE\tSHORTAGE\nPERF-00100\nPerformance PERF-00100\t1\t112\t0\nPERF-00101\nPerformance PERF-00101\t1\t112\t0\nPERF-00102\nPerformance PERF-00102\t1\t112\t0\nPERF-00103\nPerformance PERF-00103\t1\t112\t0\nPERF-00104\nPerformance PERF-00104\t1\t112\t0\nPERF-00105\nPerformance PERF-00105\t1\t112\t0\nPERF-00106\nPerformance PERF-00106\t1\t112\t0\nPERF-00107\nPerformance PERF-00107\t1\t112\t0\nPERF-00108\nPerformance PERF-00108\t1\t112\t0\nPERF-00109\nPerformance PERF-00109\t1\t112\t0\nPERF-00110\nPerformance PERF-00110\t1\t112\t0\nPERF-00111\nPerformance PERF-00111\t1\t112\t0\nPERF-00112\nPerformance PERF-00112\t1\t112\t0\nPERF-00113\nPerformance PERF-00113\t1\t112\t0\nPERF-00114\nPerformance PERF-00114\t1\t112\t0\nPERF-00115\nPerformance PERF-00115\t1\t112\t0\nPERF-00116\nPerformance PERF-00116\t1\t112\t0\nPERF-00117\nPerformance PERF-00117\t1\t112\t0\nPERF-00118\nPerformance PERF-00118\t1\t112\t0\nPERF-00119\nPerformance PERF-00119\t1\t112\t0\nPERF-00120\nPerformance PERF-00120\t1\t112\t0\nPERF-00121\nPerformance PERF-00121\t1\t112\t0\nPERF-00122\nPerformance PERF-00122\t1\t112\t0\nPERF-00123\nPerformance PERF-00123\t1\t112\t0\nPERF-00124\nPerformance PERF-00124\t1\t112\t0\nPERF-00125\nPerformance PERF-00125\t1\t112\t0\nPERF-00126\nPerformance PERF-00126\t1\t112\t0\nPERF-00127\nPerformance PERF-00127\t1\t112\t0\nPERF-00128\nPerformance PERF-00128\t1\t112\t0\nPERF-00129\nPerformance PERF-00129\t1\t112\t0\nPERF-00130\nPerformance PERF-00130\t1\t112\t0\nPERF-00131\nPerformance PERF-00131\t1\t112\t0\nPERF-00132\nPerformance PERF-00132\t1\t112\t0\nPERF-00133\nPerformance PERF-00133\t1\t112\t0\nPERF-00134\nPerformance PERF-00134\t1\t112\t0\nPERF-00135\nPerformance PERF-00135\t1\t112\t0\nPERF-00136\nPerformance PERF-00136\t1\t112\t0\nPERF-00137\nPerformance PERF-00137\t1\t112\t0\nPERF-00138\nPerformance PERF-00138\t1\t112\t0\nPERF-00139\nPerformance PERF-00139\t1\t112\t0\nPERF-00140\nPerformance PERF-00140\t1\t112\t0\nPERF-00141\nPerformance PERF-00141\t1\t112\t0\nPERF-00142\nPerformance PERF-00142\t1\t112\t0\nPERF-00143\n"
+  }
+}
