@@ -152,8 +152,26 @@ def check_navigation(window: Any, wait: Any) -> dict[str, Any]:
         "document.querySelector('#create-dialog').open && !document.querySelector('#parts').hidden",
         "shortcuts are ignored while a dialog is open",
     )
-    run("document.querySelector('#close-create').click()")
-    wait("!document.querySelector('#create-dialog').open")
+    # Hold the queued close event until after shortcut navigation. A late
+    # focus-restoration handler must not steal focus from the destination.
+    run("""
+        window.smokeCreateClosed = false;
+        document.querySelector('#create-dialog').addEventListener('close', event => {
+            event.stopImmediatePropagation();
+            window.smokeCreateClosed = true;
+        }, {capture: true, once: true});
+        document.querySelector('#close-create').click();
+    """)
+    wait("window.smokeCreateClosed && !document.querySelector('#create-dialog').open")
+    key(Qt.Key.Key_1, control)
+    wait("!document.querySelector('#dashboard').hidden")
+    key(Qt.Key.Key_2, control)
+    wait("!document.querySelector('#parts').hidden && document.activeElement.id === 'query'")
+    run("document.querySelector('#create-dialog').dispatchEvent(new Event('close'))")
+    require(
+        "document.activeElement.id === 'query'",
+        "late create-dialog close preserves shortcut focus",
+    )
 
     # Contextual Move keeps the catalog filters, sort and selection for the return trip.
     run("""

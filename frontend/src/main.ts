@@ -118,6 +118,8 @@ function notice(text: string, error = false) {
   $('#notice').className = error ? 'alert error' : 'alert success';
 }
 function navigate(next: Page, refresh = true): Promise<unknown> {
+  // A queued dialog close must not restore focus after navigation has moved it.
+  createReturnFocus = null;
   if (page === 'history' && page !== next) history.leave();
   if (page === 'bom-explore' && page !== next) bomExplore.leave();
   if (page === 'bom' && page !== next) bom.leave();
