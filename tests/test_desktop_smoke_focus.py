@@ -1,8 +1,12 @@
-"""The export keyboard check sends one Shift+Tab and still fails when it has no effect."""
+"""Native keyboard probes use current layout and reject ineffective keys without retries."""
 
 import pytest
+from PySide6.QtCore import Qt
 
-from inventory_control.desktop_smoke_ui import shift_tab_to_previous_export
+from inventory_control.desktop_smoke_ui import (
+    check_graph_keyboard_view,
+    shift_tab_to_previous_export,
+)
 
 
 class Page:
@@ -42,3 +46,45 @@ def test_a_delivered_but_ineffective_key_is_not_retried_and_fails():
     with pytest.raises(RuntimeError, match="timed out"):
         shift_tab_to_previous_export(page.key, page.wait, page.run)
     assert page.keys == 1
+
+
+class GraphPage:
+    """A graph with an initial transform left over from a previous viewport size."""
+
+    def __init__(self, ineffective=None):
+        self.transform = "old fit"
+        self.baseline = None
+        self.ineffective = ineffective
+        self.keys = []
+
+    def run(self, script):
+        if "[data-bomx=fit]" in script:
+            self.transform = "current fit"
+        if "window.smokeGraphFit=" in script:
+            self.baseline = self.transform
+
+    def wait(self, condition):
+        if "getAttribute('transform') === smokeGraphFit" in condition:
+            assert self.transform == self.baseline
+        elif "getAttribute('transform') !== smokeGraphFit" in condition:
+            assert self.transform != self.baseline
+
+    def key(self, code):
+        self.keys.append(code)
+        if code == self.ineffective:
+            return
+        self.transform = "current fit" if code == Qt.Key.Key_0 else "changed"
+
+
+def test_graph_keyboard_fit_uses_the_current_viewport_not_the_initial_transform():
+    page = GraphPage()
+    check_graph_keyboard_view(page.key, page.wait, page.run)
+    assert page.keys == [Qt.Key.Key_Right, Qt.Key.Key_0, Qt.Key.Key_Plus, Qt.Key.Key_0]
+
+
+@pytest.mark.parametrize("ineffective", [Qt.Key.Key_Right, Qt.Key.Key_Plus, Qt.Key.Key_0])
+def test_graph_keyboard_probe_rejects_an_ineffective_key(ineffective):
+    page = GraphPage(ineffective)
+    with pytest.raises(AssertionError):
+        check_graph_keyboard_view(page.key, page.wait, page.run)
+    assert page.keys.count(ineffective) == 1

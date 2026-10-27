@@ -69,6 +69,28 @@ def shift_tab_to_previous_export(press: Any, wait: Any, run: Any) -> None:
     wait("document.activeElement.dataset.exportKind === 'parts'")
 
 
+def check_graph_keyboard_view(key: Any, wait: Any, run: Any) -> None:
+    """Require native pan, zoom and Fit to agree with the visible Fit control."""
+    # The initial render can precede the native resize and ResizeObserver delivery.
+    # Establish the reference at the current size, rather than recording that old fit.
+    run(
+        "window.smokeGraphPainted=false; requestAnimationFrame(() => requestAnimationFrame(() => { window.smokeGraphPainted=true; }));"
+    )
+    wait("window.smokeGraphPainted")
+    run(
+        "document.querySelector('[data-bomx=fit]').click(); document.querySelector('#bomx-viewport').focus()"
+    )
+    run("window.smokeGraphFit=document.querySelector('#bomx-canvas').getAttribute('transform')")
+    key(Qt.Key.Key_Right)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') !== smokeGraphFit")
+    key(Qt.Key.Key_0)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') === smokeGraphFit")
+    key(Qt.Key.Key_Plus)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') !== smokeGraphFit")
+    key(Qt.Key.Key_0)
+    wait("document.querySelector('#bomx-canvas').getAttribute('transform') === smokeGraphFit")
+
+
 def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
     import json
 
@@ -263,20 +285,12 @@ def check_ui(window: Any, wait: Any, captures: Path, bom_part: str) -> None:
     wait("document.querySelector('#bomx-canvas .bomx-node')")
     actions.run(activate)
     wait("document.hasFocus()")
-    run(
-        "window.smokeGraphFit=document.querySelector('#bomx-canvas').getAttribute('transform'); document.querySelector('#bomx-viewport').focus()"
-    )
+    run("document.querySelector('#bomx-viewport').focus()")
     require(
         "getComputedStyle(document.activeElement).outlineStyle !== 'none'",
         "graph viewport shows keyboard focus",
     )
-    key(Qt.Key.Key_Right)
-    wait("document.querySelector('#bomx-canvas').getAttribute('transform') !== smokeGraphFit")
-    key(Qt.Key.Key_0)
-    wait("document.querySelector('#bomx-canvas').getAttribute('transform') === smokeGraphFit")
-    key(Qt.Key.Key_Plus)
-    wait("document.querySelector('#bomx-canvas').getAttribute('transform') !== smokeGraphFit")
-    key(Qt.Key.Key_0)
+    check_graph_keyboard_view(key, wait, run)
     key(Qt.Key.Key_Tab)
     wait("document.activeElement.classList.contains('bomx-node')")
     require(
