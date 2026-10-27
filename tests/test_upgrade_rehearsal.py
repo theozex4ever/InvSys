@@ -987,6 +987,27 @@ def test_verify_backup_reports_a_file_that_cannot_be_read_without_a_traceback(
     assert "NOT VERIFIED" in capsys.readouterr().out
 
 
+def test_dropped_reports_an_inaccessible_path_without_a_traceback(
+    inventory, tmp_path, monkeypatch, capsys
+):
+    displaced = tmp_path / "inaccessible" / "inventory.db"
+    real_is_file = Path.is_file
+
+    def is_file(self):
+        if self == displaced.resolve():
+            raise PermissionError(13, "Permission denied", str(self))
+        return real_is_file(self)
+
+    monkeypatch.setattr(Path, "is_file", is_file)
+    displaced.parent.mkdir()
+    shutil_copy(inventory, displaced.parent)
+
+    code = rehearsal.main(["dropped", "--kept", str(inventory), "--displaced", str(displaced)])
+
+    assert code == 1
+    assert "Permission denied" in capsys.readouterr().err
+
+
 def shutil_copy(source: Path, destination: Path) -> None:
     import shutil
 

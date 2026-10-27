@@ -1140,9 +1140,6 @@ def report_backup(path: Path) -> int:
 
 
 def report_dropped(kept: Path, displaced: Path) -> int:
-    for path in (kept, displaced):
-        if not path.is_file():
-            raise RehearsalError(f"{path} is not a file.")
     dropped = dropped_entries(readable_snapshot(kept), readable_snapshot(displaced))
     print(
         f"{dropped['ledger_entries']} ledger entries and {len(dropped['shipments'])} shipments "
