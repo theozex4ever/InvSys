@@ -37,8 +37,9 @@ A backup is only a recovery path once it has been checked. Use any of these on a
 **copy** or on the backup itself (they never change it):
 
 - With a checkout of this repository and Python 3.12:
-  `python scripts/upgrade_rehearsal.py verify-backup <backup file>`. It reopens the file
-  read-only, checks SQLite integrity, the required tables and foreign keys, and that
+  `python scripts/upgrade_rehearsal.py verify-backup <backup file>`. It inspects a
+  scratch copy of the file (with any `-wal`/`-shm` beside it), so the backup is never
+  changed, checks SQLite integrity, the required tables and foreign keys, and that
   every balance and shipment agrees with the ledger. It prints `verified` with the Part,
   Lot, ledger and shipment counts (compare them with the dashboard) and exits 0, or lists
   the problems and exits 1. This is the check for a backup made by the original

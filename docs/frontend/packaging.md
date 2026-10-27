@@ -587,9 +587,11 @@ with the `filelock`/`setuptools` bumps). GitHub tested the clean integration mer
 head's; that merge is the source commit in each bundle manifest. Linux and macOS are the
 first attempt of their jobs; **Windows is attempt 2** (attempt 1 failed in the existing
 package smoke, see the run history). The records are unmodified from the
-`package-evidence-*` artifacts, and were produced by the current
-`scripts/upgrade_rehearsal.py`; the evidence-retention commit that adds them changes
-documentation and evidence files only, and its own CI run must be checked on the PR.
+`package-evidence-*` artifacts, and were produced by `scripts/upgrade_rehearsal.py` at that
+head; the evidence-retention commit that adds them changes documentation and evidence
+files only, and its own CI run must be checked on the PR. A later commit makes the
+`verify-backup` and `dropped` structure check read a crashed database together with its
+WAL; the `rehearse` run recorded here never calls that check, so these records stand.
 
 | Environment | Record | Bundle | Result |
 | --- | --- | --- | --- |
