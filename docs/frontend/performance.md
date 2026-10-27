@@ -40,7 +40,7 @@ disposable `--database`).
   is on screen **and two animation frames have been produced after it**, timed in the
   page with `performance.now()`. Frames are required, not optional: a renderer that
   produces fewer than two by the step's 30 s deadline fails the step (a stalled window
-  can no longer return a quick "success"), each sample records `frames: 2`, and the
+  can no longer return a quick "success"), each workflow sample records `frames: 2`, and the
   helpers are tested with a stalled `requestAnimationFrame`. Waiting conditions include
   the content (row counts and the footer total against SQLite read directly, the exact
   record, the Python review's allocations, 1,000 laid-out nodes and 900 Leaf rows, an
@@ -154,7 +154,8 @@ decision, not an incidental performance patch.
 Recorded 2026-10-26 by `scripts/package_perf.py` on the frozen bundles, with the probe as
 described above (two painted frames required, the whole review plan compared with SQLite,
 protected tables hashed before and after). Every record has `result: passed`, 29 steps,
-five measured repeats each, `frames: 2` in every sample, no probe error, no missing step
+five measured repeats each, `frames: 2` in every P01–P04 sample (the P05 launch is timed from
+process spawn to the marker the probe prints after the same two-frame wait), no probe error, no missing step
 and no warm-up over its limit. The unmodified JSON records and their
 [checksums](evidence/performance-2026-10-26.SHA256SUMS) are in `evidence/`:
 [Linux hosted](evidence/performance-linux-hosted-2026-10-26.json),
@@ -249,6 +250,8 @@ Not established:
   `ubuntu-24.04`, `windows-2025` and `macos-15` runners plus this local Linux
   machine; none is a physical Windows or macOS workstation, none has a GPU, and
   hosted runners are shared VMs.
+* Animated transitions: every record's `probe_environment` has `reduced_motion: true`, so
+  drawer and dialog animations were not part of the timings.
 * Cold-cache launch, other displays or scaling, battery power, antivirus on
   Windows, Intel Macs, other Linux distributions or Windows 10/11 desktop editions.
 * Catalogs or histories larger than the frozen fixture, or BOMs that are deeper than
