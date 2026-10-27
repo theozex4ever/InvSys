@@ -79,9 +79,23 @@ def _launch() -> int:
         action="store_true",
         help="Exercise real desktop reads/writes and exit; requires a disposable --database",
     )
+    parser.add_argument(
+        "--perf-check",
+        choices=("launch", "workflow"),
+        help="Measure the performance envelope on a disposable large fixture and exit",
+    )
+    parser.add_argument(
+        "--perf-output",
+        type=Path,
+        help="Where --perf-check writes its JSON measurements",
+    )
     args = parser.parse_args()
     if args.smoke_check and args.database is None:
         parser.error("--smoke-check requires an explicit disposable --database.")
+    if args.perf_check and (args.database is None or args.perf_output is None or args.smoke_check):
+        parser.error(
+            "--perf-check needs a disposable --database and --perf-output, not --smoke-check."
+        )
     if getattr(sys, "frozen", False) and args.database is None:
         parser.error(
             "Packaged launch requires --database to choose the intended inventory file explicitly."
@@ -155,6 +169,16 @@ def _launch() -> int:
             if server is not None:
                 print("Desktop smoke failed: an HTTP server was started.", file=sys.stderr)
                 return 1
+        elif args.perf_check:
+            from inventory_control import desktop_perf
+
+            probe = desktop_perf.PerfProbe(args.perf_check, args.perf_output, database)
+            webview.start(probe.run, (window,), gui="qt", http_server=False)
+            if probe.error:
+                print(f"Performance probe failed: {probe.error}", file=sys.stderr)
+                return 1
+            store.engine.dispose()
+            desktop_perf.finish_in_process()  # pragma: no cover - the native probe only
         else:
             webview.start(gui="qt", http_server=False)
     finally:

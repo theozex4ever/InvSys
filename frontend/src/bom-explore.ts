@@ -9,6 +9,8 @@ interface View { x: number; y: number; k: number }
 
 const NODE_W = 236, NODE_H = 112, COL_GAP = 96, ROW_GAP = 20, MARGIN = 32;
 const MIN_ZOOM = 0.02, MAX_ZOOM = 3, PAN_STEP = 64;
+// Below this scale node text is unreadable; not laying it out keeps a 1,000-node graph responsive.
+const TEXT_ZOOM = 0.25;
 const LEVELS: Record<CapacityLevel, { label: string; glyph: string }> = {
   critical: { label: 'Critical', glyph: '▲' },
   low: { label: 'Low', glyph: '◆' },
@@ -137,7 +139,7 @@ export function bomExploreWorkflow(getAPI: () => API, openHistory: (partNumber: 
     fitted = true;
     const leaves = data.requirements.length;
     $('#bomx-result').innerHTML = `${summary}<div class="bomx-layout"><div class="panel"><div class="panel-head"><h2>Structure</h2><div class="bomx-tools" role="group" aria-label="Graph view controls"><button class="btn small" data-bomx="out" aria-label="Zoom out">−</button><output id="bomx-zoom" aria-label="Zoom level">100%</output><button class="btn small" data-bomx="in" aria-label="Zoom in">+</button><button class="btn small" data-bomx="fit">Fit</button><button class="btn small" data-bomx="reset">100%</button></div></div>
-<div id="bomx-viewport" class="bomx-viewport" tabindex="0" role="group" aria-label="BOM graph, ${placed.length} nodes" aria-describedby="bomx-hint"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><g id="bomx-canvas">${edgesSVG()}${placed.map(nodeSVG).join('')}</g></svg></div>
+<div id="bomx-viewport" class="bomx-viewport" tabindex="0" role="group" aria-label="BOM graph, ${placed.length} nodes" aria-describedby="bomx-hint"><svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><g id="bomx-canvas" class="bomx-far">${edgesSVG()}${placed.map(nodeSVG).join('')}</g></svg></div>
 <p id="bomx-hint" class="help bomx-hint">Capacity: Critical ≤100 builds, Low ≤500; shortages use the requested quantity. Pan: drag or graph arrow keys. Zoom: Ctrl + wheel or +/−. Fit: 0. Nodes: arrows navigate, Enter selects. ${placed.length} nodes, ${leaves} Leaf ${leaves === 1 ? 'material' : 'materials'}.</p></div>
 <aside id="bomx-inspector" class="panel panel-body" aria-label="Selected node">${status('Select a node to inspect it.')}</aside></div>
 <div class="panel"><div class="panel-head"><h2>Leaf material requirements</h2><span class="badge neutral">Aggregated across all paths</span></div>${requirementsTable(data)}</div>`;
@@ -174,6 +176,7 @@ ${req ? `${pair('Required across all paths', req.quantity_required)}${pair('Shor
 
   function apply() {
     canvas()?.setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
+    canvas()?.classList.toggle('bomx-far', view.k < TEXT_ZOOM);
     const zoom = document.querySelector('#bomx-zoom');
     if (zoom) zoom.textContent = `${Math.round(view.k * 100)}%`;
   }

@@ -11,6 +11,8 @@ The optional pywebview frontend needs `requirements-desktop.txt` and built asset
 
 Omitting `--database` opens the existing operational database. For workflow smoke
 checks, use an explicit disposable database; these checks perform real writes.
+`docs/frontend/performance.md` defines the approved performance envelope and how
+`scripts/package_perf.py` measures the packaged bundle (limits are never options).
 See `docs/frontend/desktop.md` for smoke commands, platform requirements, the
 bridge contract, and packaging limits; `docs/frontend/roadmap.md` for remaining
 migration phases and rules.

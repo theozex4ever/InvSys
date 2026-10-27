@@ -32,6 +32,33 @@ def test_smoke_check_requires_an_explicit_database(monkeypatch, capsys):
     assert "--smoke-check requires an explicit disposable --database" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ("--perf-check", "launch"),
+        ("--perf-check", "launch", "--database", "inventory.db"),
+        ("--perf-check", "launch", "--perf-output", "result.json"),
+        (
+            "--perf-check",
+            "launch",
+            "--database",
+            "x.db",
+            "--perf-output",
+            "r.json",
+            "--smoke-check",
+        ),
+    ],
+)
+def test_perf_check_needs_a_disposable_database_and_an_output_file(monkeypatch, capsys, arguments):
+    assert run_launcher(monkeypatch, *arguments) == 2
+    assert "--perf-check needs a disposable --database and --perf-output" in capsys.readouterr().err
+
+
+def test_perf_check_only_accepts_the_two_probe_modes(monkeypatch, capsys):
+    assert run_launcher(monkeypatch, "--perf-check", "everything") == 2
+    assert "invalid choice" in capsys.readouterr().err
+
+
 def test_packaged_launch_requires_an_explicit_database(monkeypatch, capsys):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     assert run_launcher(monkeypatch) == 2

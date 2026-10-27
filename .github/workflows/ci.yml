@@ -370,7 +370,9 @@ jobs:
     name: Package smoke (${{ matrix.os }})
     needs: frontend
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    # Includes building the large performance fixture (100,000 ledger rows) and the
+    # measured launches and scenarios of the performance step.
+    timeout-minutes: 75
     permissions:
       contents: read
     strategy:
@@ -554,6 +556,39 @@ jobs:
           --isolate-network
           2>&1 | tee "$RUNNER_TEMP/upgrade-rehearsal.log"
 
+      # The approved performance envelope (docs/frontend/performance.md), measured on
+      # the frozen bundle against a freshly built 10,000-Part / 100,000-transaction /
+      # 1,000-node-BOM inventory. A measured repeat over its limit fails the job.
+      - name: Package performance
+        if: runner.os == 'Linux'
+        run: >-
+          xvfb-run -a -s "-screen 0 1920x1080x24"
+          python scripts/package_perf.py run
+          --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
+          --workdir "$RUNNER_TEMP/invsys-package-perf"
+          --evidence "$RUNNER_TEMP/perf-evidence.json"
+          2>&1 | tee "$RUNNER_TEMP/package-perf.log"
+
+      - name: Package performance (macOS)
+        if: runner.os == 'macOS'
+        env:
+          BUNDLE: ${{ matrix.bundle }}
+        run: >-
+          python scripts/package_perf.py run
+          --bundle "$RUNNER_TEMP/bundle-installed/$BUNDLE"
+          --workdir "$RUNNER_TEMP/invsys-package-perf"
+          --evidence "$RUNNER_TEMP/perf-evidence.json"
+          2>&1 | tee "$RUNNER_TEMP/package-perf.log"
+
+      - name: Package performance (Windows)
+        if: runner.os == 'Windows'
+        run: >-
+          python scripts/package_perf.py run
+          --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
+          --workdir "$RUNNER_TEMP/invsys-package-perf"
+          --evidence "$RUNNER_TEMP/perf-evidence.json"
+          2>&1 | tee "$RUNNER_TEMP/package-perf.log"
+
       - name: Package evidence summary
         if: ${{ !cancelled() }}
         run: |
@@ -579,6 +614,8 @@ jobs:
             ${{ runner.temp }}/upgrade-rehearsal.log
             ${{ runner.temp }}/invsys-upgrade-rehearsal/inventory/logs/
             ${{ runner.temp }}/invsys-upgrade-rehearsal/inventory/smoke-captures/
+            ${{ runner.temp }}/perf-evidence.json
+            ${{ runner.temp }}/package-perf.log
             ${{ runner.temp }}/bundle-dist/SHA256SUMS
             ${{ runner.temp }}/bundle-dist/invsys-desktop/bundle-manifest.json
             ${{ runner.temp }}/bundle-dist/invsys-desktop.app/Contents/Resources/bundle-manifest.json

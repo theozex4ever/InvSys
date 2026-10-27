@@ -118,6 +118,9 @@ class DesktopSmoke:
             from inventory_control.desktop_smoke_navigation import check_navigation
 
             self.navigation = check_navigation(window, wait)
+            from inventory_control.desktop_smoke_paging import check_catalog_paging
+
+            check_catalog_paging(window, wait)
             print(
                 "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
                 flush=True,
