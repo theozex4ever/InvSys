@@ -6,19 +6,24 @@
     python scripts/upgrade_rehearsal.py rehearse --source --workdir ... --evidence ...
     python scripts/upgrade_rehearsal.py generate-fixture   # maintainers only
 
-``rehearse`` installs the committed pre-migration inventory
+``rehearse`` unpacks the last known-good release (``last_known_good.py``: the original
+application at a pinned commit) into an empty disposable folder and installs the committed
+pre-migration inventory that release wrote
 (``tests/fixtures/upgrade/premigration-inventory.sql``: Lots, balances, ledger rows,
 standard and BOM shipments with component snapshots, BOM definitions that were edited
-after shipping, an inactive Part, preferences) into an empty disposable folder and
-drives the *real* application (the frozen bundle or a source launch) against it:
+after shipping, an inactive Part, preferences) where it keeps its inventory. It drives the
+*real* application (the frozen bundle or a source launch) against it:
 
 1. upgrade: the native smoke runs against the copy; the startup backup must equal the
    pre-upgrade copy, and every pre-existing record must survive unchanged;
 2. restart: a second launch; the startup backup must equal the first launch's result;
-3. closed-app restore: the documented procedure (docs/frontend/cutover.md) is applied
+3. rollback: the last known-good release starts on the upgraded inventory (its real
+   startup and main window) and works with its own store; nothing earlier may change;
+4. roll forward: the application is launched once more on what the older release left;
+5. closed-app restore: the documented procedure (docs/frontend/cutover.md) is applied
    to restore the pre-upgrade startup backup over the later inventory, keeping the later
    file aside and listing every ledger entry the restore drops;
-4. reopen: a third launch must open the restored inventory and find exactly the
+6. reopen: a launch must open the restored inventory and find exactly the
    pre-upgrade records.
 
 The restore helper lives here, in a rehearsal tool, on purpose: the application has no
@@ -39,11 +44,11 @@ import tempfile
 import time
 from collections.abc import Callable, Iterator
 from contextlib import ExitStack, closing, contextmanager, suppress
-from datetime import UTC, datetime, tzinfo
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from unittest import mock
 
+import last_known_good
 import package_bundle
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -108,133 +113,30 @@ class RestoreRefused(Exception):
 # ------------------------------------------------------------------- fixture
 
 
-class _Clock:
-    """Deterministic wall clock for the fixture generator."""
-
-    def __init__(self) -> None:
-        self.current = datetime(2026, 9, 1, 9, 0)
-
-    def at(self, day: int, hour: int = 9, minute: int = 0) -> None:
-        self.current = datetime(2026, 9, day, hour, minute)
-
-
-def _ensure_repo_importable() -> None:
-    """Make the repository importable when the script runs from ``scripts/``."""
-    if str(ROOT) not in sys.path:
-        sys.path.insert(0, str(ROOT))
+def build_fixture_database(path: Path, tree: Path) -> None:
+    """Write the pre-migration scenario with the last known-good release's own store."""
+    run = last_known_good.run_release("build-fixture", tree, "--database", str(path))
+    if run.returncode != 0:
+        raise RehearsalError(
+            f"The last known-good release could not write the fixture: {run.stderr[-400:]}"
+        )
 
 
-def build_fixture_database(path: Path) -> None:
-    """Write the pre-migration scenario with the application's own store and a fixed clock."""
-    _ensure_repo_importable()
-    from inventory_control.store import InventoryStore
-
-    clock = _Clock()
-
-    class FrozenDateTime(datetime):
-        @classmethod
-        def now(cls, tz: tzinfo | None = None) -> "FrozenDateTime":  # noqa: ARG003  # mirrors datetime.now
-            moment = clock.current
-            return cls(moment.year, moment.month, moment.day, moment.hour, moment.minute)
-
-    # Both modules stamp rows (and the shipment number) with datetime.now().
-    with (
-        mock.patch("inventory_control.store.datetime", FrozenDateTime),
-        mock.patch("inventory_control.migrations.datetime", FrozenDateTime),
-    ):
-        store = InventoryStore(path, seed=False)
-        try:
-            _scenario(store, clock)
-        finally:
-            store.engine.dispose()
-
-
-def _scenario(store: Any, clock: _Clock) -> None:
-    clock.at(1)
-    catalog = (
-        ("UPG-FRAME", "Frame assembly (phantom, nested)", 2, "Stock"),
-        ("UPG-SUB", "Sub-assembly (phantom, intermediate)", 0, "Stock"),
-        ("UPG-BOLT", "Bolt M6 (leaf)", 40, "Stock"),
-        ("UPG-PLATE", "Mounting plate (leaf)", 5, "Stock"),
-        ("UPG-GASKET", "Gasket (leaf)", 10, "Receiving"),
-        ("UPG-WIDGET", "Widget (standard Part)", 20, "Stock"),
-        ("UPG-LOW", "Low stock sensor", 10, "Stock"),
-        ("UPG-RETIRED", "Retired fitting", 0, "Receiving"),
-    )
-    for number, description, minimum, location in catalog:
-        store.add_part(number, description, minimum, location, notify=False)
-    store.add_bom_component("UPG-FRAME", "UPG-SUB", 2, notify=False)
-    store.add_bom_component("UPG-FRAME", "UPG-BOLT", 4, notify=False)
-    store.add_bom_component("UPG-FRAME", "UPG-PLATE", 1, notify=False)
-    store.add_bom_component("UPG-SUB", "UPG-BOLT", 2, notify=False)
-    store.add_bom_component("UPG-SUB", "UPG-GASKET", 1, notify=False)
-
-    clock.at(2)
-    for number, quantity, location, lot in (
-        ("UPG-BOLT", 60, "Stock", "B-100"),
-        ("UPG-BOLT", 40, "Stock", "B-200"),
-        ("UPG-PLATE", 10, "Stock", "P-1"),
-        ("UPG-GASKET", 25, "Receiving", "G-1"),
-        ("UPG-WIDGET", 80, "Stock", "W-1"),
-        ("UPG-WIDGET", 40, "Receiving", "W-2"),
-        ("UPG-LOW", 15, "Stock", "L-1"),
-        ("UPG-RETIRED", 5, "Receiving", "R-1"),
-    ):
-        store.receive(number, quantity, location, lot, "A. Rivera", "PO-2026-0901", notify=False)
-
-    clock.at(3)
-    store.move("UPG-GASKET", 25, "Receiving", "Stock", "G-1", "A. Rivera", "Putaway")
-    store.move("UPG-WIDGET", 20, "Receiving", "Stock", "W-2", "A. Rivera", "Putaway")
-
-    clock.at(4)
-    store.ship(
-        "UPG-WIDGET",
-        30,
-        "Stock",
-        "Acme Co",
-        "J. Okafor",
-        lot_number="W-1",
-        carrier="Parcel Express",
-        tracking="PX-100200300",
-        reference="SO-5001",
-    )
-    store.ship("UPG-LOW", 12, "Stock", "Beta GmbH", "J. Okafor", lot_number="L-1")
-
-    clock.at(5)
-    plan = store.prepare_bom_shipment("UPG-FRAME", 3, "Stock")
-    store.ship("UPG-FRAME", 3, "Stock", "Gamma Ltd", "J. Okafor", expected_bom_plan=plan)
-    clock.at(6)
-    store.adjust("UPG-WIDGET", "Stock", "W-2", 18, "A. Rivera", "Cycle count: two damaged")
-    store.adjust("UPG-RETIRED", "Receiving", "R-1", 0, "A. Rivera", "Written off")
-    store.adjust("UPG-RETIRED", "Receiving", "R-1", 2, "A. Rivera", "Found two on the shelf")
-    store.set_part_active("UPG-RETIRED", False, notify=False)
-
-    clock.at(8)
-    plan = store.prepare_bom_shipment("UPG-FRAME", 5, "Stock")
-    store.ship(
-        "UPG-FRAME",
-        5,
-        "Stock",
-        "Delta SA",
-        "J. Okafor",
-        expected_bom_plan=plan,
-        reference="SO-5002",
-    )
-
-    clock.at(9)
-    store.move("UPG-BOLT", 2, "Stock", "Scrap", "B-200", "A. Rivera", "Damaged")
-    # The BOM changes after the shipments above; their component snapshots must not.
-    store.add_bom_component("UPG-FRAME", "UPG-BOLT", 5, notify=False)
-    store.add_bom_component("UPG-FRAME", "UPG-GASKET", 1, notify=False)
-    store.set_setting("last_operator", "J. Okafor")
-    store.set_setting("desktop_theme", "dark")
+def extract_release(destination: Path) -> dict[str, Any]:
+    """Extract the pinned last known-good release into the new directory ``destination``."""
+    try:
+        return last_known_good.extract(destination)
+    except last_known_good.ReleaseUnavailable as exc:
+        raise RehearsalError(str(exc)) from exc
 
 
 def write_fixture(target: Path = FIXTURE) -> None:
     """Regenerate the committed SQL text; a maintainer reviews the diff like evidence."""
     with tempfile.TemporaryDirectory(prefix="invsys-fixture-") as scratch:
         database = Path(scratch) / "inventory.db"
-        build_fixture_database(database)
+        tree = Path(scratch) / "release"
+        extract_release(tree)
+        build_fixture_database(database, tree)
         with closing(sqlite3.connect(database)) as connection:
             dump = [
                 line
@@ -245,8 +147,10 @@ def write_fixture(target: Path = FIXTURE) -> None:
     indexes = sorted(line for line in dump if line.startswith("CREATE INDEX"))
     statements = [line for line in dump if not line.startswith("CREATE INDEX")] + indexes
     target.parent.mkdir(parents=True, exist_ok=True)
-    revision = package_bundle.source_revision(ROOT)
-    provenance = f"-- Written by the application at commit {revision.get('commit', 'unknown')}."
+    provenance = (
+        "-- Written by the original application (last known-good release) at commit "
+        f"{last_known_good.COMMIT}."
+    )
     target.write_text(
         "\n".join([FIXTURE_HEADER, provenance, *statements]) + "\n", encoding="utf-8", newline="\n"
     )
@@ -906,8 +810,13 @@ def launch_and_check(
     env: dict[str, str],
     reference: dict[str, Any],
     original: dict[str, Any],
+    stock_moved: bool = False,
 ) -> tuple[bool, dict[str, Any], Path | None]:
-    """One launch of the application on ``database``; checks what it did and backed up."""
+    """One launch of the application on ``database``; checks what it did and backed up.
+
+    ``stock_moved`` is for a launch after earlier work changed the original balances (the
+    last known-good release's workflows): they still have to reconcile with the ledger.
+    """
     known = set(backups_in(database))
     run = launcher.run(database, cwd, env)
     after = snapshot(database)
@@ -928,8 +837,11 @@ def launch_and_check(
         problems.append("The smoke created no manual backup.")
     manual_states = [snapshot(path) for path in manual]
     for path, state in zip(manual, manual_states, strict=True):
-        problems += [f"{path.name}: {p}" for p in compare(original, state, identical=False)]
-    problems += compare(original, after, identical=False)
+        problems += [
+            f"{path.name}: {p}"
+            for p in compare(original, state, identical=False, stock_moved=stock_moved)
+        ]
+    problems += compare(original, after, identical=False, stock_moved=stock_moved)
     problems += reconcile(after)
     if len(after["tables"]["inventory_transactions"]["rows"]) <= len(
         reference["tables"]["inventory_transactions"]["rows"]
@@ -1002,7 +914,10 @@ def rehearse(
     workdir.mkdir(parents=True, exist_ok=True)
     unexpected_home = workdir / "unexpected-home"
     env = {**os.environ, "INVSYS_HOME": str(unexpected_home)}
-    database = workdir / "inventory" / "inventory.db"
+    # The inventory sits where the last known-good release keeps it, so the replacement is
+    # pointed at the operator's existing file and nothing is copied or relocated.
+    release = workdir / "last-known-good"
+    database = last_known_good.release_database(release)
     cwd = workdir / "cwd"
     cwd.mkdir()
     record: dict[str, Any] = {
@@ -1011,6 +926,7 @@ def rehearse(
         "application": launcher.describe(),
         "network_isolated": launcher.isolate_network,
         "fixture": {"path": fixture.name, "sha256": fixture_sha256(fixture)},
+        "last_known_good": extract_release(release),
         "steps": [],
     }
     print(f"Upgrade rehearsal ({record['application']['kind']}) in {workdir}")
@@ -1046,7 +962,25 @@ def rehearse(
             record, "restart-and-workflows", launcher, database, cwd, env, after1, original
         )
         ok = ok and ok1 and ok2
-        rollback = restore_rollback(record, database, pre_upgrade_backup, original, after2)
+        # The upgraded inventory goes back to the previous release, then forward again.
+        old_release = rollback_to_release(record, release, database, after2, original)
+        ok = ok and old_release is not None
+        if old_release is not None:
+            ok4, _, _ = launch_and_check(
+                record,
+                "roll-forward-after-rollback-and-workflows",
+                launcher,
+                database,
+                cwd,
+                env,
+                old_release,
+                original,
+                stock_moved=True,
+            )
+            ok = ok and ok4
+        rollback = restore_rollback(
+            record, database, pre_upgrade_backup, original, snapshot(database)
+        )
         ok = ok and rollback is not None
         if rollback is not None:
             ok3, _, _ = launch_and_check(
@@ -1084,6 +1018,111 @@ def rehearse(
     write_evidence(record, evidence)
     print(f"Upgrade rehearsal {record['result']}; evidence written to {evidence}")
     return ok
+
+
+def _probe_report(stdout: str) -> dict[str, Any] | None:
+    for line in reversed(stdout.splitlines()):
+        if line.startswith("{"):
+            try:
+                report = json.loads(line)
+            except ValueError:
+                return None
+            return report if isinstance(report, dict) else None
+    return None
+
+
+def rollback_to_release(
+    record: dict[str, Any],
+    release: Path,
+    database: Path,
+    upgraded: dict[str, Any],
+    original: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Start the last known-good release on the inventory the replacement just used.
+
+    The release (original application, ``last_known_good.COMMIT``) keeps its inventory at
+    ``data/inventory.db`` in its own folder, which is the very file the replacement was
+    pointed at. Its real startup runs, then its own store works on the inventory.
+    """
+    known = {p.name for p in last_known_good.release_backups(release).glob("inventory-*.db")}
+    run = last_known_good.run_release("rollback-probe", release)
+    report = _probe_report(run.stdout)
+    after = snapshot(database)
+    folder = last_known_good.release_backups(release)
+    new = {p.name: p for p in sorted(folder.glob("inventory-*.db")) if p.name not in known}
+    startup = [p for name, p in new.items() if "-startup" in name]
+    manual = [p for name, p in new.items() if "-manual" in name]
+    problems: list[str] = []
+    if run.returncode != 0 or report is None or report.get("exit_code") != 0:
+        problems.append(f"The release failed (exit {run.returncode}): {run.stderr[-400:]}")
+    elif report["windows_shown"] != 1:
+        problems.append("The release did not show its main window.")
+    elif Path(report["release"]).resolve() != release.resolve():
+        problems.append(f"The release ran code from {report['release']}.")
+    if report is not None and "read_before_work" in report:
+        seen = report["read_before_work"]
+        expected = {
+            "parts": len(upgraded["tables"]["parts"]["rows"]),
+            "transactions": len(upgraded["tables"]["inventory_transactions"]["rows"]),
+            "shipments": len(upgraded["tables"]["shipments"]["rows"]),
+            "component_snapshots": component_trace(upgraded),
+        }
+        problems += [
+            f"The release read {key} {seen.get(key)!r}, not {value!r}."
+            for key, value in expected.items()
+            if seen.get(key) != value
+        ]
+    if len(startup) != 1:
+        problems.append(f"Expected one release startup backup, found {len(startup)}.")
+    else:
+        problems += [
+            f"Release startup backup: {p}"
+            for p in compare(upgraded, snapshot(startup[0]), identical=True)
+        ]
+    if len(manual) != 1:
+        problems.append(f"Expected one release manual backup, found {len(manual)}.")
+    else:
+        problems += [
+            f"{manual[0].name}: {p}"
+            for p in compare(upgraded, snapshot(manual[0]), identical=False, stock_moved=True)
+        ]
+    problems += compare(upgraded, after, identical=False, stock_moved=True)
+    problems += compare(original, after, identical=False, stock_moved=True)
+    problems += reconcile(after)
+    written = {
+        row["tx_type"]
+        for row in _table(after, "inventory_transactions")
+        if row["operator"] == last_known_good.PROBE_OPERATOR
+    }
+    needed = {
+        "RECEIVE",
+        "MOVE_OUT",
+        "MOVE_IN",
+        "SHIP",
+        "SHIP_BOM",
+        "BOM_CONSUME",
+        "COUNT_CORRECTION",
+    }
+    if not needed <= written:
+        problems.append(
+            f"The release left no ledger rows of type {', '.join(sorted(needed - written))}."
+        )
+    if report is not None and report.get("bom_shipment") not in component_trace(after):
+        problems.append("The release's BOM shipment has no component snapshot.")
+    step(
+        record,
+        "rollback-to-the-last-known-good-release-on-the-upgraded-inventory",
+        problems,
+        exit_code=run.returncode,
+        release=report,
+        stderr=package_bundle.excerpt(run.stderr),
+        startup_backups=sorted(p.name for p in startup),
+        manual_backups=sorted(p.name for p in manual),
+        release_backup_folder=str(folder.relative_to(release)),
+        inventory_counts=counts(after),
+        inventory_digest=digest(after),
+    )
+    return after if not problems else None
 
 
 def restore_rollback(

@@ -161,6 +161,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The upgrade rehearsal unpacks the pinned last known-good release from history.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -394,6 +396,8 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The upgrade rehearsal unpacks the pinned last known-good release from history.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -612,8 +616,8 @@ jobs:
             ${{ runner.temp }}/package-smoke.log
             ${{ runner.temp }}/upgrade-evidence.json
             ${{ runner.temp }}/upgrade-rehearsal.log
-            ${{ runner.temp }}/invsys-upgrade-rehearsal/inventory/logs/
-            ${{ runner.temp }}/invsys-upgrade-rehearsal/inventory/smoke-captures/
+            ${{ runner.temp }}/invsys-upgrade-rehearsal/last-known-good/data/logs/
+            ${{ runner.temp }}/invsys-upgrade-rehearsal/last-known-good/data/smoke-captures/
             ${{ runner.temp }}/perf-evidence.json
             ${{ runner.temp }}/package-perf.log
             ${{ runner.temp }}/bundle-dist/SHA256SUMS

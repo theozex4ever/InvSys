@@ -354,10 +354,13 @@ exact tested bundle. This is a CI artifact, not a release publication. Linux and
 Windows archives are not uploaded. The same job then runs `scripts/package_perf.py` on the extracted bundle against a freshly built large inventory and uploads `perf-evidence.json` (see [performance.md](performance.md)). All three legs are part of **CI gate**.
 
 After the package smoke, each leg runs `scripts/upgrade_rehearsal.py` against the same
-extracted bundle (copied-data upgrade, restart, closed-app restore and reopen on a
-disposable copy of a pre-migration fixture; see [cutover.md](cutover.md)) and uploads
-`upgrade-evidence.json` and its log with the package evidence. It adds three more
-native launches per leg.
+extracted bundle (copied-data upgrade, restart, rollback to and forward from the pinned
+last known-good release, closed-app restore and reopen on a disposable copy of a
+pre-migration fixture written by that release; see [cutover.md](cutover.md)) and uploads
+`upgrade-evidence.json` and its log with the package evidence. It adds four more native
+launches per leg. The pinned release is unpacked from git history, so the job (and the
+test legs, which run the same rehearsal against a stand-in application) check out full
+history.
 
 ## Extending packaging
 

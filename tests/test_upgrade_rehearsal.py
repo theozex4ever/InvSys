@@ -42,6 +42,7 @@ def load_script(name: str) -> Any:
 
 
 package_bundle = load_script("package_bundle")
+last_known_good = load_script("last_known_good")
 rehearsal = load_script("upgrade_rehearsal")
 
 # Changing the fixture is a deliberate, reviewed act: update these with it.
@@ -57,7 +58,7 @@ FIXTURE_COUNTS = {
     "settings": 3,
 }
 FIXTURE_DIGEST = "8bfb5a770ae68928af1673d1be059fe14ce87563f6253551d1ed21390cb390bb"
-FIXTURE_SHA256 = "ea6da4ea945c05f5ad56535386a04dce1a17cc3d44b16e7c33fefa3fb4d67861"
+FIXTURE_SHA256 = "6bdb9faaa8d5daef8cb2872207e113a98b252b790d39dbf99417545273eb7c5c"
 BOM_SHIPMENT = "SHP-20260905-0001"
 MULTI_LOT_BOM_SHIPMENT = "SHP-20260908-0001"
 
@@ -67,6 +68,10 @@ def inventory(tmp_path: Path) -> Path:
     database = tmp_path / "operations" / "inventory.db"
     rehearsal.install_fixture(database)
     return database
+
+
+def release_database(workdir: Path) -> Path:
+    return workdir / "last-known-good" / "data" / "inventory.db"
 
 
 def open_bridge(database: Path) -> tuple[InventoryStore, InventoryBridge]:
@@ -514,11 +519,13 @@ def test_the_rehearsal_upgrades_restarts_restores_and_reopens(tmp_path, display)
 
     assert passed
     assert record["result"] == "passed"
-    assert app.launches == 3
+    assert app.launches == 4
     assert [step["name"] for step in record["steps"]] == [
         "fixture-is-intact-before-upgrade",
         "upgrade-open-and-workflows",
         "restart-and-workflows",
+        "rollback-to-the-last-known-good-release-on-the-upgraded-inventory",
+        "roll-forward-after-rollback-and-workflows",
         "closed-app-restore-of-the-pre-upgrade-backup",
         "reopen-after-restore-and-workflows",
         "nothing-written-outside-the-selected-inventory",
@@ -537,11 +544,20 @@ def test_the_rehearsal_upgrades_restarts_restores_and_reopens(tmp_path, display)
     ]
     restore = next(s for s in record["steps"] if s["name"].startswith("closed-app-restore"))
     assert restore["reconciliation_required"]["ledger_entries"] > 0
-    assert restore["reconciliation_required"]["by_type"] == {"RECEIVE": 2}
+    # Three stand-in launches and the last known-good release's workflows are displaced.
+    assert restore["reconciliation_required"]["by_type"] == {
+        "BOM_CONSUME": 3,
+        "COUNT_CORRECTION": 1,
+        "MOVE_IN": 1,
+        "MOVE_OUT": 1,
+        "RECEIVE": 4,
+        "SHIP": 1,
+        "SHIP_BOM": 1,
+    }
     assert not (tmp_path / "work" / "unexpected-home").exists()
     # The disposable copy was rolled back to the pre-upgrade inventory.
-    final = rehearsal.snapshot(tmp_path / "work" / "inventory" / "inventory.db")
-    assert any(row[2] == "NEW-3" for row in final["tables"]["lots"]["rows"].values())
+    final = rehearsal.snapshot(release_database(tmp_path / "work"))
+    assert any(row[2] == "NEW-4" for row in final["tables"]["lots"]["rows"].values())
     assert not any(row[2] == "NEW-1" for row in final["tables"]["lots"]["rows"].values())
 
 
@@ -638,13 +654,165 @@ def test_a_rehearsal_needs_a_target(tmp_path):
 
 
 def test_the_committed_fixture_text_is_what_the_generator_writes(tmp_path, monkeypatch):
-    """Regeneration is reproducible apart from the provenance line naming the commit."""
+    """The pinned older release, not the current store, writes exactly the committed text."""
     regenerated = tmp_path / "fixture.sql"
     rehearsal.write_fixture(regenerated)
     committed = rehearsal.FIXTURE.read_text(encoding="utf-8").splitlines()
-    assert regenerated.read_text(encoding="utf-8").splitlines()[2:] == committed[2:]
+    assert regenerated.read_text(encoding="utf-8").splitlines() == committed
     assert committed[0] == rehearsal.FIXTURE_HEADER
-    assert committed[1].startswith("-- Written by the application at commit ")
+    assert committed[1].endswith(f"at commit {last_known_good.COMMIT}.")
+
+
+# ------------------------------------------------- the last known-good release (rollback)
+
+
+def test_the_pinned_release_is_the_original_application_before_the_desktop_frontend(tmp_path):
+    info = last_known_good.extract(tmp_path / "release")
+
+    assert info["commit"] == last_known_good.COMMIT
+    assert info["tree"] == last_known_good.tree_hash()
+    release = tmp_path / "release"
+    assert (release / "inventory_visualizer.py").is_file()
+    assert (release / "inventory_control" / "ui" / "main_window.py").is_file()
+    # The release predates the desktop frontend, its bridge and its packaging.
+    assert not (release / "inventory_desktop.py").exists()
+    assert not (release / "inventory_control" / "desktop.py").exists()
+    assert not list(release.rglob("__pycache__"))
+    # Its inventory is not here until an operator's data (or the fixture) is put there.
+    assert not (release / "data").exists()
+    assert info["files"] == sum(1 for path in release.rglob("*") if path.is_file())
+
+
+def test_an_unreadable_history_is_reported_with_how_to_fix_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(last_known_good, "ROOT", tmp_path)
+    with pytest.raises(rehearsal.RehearsalError, match="full history"):
+        rehearsal.extract_release(tmp_path / "release")
+
+
+def test_the_pinned_release_writes_the_same_schema_the_application_creates_today(tmp_path):
+    """The older release and today's store agree on every table, column and index."""
+    release = tmp_path / "release"
+    last_known_good.extract(release)
+    old = tmp_path / "old.db"
+    rehearsal.build_fixture_database(old, release)
+    new = tmp_path / "new.db"
+    InventoryStore(new, seed=False).engine.dispose()
+
+    assert rehearsal.snapshot(old)["schema"] == rehearsal.snapshot(new)["schema"]
+
+
+def test_the_older_release_opens_the_inventory_and_keeps_its_own_backups(tmp_path):
+    workdir = tmp_path / "work"
+    tree = workdir / "last-known-good"
+    last_known_good.extract(tree)
+    database = last_known_good.release_database(tree)
+    rehearsal.install_fixture(database)
+    before = rehearsal.snapshot(database)
+
+    run = last_known_good.run_release("rollback-probe", tree)
+    report = json.loads(run.stdout.splitlines()[-1])
+    after = rehearsal.snapshot(database)
+
+    assert run.returncode == 0, run.stderr
+    assert report["exit_code"] == 0
+    assert report["windows_shown"] == 1
+    assert Path(report["release"]).resolve() == tree.resolve()
+    # What the release itself reads: every record and each BOM shipment's per-Lot snapshot.
+    assert report["read_before_work"] == {
+        "parts": 8,
+        "transactions": 28,
+        "shipments": 4,
+        "component_snapshots": rehearsal.component_trace(before),
+    }
+    # Its startup backup is the inventory as it was, kept in the release's own folder.
+    backups = sorted(last_known_good.release_backups(tree).glob("inventory-*.db"))
+    startup = next(path for path in backups if path.name.endswith("-startup.db"))
+    assert rehearsal.compare(before, rehearsal.snapshot(startup), identical=True) == []
+    assert [path.name for path in backups if "-manual" in path.name] == [report["manual_backup"]]
+    assert not (database.parent / "backups").exists()
+    assert rehearsal.compare(before, after, identical=False, stock_moved=True) == []
+    assert rehearsal.reconcile(after) == []
+    assert report["bom_shipment"] in rehearsal.component_trace(after)
+
+
+def run_with_release_fault(tmp_path: Path, monkeypatch, fault: str) -> list[str]:
+    """Rehearse with a last known-good release that misbehaves after its real run."""
+    real = last_known_good.run_release
+
+    def faulty(command: str, tree: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+        if command != "rollback-probe":
+            return real(command, tree, *arguments)
+        result = real(command, tree, *arguments)
+        database = last_known_good.release_database(tree)
+        match fault:
+            case "crashes":
+                return subprocess.CompletedProcess(result.args, 3, "", "boom")
+            case "no-report":
+                return subprocess.CompletedProcess(result.args, 0, "not json\n", "")
+            case "loses-a-ledger-row":
+                tamper(database, "DELETE FROM inventory_transactions WHERE id = 3")
+            case "rewrites-a-snapshot":
+                tamper(database, "UPDATE shipment_components SET quantity = 1 WHERE id = 2")
+            case "alters-the-schema":
+                tamper(database, "ALTER TABLE lots ADD COLUMN surprise TEXT")
+            case "reads-less-than-the-inventory":
+                report = json.loads(result.stdout.splitlines()[-1])
+                report["read_before_work"]["transactions"] -= 1
+                return subprocess.CompletedProcess(result.args, 0, json.dumps(report), "")
+            case "runs-other-code":
+                report = json.loads(result.stdout.splitlines()[-1])
+                report["release"] = str(tree.parent)
+                return subprocess.CompletedProcess(result.args, 0, json.dumps(report), "")
+        return result
+
+    monkeypatch.setattr(last_known_good, "run_release", faulty)
+    passed, record, _ = run_rehearsal(tmp_path)
+    assert not passed
+    assert record["result"] == "failed"
+    step = next(s for s in record["steps"] if s["name"].startswith("rollback-to-the-last"))
+    assert not step["passed"]
+    return step["problems"]
+
+
+@pytest.mark.parametrize(
+    "fault,expected",
+    [
+        ("crashes", "The release failed (exit 3)"),
+        ("no-report", "The release failed"),
+        ("loses-a-ledger-row", "inventory_transactions row 3 is missing"),
+        ("rewrites-a-snapshot", "shipment_components row 2 changed"),
+        ("alters-the-schema", "The schema changed"),
+        ("reads-less-than-the-inventory", "The release read transactions"),
+        ("runs-other-code", "The release ran code from"),
+    ],
+)
+def test_the_rollback_fails_when_the_older_release_loses_or_misreads_anything(
+    tmp_path, display, monkeypatch, fault, expected
+):
+    problems = run_with_release_fault(tmp_path, monkeypatch, fault)
+    assert any(expected in problem for problem in problems), problems
+
+
+def test_the_rehearsal_records_the_release_it_rolled_back_to(tmp_path, display):
+    _, record, _ = run_rehearsal(tmp_path)
+
+    assert record["last_known_good"]["commit"] == last_known_good.COMMIT
+    assert record["last_known_good"]["tree"] == last_known_good.tree_hash()
+    assert record["last_known_good"]["inventory"] == "data/inventory.db"
+    rollback = next(s for s in record["steps"] if s["name"].startswith("rollback-to-the-last"))
+    assert rollback["release"]["windows_shown"] == 1
+    assert rollback["release"]["read_before_work"]["shipments"] == 4
+    assert rollback["release_backup_folder"] == "backups"
+    assert len(rollback["startup_backups"]) == 1
+    assert len(rollback["manual_backups"]) == 1
+    # The roll-forward launch reads the inventory the older release wrote to.
+    forward = next(s for s in record["steps"] if s["name"].startswith("roll-forward"))
+    assert forward["passed"]
+    assert rollback["inventory_counts"]["shipments"] == 6  # the release shipped two more
+    assert (
+        forward["inventory_counts"]["inventory_transactions"]
+        > rollback["inventory_counts"]["inventory_transactions"]
+    )
 
 
 # ------------------------------------------------------- restore cleanup and rollback
