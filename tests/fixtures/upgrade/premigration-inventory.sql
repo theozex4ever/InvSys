@@ -146,7 +146,6 @@ CREATE TABLE settings (
 );
 INSERT INTO "settings" VALUES('schema_version','1');
 INSERT INTO "settings" VALUES('last_operator','J. Okafor');
-INSERT INTO "settings" VALUES('desktop_theme','dark');
 CREATE TABLE shipment_components (
 	id INTEGER NOT NULL, 
 	shipment_id INTEGER NOT NULL, 

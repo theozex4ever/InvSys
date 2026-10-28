@@ -9,7 +9,7 @@ database is whatever `--database` names (source launches without it keep
 
 Nothing in the replacement changes the database schema. The pre-migration fixture was
 written by the original application as it was before the replacement existed (commit
-`a03c887`, see [Last known-good release](#last-known-good-release-rehearsed)), and its
+`a03c887`, see [Last known-good release](#last-known-good-release-rehearsal)), and its
 schema is byte-identical to the one a new application creates; the tests fail if that
 ever stops being true. A migration of the presentation layer therefore has no data
 conversion step, and a new bundle opens an existing inventory as it is.
@@ -24,7 +24,7 @@ conversion step, and a new bundle opens an existing inventory as it is.
   the checkout commit for a source launch) that was working against this inventory,
   kept until the new one has been used successfully. Record its file name and
   SHA-256 in the cutover log. (No packaged release exists before the replacement;
-  see [Last known-good release](#last-known-good-release-rehearsed).)
+  see [Last known-good release](#last-known-good-release-rehearsal).)
 - **Startup backup** (`inventory-YYYYMMDD-HHMMSS-startup.db`): taken at every launch
   *before* the database is opened, so it is the inventory exactly as the previous
   session left it. **Manual backup** (`...-manual.db`): taken from Settings. Only the
@@ -153,13 +153,14 @@ There are two different things to go back to; choose by what is wrong.
 was written is correct). Close the new application and start the last known-good
 artifact on the same inventory. Take a backup first. No data step is needed because the
 schema is unchanged: whatever the new application recorded stays in the ledger and the
-last known-good release reads it ([rehearsed](#last-known-good-release-rehearsed)).
+last known-good release reads it (what the [rehearsal](#last-known-good-release-rehearsal)
+checks; retained results are in [packaging.md](packaging.md#recorded-copied-data-upgrade-and-restore-evidence)).
 Where the old release keeps its inventory depends on which release it is: the original
-application at the rehearsed commit has no database option and uses `data/inventory.db`
+application at the pinned commit has no database option and uses `data/inventory.db`
 beside its code (so point the new bundle's `--database` at that file and nothing needs
 moving); a later source checkout of the original application uses `INVSYS_HOME` or its
 default `data/` folder. Each release writes its startup and manual backups to its own
-`backups/` folder, which for the rehearsed release is `backups/` beside `data/`, not the
+`backups/` folder, which for the pinned release is `backups/` beside `data/`, not the
 `data/backups` folder the new application uses for the same inventory. Verify the
 backups of the release you are about to use before relying on them.
 
@@ -169,7 +170,7 @@ backup as above. This is a data rollback and always needs reconciliation.
 An older backup must **never** be placed over later ledger activity without that
 reconciliation: the displaced database is the only record of the work done since.
 
-## Last known-good release (rehearsed)
+## Last known-good release (rehearsal)
 
 The artifact the rehearsal rolls back to is the original PySide6 application at commit
 `a03c887dd76056695f81e55d0ff1cac4315ee444` (PR #5, 2026-09-28), the last commit before the
@@ -242,7 +243,8 @@ application. Both use the committed pre-migration fixture
 8 Parts, 8 Lots, 11 balances, 28 ledger rows (RECEIVE, MOVE_OUT/IN, SHIP, SHIP_BOM,
 BOM_CONSUME, COUNT_CORRECTION), 4 shipments (two standard, two nested-BOM, one of them
 consuming one component from two Lots), 7 per-Lot component snapshots, BOM definitions
-edited after those shipments, an inactive Part, and operator/theme preferences. The
+edited after those shipments, an inactive Part, and the remembered operator (the original
+application stored no theme, so the replacement starts on its default). The
 fixture was **written by the original application's own store at the pinned last
 known-good commit** with a frozen clock (provenance line in the file; a test regenerates
 it from that commit and compares the whole text). It is a database written by an older
@@ -278,6 +280,9 @@ the fixture as its inventory (`last-known-good/data/inventory.db`; never operati
    must reconcile; the manual and startup backups must be in the selected inventory's
    folder and hold only its records.
 2. **Restart:** a second launch; its startup backup must equal the first launch's result.
+   Every launch also checks that the ledger, Lots, shipments and component snapshots added
+   by earlier launches or by the older release are unchanged (live file and manual
+   backups), not only the fixture's own rows.
 3. **Restore:** the first launch's startup backup is restored over the later inventory
    by the closed-app procedure; the result must equal the pre-upgrade inventory, the
    displaced file must equal the pre-restore state, and the ledger entries and
@@ -285,7 +290,7 @@ the fixture as its inventory (`last-known-good/data/inventory.db`; never operati
 4. **Reopen:** a launch must open the restored inventory (startup backup equal
    to it) and leave every pre-upgrade record intact.
 5. **Roll back to the last known-good release:** the original application is started on
-   that inventory and works on it ([above](#last-known-good-release-rehearsed)).
+   that inventory and works on it ([above](#last-known-good-release-rehearsal)).
 6. **Roll forward:** a launch of the replacement on what the older release left; its
    startup backup must equal that state and every fixture record must still be intact.
 7. The restore failure table above is exercised and recorded for the platform.

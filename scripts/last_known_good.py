@@ -37,6 +37,8 @@ ROOT = Path(__file__).resolve().parent.parent
 COMMIT = "a03c887dd76056695f81e55d0ff1cac4315ee444"
 # Operator named on every record the rollback probe writes.
 PROBE_OPERATOR = "Last known-good"
+# Same limit as a launch of the application under rehearsal.
+RUN_TIMEOUT_SECONDS = 300
 
 
 class ReleaseUnavailable(Exception):
@@ -92,31 +94,39 @@ def extract(destination: Path) -> dict[str, Any]:
     }
 
 
+def _text(output: str | bytes | None) -> str:
+    return output.decode(errors="replace") if isinstance(output, bytes) else output or ""
+
+
 def run_release(command: str, tree: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
-    """Run ``command`` of this module with the extracted release's code, in its folder."""
+    """Run ``command`` of this module with the extracted release's code, in its folder.
+
+    A release that cannot be started or does not finish in time comes back as a failed
+    process (exit -1) carrying whatever it printed, so the caller can record the failure.
+    """
     environment = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
     # The interpreter running the rehearsal and this module; -I keeps the checkout and any
     # PYTHON* variables out of the historical release's import path.
-    return subprocess.run(  # noqa: S603
-        [
-            sys.executable,
-            "-I",
-            str(Path(__file__).resolve()),
-            command,
-            "--tree",
-            str(tree),
-            *arguments,
-        ],
-        cwd=tree,
-        env=environment,
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=300,
-        check=False,
-    )
+    script = str(Path(__file__).resolve())
+    command_line = [sys.executable, "-I", script, command, "--tree", str(tree), *arguments]
+    try:
+        return subprocess.run(  # noqa: S603
+            command_line,
+            cwd=tree,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=RUN_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stderr = _text(exc.stderr) + f"\nTimed out after {RUN_TIMEOUT_SECONDS} s."
+        return subprocess.CompletedProcess(command_line, -1, _text(exc.stdout), stderr)
+    except OSError as exc:
+        return subprocess.CompletedProcess(command_line, -1, "", f"Could not start: {exc}")
 
 
 def release_database(tree: Path) -> Path:
@@ -257,8 +267,8 @@ def _scenario(store: Any, clock: _Clock) -> None:
     # The BOM changes after the shipments above; their component snapshots must not.
     store.add_bom_component("UPG-FRAME", "UPG-BOLT", 5, notify=False)
     store.add_bom_component("UPG-FRAME", "UPG-GASKET", 1, notify=False)
+    # The original application remembered only the operator (the theme arrived later).
     store.set_setting("last_operator", "J. Okafor")
-    store.set_setting("desktop_theme", "dark")
 
 
 def rollback_probe(tree: Path) -> dict[str, Any]:

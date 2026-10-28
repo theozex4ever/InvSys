@@ -74,6 +74,10 @@ TABLES = (
     "bom_components",
     "settings",
 )
+# The audit trail: rows here are never edited by any workflow, only appended to. Rows that
+# earlier launches (or the older release) added are checked against this set, because the
+# fixture comparison cannot see them.
+RECORD_TABLES = ("lots", "inventory_transactions", "shipments", "shipment_components")
 # Every table and column that snapshot(), reconcile() and dropped_entries() read.
 REQUIRED_COLUMNS = {
     "locations": ("id", "name"),
@@ -263,8 +267,11 @@ def compare(
     *,
     identical: bool,
     stock_moved: bool = False,
+    tables: tuple[str, ...] = TABLES,
 ) -> list[str]:
     """Differences that must not exist, as readable problems (empty means preserved).
+
+    ``tables`` limits which tables' rows are compared (the schema and integrity always are).
 
     ``identical`` demands the same schema and rows. Otherwise every ``before`` row must
     survive unchanged in ``after`` (which may hold more), except the preferences the
@@ -279,7 +286,7 @@ def compare(
         problems.append(f"SQLite integrity check: {after['integrity_check']}.")
     if after["foreign_key_violations"]:
         problems.append(f"{after['foreign_key_violations']} foreign key violation(s).")
-    for table in TABLES:
+    for table in tables:
         old, new = before["tables"][table]["rows"], after["tables"][table]["rows"]
         columns = before["tables"][table]["columns"]
         for key, row in old.items():
@@ -842,7 +849,16 @@ def launch_and_check(
             f"{path.name}: {p}"
             for p in compare(original, state, identical=False, stock_moved=stock_moved)
         ]
+        problems += [
+            f"{path.name}: {p}"
+            for p in compare(reference, state, identical=False, tables=RECORD_TABLES)
+        ]
     problems += compare(original, after, identical=False, stock_moved=stock_moved)
+    # Records that earlier launches or the older release added are audit trail too.
+    problems += [
+        f"Earlier record: {p}"
+        for p in compare(reference, after, identical=False, tables=RECORD_TABLES)
+    ]
     problems += reconcile(after)
     if len(after["tables"]["inventory_transactions"]["rows"]) <= len(
         reference["tables"]["inventory_transactions"]["rows"]
@@ -1033,6 +1049,41 @@ def _probe_report(stdout: str) -> dict[str, Any] | None:
     return None
 
 
+def report_problems(report: dict[str, Any] | None) -> list[str]:
+    """What is wrong with the release's report itself (empty when every field is usable)."""
+    if report is None:
+        return ["The release printed no report."]
+    problems = []
+    for key, kind in (
+        ("exit_code", int),
+        ("windows_shown", int),
+        ("release", str),
+        ("bom_shipment", str),
+        ("read_before_work", dict),
+    ):
+        if not isinstance(report.get(key), kind):
+            problems.append(f"The release's report has no usable {key}.")
+    seen = report.get("read_before_work")
+    if isinstance(seen, dict):
+        for key in ("parts", "transactions", "shipments"):
+            if not isinstance(seen.get(key), int):
+                problems.append(f"The release's report has no usable read_before_work.{key}.")
+        if not isinstance(seen.get("component_snapshots"), dict):
+            problems.append(
+                "The release's report has no usable read_before_work.component_snapshots."
+            )
+    return problems
+
+
+def _readable(path: Path, label: str, problems: list[str]) -> dict[str, Any] | None:
+    """Snapshot of a backup the release wrote; a damaged file is a problem, not a crash."""
+    try:
+        return snapshot(path)
+    except (OSError, sqlite3.Error, KeyError, ValueError) as exc:
+        problems.append(f"{label} {path.name} could not be read ({exc}).")
+        return None
+
+
 def rollback_to_release(
     record: dict[str, Any],
     release: Path,
@@ -1044,7 +1095,8 @@ def rollback_to_release(
 
     The release (original application, ``last_known_good.COMMIT``) keeps its inventory at
     ``data/inventory.db`` in its own folder, which is the very file the replacement was
-    pointed at. Its real startup runs, then its own store works on the inventory.
+    pointed at. Its real startup runs, then its own store works on the inventory. A release
+    that cannot start, hangs or reports nonsense is a failed step with its output kept.
     """
     known = {p.name for p in last_known_good.release_backups(release).glob("inventory-*.db")}
     run = last_known_good.run_release("rollback-probe", release)
@@ -1055,13 +1107,15 @@ def rollback_to_release(
     startup = [p for name, p in new.items() if "-startup" in name]
     manual = [p for name, p in new.items() if "-manual" in name]
     problems: list[str] = []
-    if run.returncode != 0 or report is None or report.get("exit_code") != 0:
+    malformed = report_problems(report)
+    if run.returncode != 0 or malformed or report is None or report["exit_code"] != 0:
         problems.append(f"The release failed (exit {run.returncode}): {run.stderr[-400:]}")
+        problems += malformed
     elif report["windows_shown"] != 1:
         problems.append("The release did not show its main window.")
     elif Path(report["release"]).resolve() != release.resolve():
         problems.append(f"The release ran code from {report['release']}.")
-    if report is not None and "read_before_work" in report:
+    if report is not None and not malformed:
         seen = report["read_before_work"]
         expected = {
             "parts": len(upgraded["tables"]["parts"]["rows"]),
@@ -1076,17 +1130,16 @@ def rollback_to_release(
         ]
     if len(startup) != 1:
         problems.append(f"Expected one release startup backup, found {len(startup)}.")
-    else:
+    elif (state := _readable(startup[0], "Release startup backup", problems)) is not None:
         problems += [
-            f"Release startup backup: {p}"
-            for p in compare(upgraded, snapshot(startup[0]), identical=True)
+            f"Release startup backup: {p}" for p in compare(upgraded, state, identical=True)
         ]
     if len(manual) != 1:
         problems.append(f"Expected one release manual backup, found {len(manual)}.")
-    else:
+    elif (state := _readable(manual[0], "Release manual backup", problems)) is not None:
         problems += [
             f"{manual[0].name}: {p}"
-            for p in compare(upgraded, snapshot(manual[0]), identical=False, stock_moved=True)
+            for p in compare(upgraded, state, identical=False, stock_moved=True)
         ]
     problems += compare(upgraded, after, identical=False, stock_moved=True)
     problems += compare(original, after, identical=False, stock_moved=True)
@@ -1109,7 +1162,11 @@ def rollback_to_release(
         problems.append(
             f"The release left no ledger rows of type {', '.join(sorted(needed - written))}."
         )
-    if report is not None and report.get("bom_shipment") not in component_trace(after):
+    if (
+        report is not None
+        and not malformed
+        and report["bom_shipment"] not in component_trace(after)
+    ):
         problems.append("The release's BOM shipment has no component snapshot.")
     step(
         record,
@@ -1117,6 +1174,7 @@ def rollback_to_release(
         problems,
         exit_code=run.returncode,
         release=report,
+        stdout=package_bundle.excerpt(run.stdout),
         stderr=package_bundle.excerpt(run.stderr),
         startup_backups=sorted(p.name for p in startup),
         manual_backups=sorted(p.name for p in manual),

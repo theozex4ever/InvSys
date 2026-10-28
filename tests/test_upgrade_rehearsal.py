@@ -55,10 +55,10 @@ FIXTURE_COUNTS = {
     "shipments": 4,
     "shipment_components": 7,
     "bom_components": 6,
-    "settings": 3,
+    "settings": 2,
 }
-FIXTURE_DIGEST = "8bfb5a770ae68928af1673d1be059fe14ce87563f6253551d1ed21390cb390bb"
-FIXTURE_SHA256 = "6bdb9faaa8d5daef8cb2872207e113a98b252b790d39dbf99417545273eb7c5c"
+FIXTURE_DIGEST = "fff068e27dd5a60e68923eb2563fa6b65df6bcd5a2e2d8795fa80b27809e9e75"
+FIXTURE_SHA256 = "3dac3ae7e53c9f38a525ae89c828bbc433ab38d9fb905a727763a455ec188a9d"
 BOM_SHIPMENT = "SHP-20260905-0001"
 MULTI_LOT_BOM_SHIPMENT = "SHP-20260908-0001"
 
@@ -122,8 +122,10 @@ def test_the_fixture_covers_every_record_kind_the_upgrade_must_keep(inventory):
     assert settings == {
         "schema_version": "1",
         "last_operator": "J. Okafor",
-        "desktop_theme": "dark",
     }
+    # The original application remembered only the operator; the theme arrived with the
+    # desktop frontend, so the historical data must not already contain it.
+    assert "desktop_theme" not in settings
 
 
 def test_the_fixture_schema_is_exactly_what_the_application_creates_today(inventory):
@@ -153,7 +155,8 @@ def test_opening_the_copied_inventory_changes_nothing_and_reads_everything(inven
     before = rehearsal.snapshot(inventory)
     store, bridge = open_bridge(inventory)
     try:
-        assert bridge.preferences()["data"] == {"operator": "J. Okafor", "theme": "dark"}
+        # No theme was ever stored by the original application, so the replacement defaults it.
+        assert bridge.preferences()["data"] == {"operator": "J. Okafor", "theme": "light"}
         part = bridge.part_detail("UPG-BOLT")["data"]
         assert part["quantity"] == 36
         assert {
@@ -405,8 +408,8 @@ def tamper(database: Path, statement: str) -> None:
             "settings row schema_version changed",
         ),
         (
-            "DELETE FROM settings WHERE key = 'desktop_theme'",
-            "settings row desktop_theme is missing",
+            "DELETE FROM settings WHERE key = 'last_operator'",
+            "settings row last_operator is missing",
         ),
         ("ALTER TABLE parts ADD COLUMN extra TEXT", "The schema changed"),
         (
@@ -478,6 +481,7 @@ class StandInApplication(rehearsal.Launcher):
         try:
             store.receive("UPG-WIDGET", 2, "Stock", f"NEW-{self.launches}", "Desktop smoke")
             store.set_setting("last_operator", "Desktop smoke")
+            earlier_backups = set(context.backups.glob("*-manual*.db"))
             if self.misbehaviour != "no-manual-backup":
                 bridge.create_backup()
         finally:
@@ -491,6 +495,29 @@ class StandInApplication(rehearsal.Launcher):
                 tamper(database, "UPDATE shipment_components SET quantity = 1 WHERE id = 2")
             case "writes-to-the-default-location":
                 Path(env["INVSYS_HOME"]).mkdir(parents=True, exist_ok=True)
+            case "rewrites-a-record-an-earlier-launch-added" if self.launches == 2:
+                tamper(
+                    database,
+                    "UPDATE inventory_transactions SET reference = 'edited' WHERE lot_id = "
+                    "(SELECT id FROM lots WHERE lot_number = 'NEW-1')",
+                )
+            case "renames-a-lot-an-earlier-launch-added" if self.launches == 2:
+                tamper(
+                    database, "UPDATE lots SET lot_number = 'RENAMED' WHERE lot_number = 'NEW-1'"
+                )
+            case "rewrites-a-record-the-older-release-added" if self.launches == 4:
+                tamper(
+                    database,
+                    "UPDATE inventory_transactions SET operator = 'someone else' "
+                    "WHERE operator = 'Last known-good' AND tx_type = 'SHIP'",
+                )
+            case "hides-a-rewrite-only-in-the-manual-backup" if self.launches == 2:
+                (backup,) = set(context.backups.glob("*-manual*.db")) - earlier_backups
+                tamper(
+                    backup,
+                    "UPDATE inventory_transactions SET notes = 'edited' WHERE lot_id = "
+                    "(SELECT id FROM lots WHERE lot_number = 'NEW-1')",
+                )
         return {
             "arguments": [],
             "exit_code": 7 if self.misbehaviour == "crashes" else 0,
@@ -534,10 +561,7 @@ def test_the_rehearsal_upgrades_restarts_restores_and_reopens(tmp_path, display)
     assert all(step["passed"] for step in record["steps"])
     assert record["fixture"]["snapshot_digest"] == FIXTURE_DIGEST
     assert record["fixture"]["counts"] == FIXTURE_COUNTS
-    assert record["fixture"]["preferences"] == {
-        "last_operator": "J. Okafor",
-        "desktop_theme": "dark",
-    }
+    assert record["fixture"]["preferences"] == {"last_operator": "J. Okafor"}
     assert sorted(record["fixture"]["component_snapshots"]) == [
         BOM_SHIPMENT,
         MULTI_LOT_BOM_SHIPMENT,
@@ -562,6 +586,16 @@ def test_the_rehearsal_upgrades_restarts_restores_and_reopens(tmp_path, display)
         ("no-manual-backup", "created no manual backup"),
         ("crashes", "The launch failed (exit 7)"),
         ("writes-to-the-default-location", "was created"),
+        (
+            "rewrites-a-record-an-earlier-launch-added",
+            "Earlier record: inventory_transactions row",
+        ),
+        ("renames-a-lot-an-earlier-launch-added", "Earlier record: lots row"),
+        (
+            "rewrites-a-record-the-older-release-added",
+            "Earlier record: inventory_transactions row",
+        ),
+        ("hides-a-rewrite-only-in-the-manual-backup", "-manual"),
     ],
 )
 def test_the_rehearsal_fails_when_the_application_loses_or_misplaces_anything(
@@ -770,6 +804,23 @@ def run_with_release_fault(tmp_path: Path, monkeypatch, fault: str) -> list[str]
                 report = json.loads(result.stdout.splitlines()[-1])
                 report["release"] = str(tree.parent)
                 return subprocess.CompletedProcess(result.args, 0, json.dumps(report), "")
+            case "reports-no-window-count" | "reports-nonsense-reads" | "reports-no-snapshots":
+                report = json.loads(result.stdout.splitlines()[-1])
+                match fault:
+                    case "reports-no-window-count":
+                        del report["windows_shown"]
+                    case "reports-nonsense-reads":
+                        report["read_before_work"] = "everything"
+                    case _:
+                        del report["read_before_work"]["component_snapshots"]
+                return subprocess.CompletedProcess(result.args, 0, json.dumps(report), "")
+            case "times-out":
+                return subprocess.CompletedProcess(
+                    result.args, -1, "partial output\n", "Timed out after 300 s."
+                )
+            case "damages-its-startup-backup":
+                for backup in last_known_good.release_backups(tree).glob("*-startup.db"):
+                    backup.write_bytes(b"not a database")
         return result
 
     monkeypatch.setattr(last_known_good, "run_release", faulty)
@@ -791,6 +842,11 @@ def run_with_release_fault(tmp_path: Path, monkeypatch, fault: str) -> list[str]
         ("alters-the-schema", "The schema changed"),
         ("reads-less-than-the-inventory", "The release read transactions"),
         ("runs-other-code", "The release ran code from"),
+        ("reports-no-window-count", "no usable windows_shown"),
+        ("reports-nonsense-reads", "no usable read_before_work"),
+        ("reports-no-snapshots", "no usable read_before_work.component_snapshots"),
+        ("times-out", "Timed out after 300 s"),
+        ("damages-its-startup-backup", "could not be read"),
     ],
 )
 def test_the_rollback_fails_when_the_older_release_loses_or_misreads_anything(
@@ -798,6 +854,62 @@ def test_the_rollback_fails_when_the_older_release_loses_or_misreads_anything(
 ):
     problems = run_with_release_fault(tmp_path, monkeypatch, fault)
     assert any(expected in problem for problem in problems), problems
+
+
+def test_a_hung_release_is_a_failed_step_that_keeps_what_it_printed(tmp_path, display, monkeypatch):
+    run_with_release_fault(tmp_path, monkeypatch, "times-out")
+    record = json.loads((tmp_path / "evidence" / "upgrade.json").read_text(encoding="utf-8"))
+    step = next(s for s in record["steps"] if s["name"].startswith("rollback-to-the-last"))
+
+    assert step["exit_code"] == -1
+    assert step["stdout"] == ["partial output"]
+    assert step["stderr"] == ["Timed out after 300 s."]
+    # The rehearsal went on: the inventory was snapshotted and the other steps recorded.
+    assert step["inventory_counts"]["parts"] > 0
+    assert record["steps"][-1]["name"].startswith("restore-refusals")
+
+
+def probe_only(monkeypatch, failure: Exception) -> None:
+    """Make launching the release fail; git (extraction) keeps working."""
+    real = subprocess.run
+
+    def run(command, *args, **kwargs):
+        if "rollback-probe" in command:
+            raise failure
+        return real(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+
+def test_a_release_that_times_out_comes_back_as_a_failed_process(tmp_path, monkeypatch):
+    timeout = subprocess.TimeoutExpired("probe", 300, output=b"half a line", stderr=None)
+    probe_only(monkeypatch, timeout)
+
+    result = last_known_good.run_release("rollback-probe", tmp_path)
+
+    assert result.returncode == -1
+    assert result.stdout == "half a line"
+    assert "Timed out after 300 s." in result.stderr
+
+
+def test_a_release_that_cannot_be_started_comes_back_as_a_failed_process(tmp_path, monkeypatch):
+    probe_only(monkeypatch, PermissionError("denied"))
+
+    result = last_known_good.run_release("rollback-probe", tmp_path)
+
+    assert result.returncode == -1
+    assert "Could not start: denied" in result.stderr
+
+
+def test_the_rehearsal_records_a_release_that_cannot_start(tmp_path, display, monkeypatch):
+    probe_only(monkeypatch, FileNotFoundError("no interpreter"))
+    passed, record, _ = run_rehearsal(tmp_path)
+
+    step = next(s for s in record["steps"] if s["name"].startswith("rollback-to-the-last"))
+    assert not passed
+    assert not step["passed"]
+    assert any("Could not start: no interpreter" in p for p in step["problems"])
+    assert step["exit_code"] == -1
 
 
 def test_the_rehearsal_records_the_release_it_rolled_back_to(tmp_path, display):
