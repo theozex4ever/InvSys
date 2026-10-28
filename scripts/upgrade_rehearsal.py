@@ -17,14 +17,14 @@ after shipping, an inactive Part, preferences) where it keeps its inventory. It 
 1. upgrade: the native smoke runs against the copy; the startup backup must equal the
    pre-upgrade copy, and every pre-existing record must survive unchanged;
 2. restart: a second launch; the startup backup must equal the first launch's result;
-3. rollback: the last known-good release starts on the upgraded inventory (its real
-   startup and main window) and works with its own store; nothing earlier may change;
-4. roll forward: the application is launched once more on what the older release left;
-5. closed-app restore: the documented procedure (docs/frontend/cutover.md) is applied
+3. closed-app restore: the documented procedure (docs/frontend/cutover.md) is applied
    to restore the pre-upgrade startup backup over the later inventory, keeping the later
    file aside and listing every ledger entry the restore drops;
-6. reopen: a launch must open the restored inventory and find exactly the
-   pre-upgrade records.
+4. reopen: a launch must open the restored inventory and find exactly the
+   pre-upgrade records;
+5. rollback: the last known-good release starts on that inventory (its real startup and
+   main window) and works with its own store; nothing earlier may change;
+6. roll forward: the application is launched once more on what the older release left.
 
 The restore helper lives here, in a rehearsal tool, on purpose: the application has no
 restore feature and gains none. The tool never touches operational data: it needs an
@@ -962,28 +962,10 @@ def rehearse(
             record, "restart-and-workflows", launcher, database, cwd, env, after1, original
         )
         ok = ok and ok1 and ok2
-        # The upgraded inventory goes back to the previous release, then forward again.
-        old_release = rollback_to_release(record, release, database, after2, original)
-        ok = ok and old_release is not None
-        if old_release is not None:
-            ok4, _, _ = launch_and_check(
-                record,
-                "roll-forward-after-rollback-and-workflows",
-                launcher,
-                database,
-                cwd,
-                env,
-                old_release,
-                original,
-                stock_moved=True,
-            )
-            ok = ok and ok4
-        rollback = restore_rollback(
-            record, database, pre_upgrade_backup, original, snapshot(database)
-        )
+        rollback = restore_rollback(record, database, pre_upgrade_backup, original, after2)
         ok = ok and rollback is not None
         if rollback is not None:
-            ok3, _, _ = launch_and_check(
+            ok3, after3, _ = launch_and_check(
                 record,
                 "reopen-after-restore-and-workflows",
                 launcher,
@@ -994,6 +976,25 @@ def rehearse(
                 original,
             )
             ok = ok and ok3
+            # The inventory the replacement has used goes back to the previous release and
+            # forward again. This comes last: the smoke's dashboard assertions assume the
+            # inventory has not collected many earlier smoke Parts, so no more than two
+            # consecutive launches may run on one inventory.
+            old_release = rollback_to_release(record, release, database, after3, original)
+            ok = ok and old_release is not None
+            if old_release is not None:
+                ok4, _, _ = launch_and_check(
+                    record,
+                    "roll-forward-after-rollback-and-workflows",
+                    launcher,
+                    database,
+                    cwd,
+                    env,
+                    old_release,
+                    original,
+                    stock_moved=True,
+                )
+                ok = ok and ok4
 
     ok = (
         step(

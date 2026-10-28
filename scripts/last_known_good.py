@@ -20,6 +20,7 @@ upgraded inventory and then works with that release's own store.
 """
 
 import argparse
+import importlib
 import io
 import json
 import os
@@ -130,11 +131,18 @@ def release_backups(tree: Path) -> Path:
 
 
 def _use_release(tree: Path) -> None:
-    sys.path.insert(0, str(tree))
-    import inventory_control
+    """Make the release importable; modules are imported by name so they stay untyped here.
 
-    if not Path(inventory_control.__file__).resolve().is_relative_to(tree.resolve()):
-        raise SystemExit(f"{inventory_control.__file__} is not the release under {tree}.")
+    The checkout's own ``inventory_control`` is what the type checker sees, not the release's.
+    """
+    sys.path.insert(0, str(tree))
+    package = importlib.import_module("inventory_control")
+    if not Path(str(package.__file__)).resolve().is_relative_to(tree.resolve()):
+        raise SystemExit(f"{package.__file__} is not the release under {tree}.")
+
+
+def _module(name: str) -> Any:
+    return importlib.import_module(name)
 
 
 class _Clock:
@@ -150,7 +158,7 @@ class _Clock:
 def build_fixture(tree: Path, database: Path) -> None:
     """Write the pre-migration scenario with the release's own store and a fixed clock."""
     _use_release(tree)
-    from inventory_control.store import InventoryStore
+    InventoryStore = _module("inventory_control.store").InventoryStore  # noqa: N806  # a class
 
     clock = _Clock()
 
@@ -265,8 +273,8 @@ def rollback_probe(tree: Path) -> dict[str, Any]:
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
 
-    from inventory_control import app as original_app
-    from inventory_control.ui import main_window
+    original_app = _module("inventory_control.app")
+    main_window = _module("inventory_control.ui.main_window")
 
     shown: list[Any] = []
     real_show = main_window.MainWindow.show
@@ -274,14 +282,14 @@ def rollback_probe(tree: Path) -> dict[str, Any]:
     def show_then_quit(window: Any) -> None:
         real_show(window)
         shown.append(window)
-        QTimer.singleShot(300, QApplication.instance().quit)
+        QTimer.singleShot(300, QApplication.quit)
 
-    main_window.MainWindow.show = show_then_quit  # type: ignore[method-assign]  # one-shot child process
+    main_window.MainWindow.show = show_then_quit  # a one-shot child process
     exit_code = original_app.main()
 
-    from inventory_control.backup import backup_database
-    from inventory_control.config import BACKUP_DIR, DB_PATH
-    from inventory_control.store import STORE
+    backup_database = _module("inventory_control.backup").backup_database
+    configuration = _module("inventory_control.config")
+    STORE = _module("inventory_control.store").STORE  # noqa: N806  # the release's singleton
 
     read = _read_inventory(STORE)
     operator = PROBE_OPERATOR
@@ -296,7 +304,7 @@ def rollback_probe(tree: Path) -> dict[str, Any]:
     )
     STORE.adjust("UPG-LOW", "Stock", "L-1", 5, operator, "rollback rehearsal count")
     STORE.set_setting("last_operator", operator)
-    manual = backup_database(DB_PATH, BACKUP_DIR, reason="manual")
+    manual = backup_database(configuration.DB_PATH, configuration.BACKUP_DIR, reason="manual")
     return {
         "exit_code": exit_code,
         "windows_shown": len(shown),

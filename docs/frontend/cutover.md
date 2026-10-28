@@ -182,7 +182,7 @@ history at that commit; its dependencies are the ones the rehearsing interpreter
 
 The rehearsal keeps the operator's inventory where this release keeps it,
 `<release>/data/inventory.db`, and points the replacement at that file with
-`--database`; nothing is copied. After the replacement has been launched twice, the
+`--database`; nothing is copied. After the replacement has restored and reopened the inventory, the
 release is started on the same file by `last_known_good.py rollback-probe`, in a child
 interpreter that only sees the release's code (`python -I`), with Qt's offscreen platform:
 it runs the release's own `inventory_control.app.main` (startup backup, then the real main
@@ -192,7 +192,8 @@ manual backup). The rehearsal then checks that the release read every Part, ledg
 shipment and per-Lot component snapshot the replacement had left, that its startup backup
 equals the inventory as the replacement left it, that no earlier record changed, that the
 schema is unchanged, that ledger, balances and snapshots still reconcile with the
-release's new rows, and launches the replacement once more on the result.
+release's new rows, and launches the replacement once more on the result. (The rollback runs last because the native smoke's
+dashboard checks assume an inventory that has not collected many earlier smoke Parts.)
 
 Not covered: the release's window is created but not driven, and the replacement's data
 after the release's work is read back by one launch, not a long working period.
@@ -277,17 +278,16 @@ the fixture as its inventory (`last-known-good/data/inventory.db`; never operati
    must reconcile; the manual and startup backups must be in the selected inventory's
    folder and hold only its records.
 2. **Restart:** a second launch; its startup backup must equal the first launch's result.
-3. **Roll back to the last known-good release:** the original application is started on
-   the upgraded inventory and works on it ([above](#last-known-good-release-rehearsed)).
-4. **Roll forward:** a launch of the replacement on what the older release left; its
-   startup backup must equal that state and every fixture record must still be intact.
-5. **Restore:** the first launch's startup backup is restored over the later inventory
+3. **Restore:** the first launch's startup backup is restored over the later inventory
    by the closed-app procedure; the result must equal the pre-upgrade inventory, the
    displaced file must equal the pre-restore state, and the ledger entries and
-   shipments the restore removed (the replacement's and the older release's) are listed
-   in the record.
-6. **Reopen:** a launch must open the restored inventory (startup backup equal
+   shipments the restore removed are listed in the record.
+4. **Reopen:** a launch must open the restored inventory (startup backup equal
    to it) and leave every pre-upgrade record intact.
+5. **Roll back to the last known-good release:** the original application is started on
+   that inventory and works on it ([above](#last-known-good-release-rehearsed)).
+6. **Roll forward:** a launch of the replacement on what the older release left; its
+   startup backup must equal that state and every fixture record must still be intact.
 7. The restore failure table above is exercised and recorded for the platform.
 
 Retained results and what they do and do not establish are in

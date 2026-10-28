@@ -524,10 +524,10 @@ def test_the_rehearsal_upgrades_restarts_restores_and_reopens(tmp_path, display)
         "fixture-is-intact-before-upgrade",
         "upgrade-open-and-workflows",
         "restart-and-workflows",
-        "rollback-to-the-last-known-good-release-on-the-upgraded-inventory",
-        "roll-forward-after-rollback-and-workflows",
         "closed-app-restore-of-the-pre-upgrade-backup",
         "reopen-after-restore-and-workflows",
+        "rollback-to-the-last-known-good-release-on-the-upgraded-inventory",
+        "roll-forward-after-rollback-and-workflows",
         "nothing-written-outside-the-selected-inventory",
         "restore-refusals-and-file-failures-leave-the-database-untouched",
     ]
@@ -544,21 +544,12 @@ def test_the_rehearsal_upgrades_restarts_restores_and_reopens(tmp_path, display)
     ]
     restore = next(s for s in record["steps"] if s["name"].startswith("closed-app-restore"))
     assert restore["reconciliation_required"]["ledger_entries"] > 0
-    # Three stand-in launches and the last known-good release's workflows are displaced.
-    assert restore["reconciliation_required"]["by_type"] == {
-        "BOM_CONSUME": 3,
-        "COUNT_CORRECTION": 1,
-        "MOVE_IN": 1,
-        "MOVE_OUT": 1,
-        "RECEIVE": 4,
-        "SHIP": 1,
-        "SHIP_BOM": 1,
-    }
+    assert restore["reconciliation_required"]["by_type"] == {"RECEIVE": 2}
     assert not (tmp_path / "work" / "unexpected-home").exists()
-    # The disposable copy was rolled back to the pre-upgrade inventory.
+    # The restore returned the pre-upgrade inventory; the launches after it are all that is new.
     final = rehearsal.snapshot(release_database(tmp_path / "work"))
     assert any(row[2] == "NEW-4" for row in final["tables"]["lots"]["rows"].values())
-    assert not any(row[2] == "NEW-1" for row in final["tables"]["lots"]["rows"].values())
+    assert not any(row[2] in ("NEW-1", "NEW-2") for row in final["tables"]["lots"]["rows"].values())
 
 
 @pytest.mark.parametrize(
