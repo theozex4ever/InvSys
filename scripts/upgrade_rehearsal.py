@@ -34,6 +34,7 @@ It reads databases through scratch copies, so inspecting a file never changes it
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -1207,7 +1208,20 @@ def report_dropped(kept: Path, displaced: Path) -> int:
     return 0
 
 
+def _report_unencodable_text() -> None:
+    """Never lose a rehearsal result to the console's encoding.
+
+    Launch output can hold replacement characters that a Windows console code page
+    (cp1252) cannot encode; printing a failed step must still show it and the evidence
+    must still be written.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _report_unencodable_text()
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
     commands = parser.add_subparsers(dest="command", required=True)
     rehearse_parser = commands.add_parser("rehearse")

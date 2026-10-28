@@ -639,6 +639,22 @@ def test_source_rehearsals_cannot_ask_for_network_isolation(capsys, tmp_path):
     assert "--bundle rehearsals only" in capsys.readouterr().err
 
 
+def test_a_failed_step_prints_even_when_the_console_cannot_encode_its_text(monkeypatch):
+    """A Windows cp1252 console must not turn a failed launch into a traceback."""
+    import io
+
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding="cp1252", write_through=True)
+    monkeypatch.setattr(sys, "stdout", console)
+    monkeypatch.setattr(sys, "stderr", console)
+    with pytest.raises(SystemExit):
+        rehearsal.main(["rehearse"])  # argparse's usage error goes to the same console
+    rehearsal.step({"steps": []}, "launch", ["smoke said \ufffd"])
+
+    assert "smoke said ?" in raw.getvalue().decode("cp1252")
+    console.detach()
+
+
 def test_a_rehearsal_needs_a_target(tmp_path):
     with pytest.raises(SystemExit):
         rehearsal.main(["rehearse", "--workdir", str(tmp_path), "--evidence", str(tmp_path / "e")])
