@@ -827,24 +827,37 @@ def launch_and_check(
     """
     known = set(backups_in(database))
     run = launcher.run(database, cwd, env)
-    after = snapshot(database)
+    problems: list[str] = []
+    after = _readable(database, "Selected inventory", problems)
+    if after is None:
+        step(
+            record,
+            label,
+            problems,
+            exit_code=run["exit_code"],
+            seconds=run["seconds"],
+            stdout=package_bundle.excerpt(run["stdout"]),
+            stderr=package_bundle.excerpt(run["stderr"]),
+        )
+        raise RehearsalError("Selected inventory is unreadable; further launches were skipped.")
     new = {name: path for name, path in backups_in(database).items() if name not in known}
     startup = [path for name, path in new.items() if "-startup" in name]
     manual = [path for name, path in new.items() if "-manual" in name]
-    problems: list[str] = []
     if run["exit_code"] != 0 or "no HTTP server" not in run["stdout"]:
         problems.append(f"The launch failed (exit {run['exit_code']}): {run['stderr'][-400:]}")
     if len(startup) != 1:
         problems.append(f"Expected one new startup backup, found {len(startup)}.")
-    startup_state = snapshot(startup[0]) if len(startup) == 1 else None
+    startup_state = _readable(startup[0], "Startup backup", problems) if len(startup) == 1 else None
     if startup_state is not None:
         problems += [
             f"Startup backup: {p}" for p in compare(reference, startup_state, identical=True)
         ]
     if not manual:
         problems.append("The smoke created no manual backup.")
-    manual_states = [snapshot(path) for path in manual]
-    for path, state in zip(manual, manual_states, strict=True):
+    for path in manual:
+        state = _readable(path, "Manual backup", problems)
+        if state is None:
+            continue
         problems += [
             f"{path.name}: {p}"
             for p in compare(original, state, identical=False, stock_moved=stock_moved)
@@ -968,50 +981,61 @@ def rehearse(
     if launcher.bundle is not None:
         record["assets_verified"] = package_bundle.verify_assets(launcher.bundle, assets.resolve())
 
-    with package_bundle.network_isolation(
-        launcher.bundle or ROOT, launcher.isolate_network
-    ) as isolation:
-        record["network_isolation"] = isolation
-        ok1, after1, pre_upgrade_backup = launch_and_check(
-            record, "upgrade-open-and-workflows", launcher, database, cwd, env, original, original
-        )
-        ok2, after2, _ = launch_and_check(
-            record, "restart-and-workflows", launcher, database, cwd, env, after1, original
-        )
-        ok = ok and ok1 and ok2
-        rollback = restore_rollback(record, database, pre_upgrade_backup, original, after2)
-        ok = ok and rollback is not None
-        if rollback is not None:
-            ok3, after3, _ = launch_and_check(
+    try:
+        with package_bundle.network_isolation(
+            launcher.bundle or ROOT, launcher.isolate_network
+        ) as isolation:
+            record["network_isolation"] = isolation
+            ok1, after1, pre_upgrade_backup = launch_and_check(
                 record,
-                "reopen-after-restore-and-workflows",
+                "upgrade-open-and-workflows",
                 launcher,
                 database,
                 cwd,
                 env,
-                rollback,
+                original,
                 original,
             )
-            ok = ok and ok3
-            # The inventory the replacement has used goes back to the previous release and
-            # forward again. This comes last: the smoke's dashboard assertions assume the
-            # inventory has not collected many earlier smoke Parts, so no more than two
-            # consecutive launches may run on one inventory.
-            old_release = rollback_to_release(record, release, database, after3, original)
-            ok = ok and old_release is not None
-            if old_release is not None:
-                ok4, _, _ = launch_and_check(
+            ok2, after2, _ = launch_and_check(
+                record, "restart-and-workflows", launcher, database, cwd, env, after1, original
+            )
+            ok = ok and ok1 and ok2
+            rollback = restore_rollback(record, database, pre_upgrade_backup, original, after2)
+            ok = ok and rollback is not None
+            if rollback is not None:
+                ok3, after3, _ = launch_and_check(
                     record,
-                    "roll-forward-after-rollback-and-workflows",
+                    "reopen-after-restore-and-workflows",
                     launcher,
                     database,
                     cwd,
                     env,
-                    old_release,
+                    rollback,
                     original,
-                    stock_moved=True,
                 )
-                ok = ok and ok4
+                ok = ok and ok3
+                # The inventory the replacement has used goes back to the previous release and
+                # forward again. This comes last: the smoke's dashboard assertions assume the
+                # inventory has not collected many earlier smoke Parts, so no more than two
+                # consecutive launches may run on one inventory.
+                old_release = rollback_to_release(record, release, database, after3, original)
+                ok = ok and old_release is not None
+                if old_release is not None:
+                    ok4, _, _ = launch_and_check(
+                        record,
+                        "roll-forward-after-rollback-and-workflows",
+                        launcher,
+                        database,
+                        cwd,
+                        env,
+                        old_release,
+                        original,
+                        stock_moved=True,
+                    )
+                    ok = ok and ok4
+    except RehearsalError as exc:
+        step(record, "remaining-workflows-skipped", [str(exc)])
+        ok = False
 
     ok = (
         step(
@@ -1076,7 +1100,7 @@ def report_problems(report: dict[str, Any] | None) -> list[str]:
 
 
 def _readable(path: Path, label: str, problems: list[str]) -> dict[str, Any] | None:
-    """Snapshot of a backup the release wrote; a damaged file is a problem, not a crash."""
+    """Read inventory evidence without losing the failure report if a file is damaged."""
     try:
         return snapshot(path)
     except (OSError, sqlite3.Error, KeyError, ValueError) as exc:
@@ -1101,12 +1125,23 @@ def rollback_to_release(
     known = {p.name for p in last_known_good.release_backups(release).glob("inventory-*.db")}
     run = last_known_good.run_release("rollback-probe", release)
     report = _probe_report(run.stdout)
-    after = snapshot(database)
+    problems: list[str] = []
+    after = _readable(database, "Selected inventory", problems)
+    if after is None:
+        step(
+            record,
+            "rollback-to-the-last-known-good-release-on-the-upgraded-inventory",
+            problems,
+            exit_code=run.returncode,
+            release=report,
+            stdout=package_bundle.excerpt(run.stdout),
+            stderr=package_bundle.excerpt(run.stderr),
+        )
+        return None
     folder = last_known_good.release_backups(release)
     new = {p.name: p for p in sorted(folder.glob("inventory-*.db")) if p.name not in known}
     startup = [p for name, p in new.items() if "-startup" in name]
     manual = [p for name, p in new.items() if "-manual" in name]
-    problems: list[str] = []
     malformed = report_problems(report)
     if run.returncode != 0 or malformed or report is None or report["exit_code"] != 0:
         problems.append(f"The release failed (exit {run.returncode}): {run.stderr[-400:]}")

@@ -818,6 +818,8 @@ def run_with_release_fault(tmp_path: Path, monkeypatch, fault: str) -> list[str]
                 return subprocess.CompletedProcess(
                     result.args, -1, "partial output\n", "Timed out after 300 s."
                 )
+            case "damages-the-live-inventory":
+                database.write_bytes(b"not a database")
             case "damages-its-startup-backup":
                 for backup in last_known_good.release_backups(tree).glob("*-startup.db"):
                     backup.write_bytes(b"not a database")
@@ -847,6 +849,7 @@ def run_with_release_fault(tmp_path: Path, monkeypatch, fault: str) -> list[str]
         ("reports-no-snapshots", "no usable read_before_work.component_snapshots"),
         ("times-out", "Timed out after 300 s"),
         ("damages-its-startup-backup", "could not be read"),
+        ("damages-the-live-inventory", "Selected inventory"),
     ],
 )
 def test_the_rollback_fails_when_the_older_release_loses_or_misreads_anything(
@@ -1374,3 +1377,29 @@ def test_restore_refuses_a_backup_missing_any_table_the_inspection_needs(invento
     tamper(broken, "DROP TABLE bom_components")
     with pytest.raises(rehearsal.RestoreRefused, match="bom_components"):
         rehearsal.restore_from_backup(inventory, broken, inventory.parent / "restore-aside")
+
+
+@pytest.mark.parametrize("target", ["live", "startup", "manual"])
+def test_damaged_launch_files_produce_failed_evidence(tmp_path, display, target):
+    class Damaging(StandInApplication):
+        def run(self, database, cwd, env):
+            result = super().run(database, cwd, env)
+            if self.launches == 1:
+                if target == "live":
+                    paths = [database]
+                else:
+                    paths = list(database.parent.joinpath("backups").glob(f"*-{target}*.db"))
+                    assert paths
+                for path in paths:
+                    path.write_bytes(b"not a database")
+            return result
+
+    evidence = tmp_path / "evidence.json"
+    assert not rehearsal.rehearse(Damaging(), tmp_path / "work", evidence)
+    record = json.loads(evidence.read_text(encoding="utf-8"))
+    assert record["result"] == "failed"
+    launch = next(s for s in record["steps"] if s["name"] == "upgrade-open-and-workflows")
+    assert not launch["passed"]
+    assert any("could not be read" in p for p in launch["problems"])
+    assert "stdout" in launch
+    assert "stderr" in launch

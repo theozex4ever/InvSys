@@ -189,12 +189,14 @@ interpreter that only sees the release's code (`python -I`), with Qt's offscreen
 it runs the release's own `inventory_control.app.main` (startup backup, then the real main
 window, whose views read the whole inventory), then works through the release's own store
 (receive, move, standard ship, nested-BOM ship with a reviewed plan, count correction,
-manual backup). The rehearsal then checks that the release read every Part, ledger row,
-shipment and per-Lot component snapshot the replacement had left, that its startup backup
+manual backup). The rehearsal then checks that the release read the expected Part, ledger and shipment counts
+and every per-Lot component snapshot the replacement had left, that its startup backup
 equals the inventory as the replacement left it, that no earlier record changed, that the
 schema is unchanged, that ledger, balances and snapshots still reconcile with the
 release's new rows, and launches the replacement once more on the result. (The rollback runs last because the native smoke's
 dashboard checks assume an inventory that has not collected many earlier smoke Parts.)
+
+The old release runs on current dependencies outside the packaged launch's network isolation.
 
 Not covered: the release's window is created but not driven, and the replacement's data
 after the release's work is read back by one launch, not a long working period.
