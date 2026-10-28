@@ -124,6 +124,8 @@ function notice(text: string, error = false) {
   $('#notice').className = error ? 'alert error' : 'alert success';
 }
 function navigate(next: Page, refresh = true): Promise<unknown> {
+  // A queued dialog close must not restore focus after navigation has moved it.
+  createReturnFocus = null;
   if (page === 'history' && page !== next) history.leave();
   if (page === 'bom-explore' && page !== next) bomExplore.leave();
   if (page === 'bom' && page !== next) bom.leave();
@@ -224,7 +226,7 @@ $<HTMLDialogElement>('#drawer').addEventListener('close', () => { ++detailVersio
 $('#close-drawer').onclick = async () => { if (await editor.mayClose()) $<HTMLDialogElement>('#drawer').close(); };
 $<HTMLDialogElement>('#drawer').addEventListener('cancel', event => { if (editor.active()) { event.preventDefault(); $('#close-drawer').click(); } });
 $('#add-part').onclick = () => openCreate($('#add-part'));
-$<HTMLDialogElement>('#create-dialog').addEventListener('close', () => { if (createReturnFocus?.isConnected) createReturnFocus.focus({ preventScroll: true }); });
+$<HTMLDialogElement>('#create-dialog').addEventListener('close', () => { createReturnFocus?.focus({ preventScroll: true }); });
 $('#close-create').onclick = () => { if (!creating) $<HTMLDialogElement>('#create-dialog').close(); };
 $<HTMLDialogElement>('#create-dialog').addEventListener('cancel', event => { if (creating) event.preventDefault(); });
 document.addEventListener('click', event => {
