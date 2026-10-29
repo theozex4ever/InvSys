@@ -103,7 +103,7 @@ def test_retained_files_match_the_checksum_list() -> None:
     for name, digest in listed.items():
         path = EVIDENCE / name
         if not path.is_file():
-            # Linux and Windows archives are not retained, only their checksums.
+            # Archives are not retained in the repository, only their checksums.
             assert name.endswith((".tar.gz", ".zip")), name
             continue
         data = path.read_bytes()

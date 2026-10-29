@@ -52,7 +52,8 @@ git diff --stat ec8bc4f20d0d433e695849090287f23426419833 HEAD -- \
 ```
 
 `tests/fixtures` is listed because the upgrade rehearsal installs
-`tests/fixtures/upgrade/premigration-inventory.sql`. A behavior, asset, dependency, fixture or packaging fix after `ec8bc4f` makes this record
+`tests/fixtures/upgrade/premigration-inventory.sql`. Changing that fixture also fails
+the evidence test until a new candidate record is added. A behavior, asset, dependency, fixture or packaging fix after `ec8bc4f` makes this record
 stale for the affected checks; repeat them and record a new candidate rather than
 editing this one. The evidence from earlier dated runs elsewhere in these documents
 (Windows 2026-10-22, macOS 2026-10-21, performance 2026-10-26, PR #79/#84 upgrade
@@ -71,7 +72,7 @@ rehearsals) belongs to earlier commits and is **not** claimed for this candidate
 | Criterion | Status | Basis |
 | --- | --- | --- |
 | Complete workflow/native smoke checklist on the exact candidate bundles on Windows, Linux and macOS, twice for restart and backup, including CSV/file/folder operations and safe failures | **Automated part met; human part open** | Both native runs on each frozen bundle passed, the second run's startup backup held exactly run 1's 42 ledger rows, five or six readable startup failures per platform, five CSV exports and three imports, backup and folder actions (Windows through real Explorer windows in both runs). macOS import dialogs use Qt's own dialog in the smoke; the Cocoa panel and Finder are covered only by the owner's earlier #54 acceptance, whose mapping to this candidate is not established (see above). The A01–A17 checklist has not been walked by a person on a workstation |
-| Consolidate capability classes, automated gates, platform results, performance, upgrade/restore and accessibility; no required capability Missing | **Not met** | Consolidated below. Rows 1, 38 (portion), 47 (portion), 48 (portion), 49 and 50 of the [register](acceptance.md#required-capability-register) remain Missing, Partial or Mixed; the human screen-reader review is absent |
+| Consolidate capability classes, automated gates, platform results, performance, upgrade/restore and accessibility; no required capability Missing | **Not met** | Consolidated below. Rows 1, 37, 38 (portion), 45, 47 (portion), 48 (portion), 49 and 50 of the [register](acceptance.md#required-capability-register) remain Missing, Partial or Mixed; the human screen-reader review is absent |
 | Actual user or designated-operator sign-off on the intended workstation | **Not obtained** | [Record](#operator-sign-off-record) is blank |
 | Document unresolved failures honestly; evidence corresponds to the candidate | **Met for this record** | [What remains](#what-remains-before-retirement); candidate check above. The gate itself stays incomplete |
 | Record readiness to retire without closing or editing the parent; sign-off does not authorize release or production data changes | **Not recorded** | Nothing here states readiness: gates above are open. Readiness is the operator's statement in the blank record below, and still would not authorize release publication or production data changes |
@@ -165,8 +166,9 @@ still carry a Missing portion:
 | 49 | Missing | Operator sign-off, human accessibility review |
 | 50 | Missing | Blocked by every retirement gate |
 
-Story 45 (standalone bundles) moves from Missing to Mixed in this change, and the
-macOS portion of story 37 from Missing to a stated gap, on the basis in their rows.
+Story 45 (standalone bundles) moves from Missing to Mixed in this change, and
+story 37 moves from Equivalent to Mixed because candidate-specific macOS acceptance
+remains open, on the basis in their rows.
 The Windows and Linux portions of 37 and story 46 were already Equivalent.
 
 ## Accessibility
