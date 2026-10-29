@@ -1,0 +1,270 @@
+{
+  "recorded_at": "2026-10-29T02:56:44+00:00",
+  "machine": {
+    "platform": "Windows-2025Server-10.0.26100-SP0",
+    "machine": "AMD64",
+    "kernel": "2025Server",
+    "logical_cpus": 4,
+    "display": "windows-desktop-session",
+    "ci_image": "win25-vs2026 20261021.278.1",
+    "os": "Windows 10.0.26100 (ServerDatacenter)",
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "memory": "16771836 kB"
+  },
+  "bundle": {
+    "directory": "invsys-desktop",
+    "file_count": 3026,
+    "size_bytes": 593979385,
+    "executable_sha256": "a4948fbf4fa673202fc02cca2e2340903f4e1d151ac945d082783289ce680e4f",
+    "manifest": {
+      "app": "invsys-desktop",
+      "source": {
+        "commit": "ec8bc4f20d0d433e695849090287f23426419833",
+        "uncommitted_changes": false
+      },
+      "python": "3.12.10",
+      "platform": "win32-AMD64",
+      "packages": {
+        "pyinstaller": "6.22.3",
+        "pyinstaller-hooks-contrib": "2026.8",
+        "PySide6": "6.11.2",
+        "pywebview": "6.2.1",
+        "QtPy": "2.4.3"
+      },
+      "assets": {
+        "app.js": "e3e58ed7634575f4bbe3c84e140d07dbd93cab59391c6cc3617ad31e03eee00f",
+        "index.html": "9311ff079756f70d629845d224fdbb60d4b01d3cdfb4020a123628123f57ea2c",
+        "style.css": "34176552257111586b6fa5a00ffa948de30c238a03b5305a50bc95628f1e6b2c"
+      }
+    }
+  },
+  "assets_verified": {
+    "app.js": "e3e58ed7634575f4bbe3c84e140d07dbd93cab59391c6cc3617ad31e03eee00f",
+    "index.html": "9311ff079756f70d629845d224fdbb60d4b01d3cdfb4020a123628123f57ea2c",
+    "style.css": "34176552257111586b6fa5a00ffa948de30c238a03b5305a50bc95628f1e6b2c"
+  },
+  "network_isolated": true,
+  "runs": [
+    {
+      "run": 1,
+      "exit_code": 0,
+      "seconds": 111.2,
+      "stdout": [
+        "Desktop smoke: visible Explorer navigation verified: D:\\a\\_temp\\invsys-package-smoke\\inventory\\exports",
+        "Desktop smoke: five real CSV files, Lot/audit/component trace, destination, duplicate clicks, navigation and export failures passed.",
+        "Desktop smoke: native reduced-motion preference passed.",
+        "Desktop smoke: dialog last-action margin below the viewport, min 25 px over 32 checks.",
+        "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
+        "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
+        "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
+        "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
+        "Desktop smoke: Ctrl+1\ufffd9/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2489 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: catalog paging with real keys keeps pager focus and announces each page.",
+        "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
+        "Desktop smoke: restart persistence and backup content passed; no HTTP server."
+      ],
+      "stderr": [],
+      "startup_backups": [],
+      "startup_backup_transactions": null,
+      "database": {
+        "integrity_check": "ok",
+        "parts": 123,
+        "inventory_transactions": 42,
+        "shipments": 6
+      },
+      "passed": true,
+      "native_folder_operations": {
+        "passed": true,
+        "observations": [
+          {
+            "hwnd": 131598,
+            "path": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\backups",
+            "location_url": "file:///D:/a/_temp/invsys-package-smoke/inventory/backups",
+            "requested": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\backups",
+            "visible": true,
+            "closed_after_probe": true
+          },
+          {
+            "hwnd": 524878,
+            "path": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\exports",
+            "location_url": "file:///D:/a/_temp/invsys-package-smoke/inventory/exports",
+            "requested": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\exports",
+            "visible": true,
+            "closed_after_probe": true
+          },
+          {
+            "hwnd": 917912,
+            "path": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\exports",
+            "location_url": "file:///D:/a/_temp/invsys-package-smoke/inventory/exports",
+            "requested": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\exports",
+            "visible": true,
+            "closed_after_probe": true
+          }
+        ]
+      }
+    },
+    {
+      "run": 2,
+      "exit_code": 0,
+      "seconds": 97.3,
+      "stdout": [
+        "Desktop smoke: visible Explorer navigation verified: D:\\a\\_temp\\invsys-package-smoke\\inventory\\exports",
+        "Desktop smoke: five real CSV files, Lot/audit/component trace, destination, duplicate clicks, navigation and export failures passed.",
+        "Desktop smoke: native reduced-motion preference passed.",
+        "Desktop smoke: dialog last-action margin below the viewport, min 25 px over 32 checks.",
+        "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
+        "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
+        "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
+        "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
+        "Desktop smoke: Ctrl+1\ufffd9/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 3454 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: catalog paging with real keys keeps pager focus and announces each page.",
+        "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
+        "Desktop smoke: restart persistence and backup content passed; no HTTP server."
+      ],
+      "stderr": [
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.",
+        "[5852:8032:1029/030017.391:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox."
+      ],
+      "startup_backups": [
+        "inventory-20261029-025840-startup.db"
+      ],
+      "startup_backup_transactions": 42,
+      "database": {
+        "integrity_check": "ok",
+        "parts": 242,
+        "inventory_transactions": 82,
+        "shipments": 12
+      },
+      "passed": true,
+      "native_folder_operations": {
+        "passed": true,
+        "observations": [
+          {
+            "hwnd": 196942,
+            "path": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\backups",
+            "location_url": "file:///D:/a/_temp/invsys-package-smoke/inventory/backups",
+            "requested": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\backups",
+            "visible": true,
+            "closed_after_probe": true
+          },
+          {
+            "hwnd": 1245926,
+            "path": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\exports",
+            "location_url": "file:///D:/a/_temp/invsys-package-smoke/inventory/exports",
+            "requested": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\exports",
+            "visible": true,
+            "closed_after_probe": true
+          },
+          {
+            "hwnd": 1573414,
+            "path": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\exports",
+            "location_url": "file:///D:/a/_temp/invsys-package-smoke/inventory/exports",
+            "requested": "D:\\a\\_temp\\invsys-package-smoke\\inventory\\exports",
+            "visible": true,
+            "closed_after_probe": true
+          }
+        ]
+      }
+    }
+  ],
+  "network_isolation": {
+    "enabled": true,
+    "mechanism": "windows-firewall-outbound-block",
+    "firewall_profiles": [
+      "ON",
+      "ON",
+      "ON"
+    ],
+    "blocked_programs": [
+      "D:\\a\\_temp\\bundle-installed\\invsys-desktop\\_internal\\PySide6\\QtWebEngineProcess.exe",
+      "D:\\a\\_temp\\bundle-installed\\invsys-desktop\\invsys-desktop.exe"
+    ]
+  },
+  "failure_checks": [
+    {
+      "name": "no-database-argument",
+      "expected_exit_code": 2,
+      "exit_code": 2,
+      "stderr": [
+        "usage: invsys-desktop.exe [-h] [--database DATABASE] [--assets ASSETS]",
+        "                          [--smoke-check] [--perf-check {launch,workflow}]",
+        "                          [--perf-output PERF_OUTPUT]",
+        "invsys-desktop.exe: error: Packaged launch requires --database to choose the intended inventory file explicitly."
+      ],
+      "passed": true
+    },
+    {
+      "name": "missing-bundled-assets",
+      "expected_exit_code": 2,
+      "exit_code": 2,
+      "stderr": [
+        "usage: invsys-desktop.exe [-h] [--database DATABASE] [--assets ASSETS]",
+        "                          [--smoke-check] [--perf-check {launch,workflow}]",
+        "                          [--perf-output PERF_OUTPUT]",
+        "invsys-desktop.exe: error: This bundle is incomplete: the frontend assets are missing from D:\\a\\_temp\\invsys-package-smoke\\incomplete-bundle\\invsys-desktop\\_internal\\frontend\\dist. Extract the bundle again from its archive."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-folder-is-a-file",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database D:\\a\\_temp\\invsys-package-smoke\\not-a-folder\\inventory.db: Cannot create a file when that file already exists",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-path-is-a-directory",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database D:\\a\\_temp\\invsys-package-smoke\\directory\\inventory.db: Permission denied",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-is-not-sqlite",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database D:\\a\\_temp\\invsys-package-smoke\\garbage\\inventory.db: file is not a database",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-drive-does-not-exist",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database Z:\\invsys\\inventory.db: The system cannot find the path specified",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "failed-launches-wrote-no-inventory",
+      "passed": true
+    }
+  ],
+  "restart_persistence": {
+    "passed": true
+  },
+  "no_writes_outside_selected_inventory": {
+    "passed": true
+  },
+  "result": "passed"
+}

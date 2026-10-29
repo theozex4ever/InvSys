@@ -529,10 +529,10 @@ The shell directs operators to the original application for
 location administration. Backup restoration requires closing the app as described above.
 Global search is part search only.
 
-Not yet validated: macOS Cocoa-panel/Finder operations and
-installers on any platform (Linux/Windows/macOS automated package evidence:
-[packaging](packaging.md)), human screen-reader review,
-human operator acceptance, and performance/release hardening. The native smoke is
+Not yet validated: installers on any platform (Linux/Windows/macOS automated package
+evidence: [packaging](packaging.md)), human screen-reader review, human operator
+acceptance, and performance/release hardening. macOS Cocoa-panel/Finder operations
+rest on the owner's #54 statement alone (see [sign-off](signoff.md)). The native smoke is
 scripted desktop acceptance, including a rendered contrast/name audit, not an
 exhaustive accessibility review (see the [accessibility record](acceptance.md#accessibility-review-record)). Mutation
 reconciliation is operator-assisted, without durable request deduplication.
