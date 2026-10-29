@@ -26,17 +26,21 @@ Evidence tied to the candidate is in
 platform's job, and a [`SHA256SUMS`](evidence/candidate-ec8bc4f/SHA256SUMS) that also
 holds each archive's checksum. The JSON hashes were taken from the CI artifacts; a
 checkout that rewrites line endings (Windows `autocrlf`) changes them, so verify on a
-byte-exact checkout. The macOS archive is the one the run uploaded as
+byte-exact checkout; from inside the directory,
+`sha256sum -c --ignore-missing SHA256SUMS` checks the retained JSON files (the list
+also names three archives that are not retained, which plain `sha256sum -c` reports as
+missing). The macOS archive is the one the run uploaded as
 `macos-standalone-bundle` (7-day artifact, SHA-256 `9276fbf0…2d413`, equal to the
 build's own checksum). The Linux and Windows archives are not uploaded; only their
 checksums survive. Raw captures and logs stay in the run's `package-evidence-*`
 artifacts for 90 days; the JSON records are the permanent acceptance record.
 `tests/test_candidate_evidence.py` reads the nine records as data and fails if one
-names another commit, a dirty tree, a failed step, a single native run or a different
-fixture.
+names another commit, a dirty tree, a failed step, a single native run, a fixture
+other than the one committed in the checkout, or if a retained file no longer matches
+`SHA256SUMS`.
 
 **This pull request must not change the candidate.** It adds documentation, evidence
-and one test. The commands below must print nothing for any later commit offered as
+and one test that is not part of any bundle. The commands below must print nothing for any later commit offered as
 the same candidate; if they print anything, the evidence belongs to an earlier
 candidate and the affected platform checks must be repeated:
 
@@ -44,10 +48,11 @@ candidate and the affected platform checks must be repeated:
 git diff --stat ec8bc4f20d0d433e695849090287f23426419833 HEAD -- \
   inventory_control frontend inventory_desktop.py inventory_visualizer.py \
   requirements-package.txt requirements-package.lock.txt requirements.lock.txt \
-  requirements-desktop.txt scripts .github pyproject.toml
+  requirements-desktop.txt scripts .github pyproject.toml tests/fixtures
 ```
 
-A behavior, asset, dependency or packaging fix after `ec8bc4f` makes this record
+`tests/fixtures` is listed because the upgrade rehearsal installs
+`tests/fixtures/upgrade/premigration-inventory.sql`. A behavior, asset, dependency, fixture or packaging fix after `ec8bc4f` makes this record
 stale for the affected checks; repeat them and record a new candidate rather than
 editing this one. The evidence from earlier dated runs elsewhere in these documents
 (Windows 2026-10-22, macOS 2026-10-21, performance 2026-10-26, PR #79/#84 upgrade
@@ -57,7 +62,7 @@ rehearsals) belongs to earlier commits and is **not** claimed for this candidate
 
 | Issue | What the retained evidence shows | What it does not show |
 | --- | --- | --- |
-| #54 macOS | Automated macOS package smoke on the candidate (below). The repository owner's comment of 2026-10-29 on #54 reads: "Cocoa-panel and Finder Accepted through manual testing on a Mac. Issues Closed". That is recorded here as the owner's confirmation of the Cocoa file-panel and Finder checks in the [macOS procedure](packaging.md#recorded-macos-evidence) | The comment does not name the archive, its SHA-256, the macOS version, the disposable path or each action's result, which that procedure asks to be recorded. It does not state which build was tested (it may predate this candidate), and it is not workstation sign-off, an accessibility review or Gatekeeper evidence |
+| #54 macOS | Automated macOS package smoke on the candidate (below). The repository owner's comment of 2026-10-29 on #54 reads: "Cocoa-panel and Finder Accepted through manual testing on a Mac. Issues Closed". That is respected and recorded as the owner's acceptance of the Cocoa file-panel and Finder checks in the [macOS procedure](packaging.md#recorded-macos-evidence) | The comment does not name the archive, its SHA-256, the macOS version, the disposable path or each action's result, which that procedure asks to be recorded, nor which build was tested. The comment (2026-10-29T03:01:31Z) predates this candidate's CI archive (`macos-standalone-bundle`, artifact 12869953480, created 03:11:47Z); that shows only it cannot be a test of that downloaded archive, not that the owner tested different bytes. **Whether it applies to this candidate has not been established**, so it is not read as acceptance of this candidate. It is also not workstation sign-off, an accessibility review or Gatekeeper evidence |
 | #55 performance | Candidate-specific P01–P05 on all three hosted runners (below); earlier records from 2026-10-26 | Operator judgement of responsiveness; hardware the operator physically uses |
 | #56 upgrade/restore | Candidate-specific automated rehearsal on all three runners (below). The closure comment on #56 reads "Migration 15 has been completed. This is a completed issue": it names a different ticket, adds no evidence, and #56's own checklist in the issue body still shows four of five criteria unchecked | Operator-run restore through a file manager, a database from an operator's real inventory, rollback to a *packaged* release (none exists), operator approval. The comment is not read as approval of any of these |
 
@@ -65,7 +70,7 @@ rehearsals) belongs to earlier commits and is **not** claimed for this candidate
 
 | Criterion | Status | Basis |
 | --- | --- | --- |
-| Complete workflow/native smoke checklist on the exact candidate bundles on Windows, Linux and macOS, twice for restart and backup, including CSV/file/folder operations and safe failures | **Automated part met; human part open** | Both native runs on each frozen bundle passed, the second run's startup backup held exactly run 1's 42 ledger rows, five or six readable startup failures per platform, five CSV exports and three imports, backup and folder actions (Windows through real Explorer windows in both runs). macOS import dialogs use Qt's own dialog in the smoke; the Cocoa panel and Finder are covered only by the owner's #54 statement above. The A01–A17 checklist has not been walked by a person on a workstation |
+| Complete workflow/native smoke checklist on the exact candidate bundles on Windows, Linux and macOS, twice for restart and backup, including CSV/file/folder operations and safe failures | **Automated part met; human part open** | Both native runs on each frozen bundle passed, the second run's startup backup held exactly run 1's 42 ledger rows, five or six readable startup failures per platform, five CSV exports and three imports, backup and folder actions (Windows through real Explorer windows in both runs). macOS import dialogs use Qt's own dialog in the smoke; the Cocoa panel and Finder are covered only by the owner's earlier #54 acceptance, whose mapping to this candidate is not established (see above). The A01–A17 checklist has not been walked by a person on a workstation |
 | Consolidate capability classes, automated gates, platform results, performance, upgrade/restore and accessibility; no required capability Missing | **Not met** | Consolidated below. Rows 1, 38 (portion), 47 (portion), 48 (portion), 49 and 50 of the [register](acceptance.md#required-capability-register) remain Missing, Partial or Mixed; the human screen-reader review is absent |
 | Actual user or designated-operator sign-off on the intended workstation | **Not obtained** | [Record](#operator-sign-off-record) is blank |
 | Document unresolved failures honestly; evidence corresponds to the candidate | **Met for this record** | [What remains](#what-remains-before-retirement); candidate check above. The gate itself stays incomplete |
@@ -76,7 +81,9 @@ rehearsals) belongs to earlier commits and is **not** claimed for this candidate
 All three package jobs ran the build, the extracted-archive package smoke twice, the
 copied-data upgrade rehearsal (four packaged launches) and the performance run, each
 on its first attempt and each `passed`. Hosted runners are shared virtual machines
-without GPUs; they are the machines the owner designated in #55, not physical
+without GPUs. [performance.md](performance.md) records the choice to use them (plus a
+local Linux machine) as the measurement machines; #55 itself carries no comment
+confirming that designation, so none is claimed here. They are not physical
 workstations.
 
 | | Linux | Windows | macOS |
@@ -91,7 +98,7 @@ workstations.
 | Startup backup | run 1 none; run 2 held 42 ledger rows | same | same |
 | Persistence and isolation | SQLite integrity `ok`; run 1's rows present after run 2; nothing written to `INVSYS_HOME` | same | same |
 | Offline | empty network namespace | all three firewall profiles ON, outbound blocked for the launcher and `QtWebEngineProcess.exe` | **not network-isolated** (macOS cannot); local assets, no HTTP server, `check:dist` |
-| Native folder opening | recording host | real Explorer windows at the selected inventory's `backups` and `exports` paths, visible, in both runs | recording host; Finder only via the #54 statement |
+| Native folder opening | recording host | real Explorer windows at the selected inventory's `backups` and `exports` paths, visible, in both runs | recording host; Finder only via the owner's earlier #54 acceptance (candidate mapping not established) |
 | Application seal | not applicable | not applicable | ad-hoc, `codesign --verify --deep --strict` passed; Gatekeeper rejected it, as expected unsigned |
 | Upgrade rehearsal (nine steps) | passed; launches 73.1 / 73.8 / 72.9 / 73.5 s | passed; 97.0 / 97.2 / 97.7 / 97.8 s | passed; 119.0 / 122.2 / 117.9 / 124.8 s |
 | Performance (29 steps, five measured repeats each, two painted frames) | passed, no missing step | passed | passed |
@@ -144,21 +151,23 @@ must be read separately.
 ## Capability classes
 
 After this record the [register](acceptance.md#required-capability-register) has 50
-rows: 44 Equivalent (26) or Improved (18) (stories 2–37 and 39–46), and the six
-rows that block retirement:
+rows: 42 Equivalent (24) or Improved (18), and eight rows that block retirement or
+still carry a Missing portion:
 
 | Story | Class | What is missing |
 | --- | --- | --- |
 | 1 | Missing | Aggregate: the original remains the fallback until every gate passes |
+| 37 | Mixed | macOS Cocoa-panel/Finder acceptance for this candidate (or the owner's confirmation that the earlier acceptance still applies) |
 | 38 | Intentionally changed, with Missing portions | Operator-run restore through a file manager; rollback to a packaged release (none exists); operator sign-off |
+| 45 | Mixed | Same macOS Cocoa-panel/Finder gap; the automated bundles on all three platforms are met |
 | 47 | Partial | Operator-designated physical workstations; operator judgement of responsiveness |
 | 48 | Mixed | A database copied from an operator's real historical inventory |
 | 49 | Missing | Operator sign-off, human accessibility review |
 | 50 | Missing | Blocked by every retirement gate |
 
-Story 45 (standalone bundles) and the macOS portion of story 37 move off Missing in
-this change, on the basis stated in their rows. Story 46 and the Windows/Linux
-portions of 37 were already Equivalent.
+Story 45 (standalone bundles) moves from Missing to Mixed in this change, and the
+macOS portion of story 37 from Missing to a stated gap, on the basis in their rows.
+The Windows and Linux portions of 37 and story 46 were already Equivalent.
 
 ## Accessibility
 
@@ -213,10 +222,12 @@ Human or external (not doable by an agent):
 
 1. Operator sign-off on the intended workstation ([record](#operator-sign-off-record)).
 2. A human screen-reader session and contrast observations.
-3. Optional but not recorded: the macOS details the #54 procedure asks for (tester,
-   machine, archive SHA-256, disposable path, result of each action), and whether
-   the build the owner tested is this candidate or an earlier one. If an earlier one,
-   the owner must repeat or knowingly accept the delta.
+3. **Required:** macOS Cocoa-panel and Finder acceptance mapped to this candidate.
+   Either evidence on this candidate's archive (the #54 procedure's record: tester,
+   machine and OS, archive SHA-256, disposable path, result of each action), or the
+   owner's explicit confirmation that the earlier #54 acceptance remains applicable
+   after reviewing the changes between the tested build and `ec8bc4f`. The earlier
+   acceptance is respected; only its applicability to this candidate is unproven.
 4. Operator-run restore through a file manager on a copy; a copy of the real
    historical inventory for the upgrade rehearsal.
 5. Operator judgement of responsiveness on designated physical workstations, if the

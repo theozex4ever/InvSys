@@ -532,7 +532,7 @@ Global search is part search only.
 Not yet validated: installers on any platform (Linux/Windows/macOS automated package
 evidence: [packaging](packaging.md)), human screen-reader review, human operator
 acceptance, and performance/release hardening. macOS Cocoa-panel/Finder operations
-rest on the owner's #54 statement alone (see [sign-off](signoff.md)). The native smoke is
+rest on the owner's #54 statement alone, on an unidentified build (see [sign-off](signoff.md)). The native smoke is
 scripted desktop acceptance, including a rendered contrast/name audit, not an
 exhaustive accessibility review (see the [accessibility record](acceptance.md#accessibility-review-record)). Mutation
 reconciliation is operator-assisted, without durable request deduplication.

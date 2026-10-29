@@ -2,10 +2,13 @@
 
 The records are unmodified CI artifacts. These checks read them as data: they
 confirm every platform's package, performance and upgrade record names the same
-candidate commit and passed, so a record from another commit cannot be filed
-beside them unnoticed. They establish nothing about operator sign-off.
+candidate commit and passed, that the upgrade records used the fixture committed
+in this checkout, and that the retained files still match their checksum list, so
+a record from another commit or an altered file cannot be filed beside them
+unnoticed. They establish nothing about operator sign-off.
 """
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -13,9 +16,9 @@ import pytest
 
 CANDIDATE = "ec8bc4f20d0d433e695849090287f23426419833"
 PLATFORMS = ("linux", "windows", "macos")
-EVIDENCE = (
-    Path(__file__).resolve().parents[1] / "docs" / "frontend" / "evidence" / "candidate-ec8bc4f"
-)
+ROOT = Path(__file__).resolve().parents[1]
+EVIDENCE = ROOT / "docs" / "frontend" / "evidence" / "candidate-ec8bc4f"
+FIXTURE = ROOT / "tests" / "fixtures" / "upgrade" / "premigration-inventory.sql"
 
 
 def load(kind: str, platform: str) -> dict:
@@ -80,3 +83,32 @@ def test_all_platforms_used_the_same_fixture_and_pinned_release() -> None:
     assert len({u["fixture"]["sha256"] for u in upgrades}) == 1
     assert len({u["fixture"]["snapshot_digest"] for u in upgrades}) == 1
     assert len({u["last_known_good"]["commit"] for u in upgrades}) == 1
+
+
+def test_upgrade_records_used_the_committed_fixture() -> None:
+    # Same normalization as scripts/upgrade_rehearsal.py (a Windows checkout may add CRs).
+    committed = hashlib.sha256(FIXTURE.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+    for platform in PLATFORMS:
+        assert load("upgrade", platform)["fixture"]["sha256"] == committed, platform
+
+
+def test_retained_files_match_the_checksum_list() -> None:
+    listed = {}
+    for line in (EVIDENCE / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
+        digest, name = line.split(maxsplit=1)
+        listed[name.strip()] = digest
+    for kind in ("package", "upgrade", "performance"):
+        for platform in PLATFORMS:
+            assert f"{kind}-{platform}.json" in listed
+    for name, digest in listed.items():
+        path = EVIDENCE / name
+        if not path.is_file():
+            # Linux and Windows archives are not retained, only their checksums.
+            assert name.endswith((".tar.gz", ".zip")), name
+            continue
+        data = path.read_bytes()
+        # A Windows checkout may rewrite line endings of files stored with LF.
+        assert digest in {
+            hashlib.sha256(data).hexdigest(),
+            hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest(),
+        }, name

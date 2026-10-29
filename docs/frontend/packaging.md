@@ -4,8 +4,9 @@
 a self-contained, one-directory bundle that runs without Python, Node, a frontend
 development server, a CDN or any inventory HTTP service. Linux (ticket #52),
 Windows (ticket #53) and macOS (ticket #54) have retained automated package
-evidence. Native Cocoa-panel and Finder acceptance on macOS is recorded as confirmed
-by the owner's issue comment, without per-action detail
+evidence. Native Cocoa-panel and Finder acceptance on macOS was given by the owner in
+an issue comment on an unidentified build, without per-action detail; its mapping to
+the current candidate is not established
 [below](#recorded-macos-evidence). All three platforms share the same
 script, lock file and CI job. Full installers, Developer ID signing, notarization,
 auto-update and release publication are out of scope.
@@ -553,8 +554,8 @@ acceptance below and full operational sign-off remain outstanding.
 
 Offline checks used local assets and no HTTP server; the run was not network
 isolated. Cocoa panels and real Finder windows were not exercised by CI. Issue #54 required
-the following native file-operation acceptance, which the owner has since confirmed
-(see below):
+the following native file-operation acceptance, which the owner has since accepted
+on an unidentified build (see below):
 
 Use the same archive from the run's `macos-standalone-bundle` artifact and verify
 it with `shasum -a 256 -c SHA256SUMS` before extraction. Create a fresh disposable
@@ -571,7 +572,9 @@ fixture.
 Update 2026-10-29: the owner's comment on #54 reads "Cocoa-panel and Finder Accepted
 through manual testing on a Mac. Issues Closed". That is the whole record: no tester,
 machine, archive SHA-256, disposable path or per-action result was written down, and it
-does not say which build was tested. It is not repeated for the later candidate. See
+does not say which build was tested. The comment predates the later candidate's CI
+archive (artifact created 03:11:47Z the same day); whether the acceptance applies to it
+is not established and remains an outstanding gate. See
 [signoff.md](signoff.md#dependencies-what-each-closed-issue-establishes).
 
 Gatekeeper approval of a quarantined download remains separately unverified;
@@ -736,4 +739,4 @@ upgrade between two *packaged releases* (no earlier packaged release exists; rol
 a last known-good artifact: PR #79 documented it without an executable swap; the current candidate's rehearsal swaps to the pinned original application, see the status note above),
 operator-run restore through the file manager, real disk-full or ACL failures,
 performance, and operator sign-off (#57). Native Cocoa-panel/Finder acceptance is
-the owner's #54 statement only.
+the owner's #54 statement only, on an unidentified build.
