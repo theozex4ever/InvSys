@@ -1,0 +1,6 @@
+80c35d16ef1688035d2bdd9d1d28e5a23ff7b9e66c27c72b1d067c3a90ac2092  upgrade-linux-package-2026-10-28.json
+344bc48d52d3a462663e64b1265abb4b57d33d26ea9769f277d8ea14bf84a613  invsys-desktop-linux-x86_64.tar.gz
+894ca46848ce8128945063b228e10ad72687c55a384a9907fbac2fb7f445e3da  upgrade-windows-package-2026-10-28.json
+333bba456242b4b15587579f170b2b46bf6182419f631941dc806df670a6d2e1  invsys-desktop-win32-amd64.zip
+55955f7c7731cc9eb0c48b4d2b5f8d2e83c6acebcd5fdba90bcbde63c783c0e3  upgrade-macos-package-2026-10-28.json
+9c1dd02d74e81b752cd7bd845c2612f5957e10c9f52faf846259c6c480887e9a  invsys-desktop-darwin-arm64.tar.gz

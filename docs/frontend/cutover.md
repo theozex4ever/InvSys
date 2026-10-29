@@ -7,7 +7,9 @@ The application has no restore feature, no database picker and never moves data:
 database is whatever `--database` names (source launches without it keep
 `data/inventory.db` under the checkout or `INVSYS_HOME`).
 
-Nothing in the replacement changes the database schema. The pre-migration fixture's
+Nothing in the replacement changes the database schema. The pre-migration fixture was
+written by the original application as it was before the replacement existed (commit
+`a03c887`, see [Last known-good release](#last-known-good-release-rehearsal)), and its
 schema is byte-identical to the one a new application creates; the tests fail if that
 ever stops being true. A migration of the presentation layer therefore has no data
 conversion step, and a new bundle opens an existing inventory as it is.
@@ -21,7 +23,8 @@ conversion step, and a new bundle opens an existing inventory as it is.
 - **Last known-good artifact**: the previous bundle (archive and unpacked folder, or
   the checkout commit for a source launch) that was working against this inventory,
   kept until the new one has been used successfully. Record its file name and
-  SHA-256 in the cutover log.
+  SHA-256 in the cutover log. (No packaged release exists before the replacement;
+  see [Last known-good release](#last-known-good-release-rehearsal).)
 - **Startup backup** (`inventory-YYYYMMDD-HHMMSS-startup.db`): taken at every launch
   *before* the database is opened, so it is the inventory exactly as the previous
   session left it. **Manual backup** (`...-manual.db`): taken from Settings. Only the
@@ -148,18 +151,55 @@ There are two different things to go back to; choose by what is wrong.
 
 **The new application misbehaves, the data is fine** (nothing was written, or what
 was written is correct). Close the new application and start the last known-good
-artifact with the same `--database` (original application: `INVSYS_HOME` set to the
-folder that contains `data/inventory.db`, or the same file at the default location).
-No data step is needed because the schema is unchanged. Take a backup first.
-Whatever the new application recorded stays in the ledger and, the schema being the
-same, should be readable by the old release; opening the upgraded inventory with an
-older packaged release has not been rehearsed (none exists yet).
+artifact on the same inventory. Take a backup first. No data step is needed because the
+schema is unchanged: whatever the new application recorded stays in the ledger and the
+last known-good release reads it (what the [rehearsal](#last-known-good-release-rehearsal)
+checks; retained results are in [packaging.md](packaging.md#recorded-copied-data-upgrade-and-restore-evidence)).
+Where the old release keeps its inventory depends on which release it is: the original
+application at the pinned commit has no database option and uses `data/inventory.db`
+beside its code (so point the new bundle's `--database` at that file and nothing needs
+moving); a later source checkout of the original application uses `INVSYS_HOME` or its
+default `data/` folder. Each release writes its startup and manual backups to its own
+`backups/` folder, which for the pinned release is `backups/` beside `data/`, not the
+`data/backups` folder the new application uses for the same inventory. Verify the
+backups of the release you are about to use before relying on them.
 
 **The data is wrong** (an import, a mistaken operation, a damaged file). Restore a
 backup as above. This is a data rollback and always needs reconciliation.
 
 An older backup must **never** be placed over later ledger activity without that
 reconciliation: the displaced database is the only record of the work done since.
+
+## Last known-good release (rehearsal)
+
+The artifact the rehearsal rolls back to is the original PySide6 application at commit
+`a03c887dd76056695f81e55d0ff1cac4315ee444` (PR #5, 2026-09-28), the last commit before the
+pywebview frontend. It is pinned in `scripts/last_known_good.py` and unpacked from git
+history (`git archive`), so the rehearsal needs the repository's full history (CI checks
+it out with `fetch-depth: 0`; a shallow clone fails with an instruction to unshallow).
+It is a **source tree** run as `python inventory_visualizer.py`, not a packaged release:
+none exists, and none is invented here. Its code and tests are the repository's own
+history at that commit; its dependencies are the ones the rehearsing interpreter has.
+
+The rehearsal keeps the operator's inventory where this release keeps it,
+`<release>/data/inventory.db`, and points the replacement at that file with
+`--database`; nothing is copied. After the replacement has restored and reopened the inventory, the
+release is started on the same file by `last_known_good.py rollback-probe`, in a child
+interpreter that only sees the release's code (`python -I`), with Qt's offscreen platform:
+it runs the release's own `inventory_control.app.main` (startup backup, then the real main
+window, whose views read the whole inventory), then works through the release's own store
+(receive, move, standard ship, nested-BOM ship with a reviewed plan, count correction,
+manual backup). The rehearsal then checks that the release read the expected Part, ledger and shipment counts
+and every per-Lot component snapshot the replacement had left, that its startup backup
+equals the inventory as the replacement left it, that no earlier record changed, that the
+schema is unchanged, that ledger, balances and snapshots still reconcile with the
+release's new rows, and launches the replacement once more on the result. (The rollback runs last because the native smoke's
+dashboard checks assume an inventory that has not collected many earlier smoke Parts.)
+
+The old release runs on current dependencies outside the packaged launch's network isolation.
+
+Not covered: the release's window is created but not driven, and the replacement's data
+after the release's work is read back by one launch, not a long working period.
 
 ## Reconcile ledger entries after restoring an older backup
 
@@ -205,11 +245,17 @@ application. Both use the committed pre-migration fixture
 8 Parts, 8 Lots, 11 balances, 28 ledger rows (RECEIVE, MOVE_OUT/IN, SHIP, SHIP_BOM,
 BOM_CONSUME, COUNT_CORRECTION), 4 shipments (two standard, two nested-BOM, one of them
 consuming one component from two Lots), 7 per-Lot component snapshots, BOM definitions
-edited after those shipments, an inactive Part, and operator/theme preferences. The
-fixture was **generated by the current store with a frozen clock** (provenance line in the
-file), so it does not prove an upgrade from a database written by an older release; that
-acceptance stays open until a pinned older-version or sanitized historical database is
-rehearsed.
+edited after those shipments, an inactive Part, and the remembered operator (the original
+application stored no theme, so the replacement starts on its default). The
+fixture was **written by the original application's own store at the pinned last
+known-good commit** with a frozen clock (provenance line in the file; a test regenerates
+it from that commit and compares the whole text). It is a database written by an older
+version of the code, not a synthetic claim. When the fixture was moved to it, its text
+below the provenance lines was byte-identical to the one the current store had written
+for the same scenario (a one-time comparison, not a standing test); a test does keep the
+schema identical to today's. It is still a scripted scenario run through
+that release's code, not a copy of an operator's historical database; no such database
+is in the repository.
 
 ```bash
 # Packaged (after `package_bundle.py build`); Linux shown. The workdir must be empty.
@@ -225,7 +271,8 @@ python scripts/upgrade_rehearsal.py rehearse --source --workdir /tmp/invsys-upgr
 refuses an existing path (a database included, also through a symlink) before launching
 anything and creates the file exclusively, so a mistyped path can never overwrite data.
 
-Each rehearsal installs the fixture into the empty workdir (never operational data;
+Each rehearsal unpacks the last known-good release into the empty workdir and installs
+the fixture as its inventory (`last-known-good/data/inventory.db`; never operational data;
 `INVSYS_HOME` points at a directory that must stay absent), then:
 
 1. **Upgrade:** the application's native smoke runs against the copy. Its startup
@@ -235,13 +282,20 @@ Each rehearsal installs the fixture into the empty workdir (never operational da
    must reconcile; the manual and startup backups must be in the selected inventory's
    folder and hold only its records.
 2. **Restart:** a second launch; its startup backup must equal the first launch's result.
+   Every launch also checks that the ledger, Lots, shipments and component snapshots added
+   by earlier launches or by the older release are unchanged (live file and manual
+   backups), not only the fixture's own rows.
 3. **Restore:** the first launch's startup backup is restored over the later inventory
    by the closed-app procedure; the result must equal the pre-upgrade inventory, the
    displaced file must equal the pre-restore state, and the ledger entries and
    shipments the restore removed are listed in the record.
-4. **Reopen:** a third launch must open the restored inventory (startup backup equal
+4. **Reopen:** a launch must open the restored inventory (startup backup equal
    to it) and leave every pre-upgrade record intact.
-5. The restore failure table above is exercised and recorded for the platform.
+5. **Roll back to the last known-good release:** the original application is started on
+   that inventory and works on it ([above](#last-known-good-release-rehearsal)).
+6. **Roll forward:** a launch of the replacement on what the older release left; its
+   startup backup must equal that state and every fixture record must still be intact.
+7. The restore failure table above is exercised and recorded for the platform.
 
 Retained results and what they do and do not establish are in
 [packaging.md](packaging.md#recorded-copied-data-upgrade-and-restore-evidence).

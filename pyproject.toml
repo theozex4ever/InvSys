@@ -49,6 +49,7 @@ files = [
     "scripts/junit_annotations.py",
     "scripts/package_bundle.py",
     "scripts/upgrade_rehearsal.py",
+    "scripts/last_known_good.py",
     "scripts/package_perf.py",
 ]
 strict = true

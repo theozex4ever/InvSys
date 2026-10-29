@@ -42,6 +42,7 @@ def load_script(name: str) -> Any:
 
 
 package_bundle = load_script("package_bundle")
+last_known_good = load_script("last_known_good")
 rehearsal = load_script("upgrade_rehearsal")
 
 # Changing the fixture is a deliberate, reviewed act: update these with it.
@@ -54,10 +55,10 @@ FIXTURE_COUNTS = {
     "shipments": 4,
     "shipment_components": 7,
     "bom_components": 6,
-    "settings": 3,
+    "settings": 2,
 }
-FIXTURE_DIGEST = "8bfb5a770ae68928af1673d1be059fe14ce87563f6253551d1ed21390cb390bb"
-FIXTURE_SHA256 = "ea6da4ea945c05f5ad56535386a04dce1a17cc3d44b16e7c33fefa3fb4d67861"
+FIXTURE_DIGEST = "fff068e27dd5a60e68923eb2563fa6b65df6bcd5a2e2d8795fa80b27809e9e75"
+FIXTURE_SHA256 = "3dac3ae7e53c9f38a525ae89c828bbc433ab38d9fb905a727763a455ec188a9d"
 BOM_SHIPMENT = "SHP-20260905-0001"
 MULTI_LOT_BOM_SHIPMENT = "SHP-20260908-0001"
 
@@ -67,6 +68,10 @@ def inventory(tmp_path: Path) -> Path:
     database = tmp_path / "operations" / "inventory.db"
     rehearsal.install_fixture(database)
     return database
+
+
+def release_database(workdir: Path) -> Path:
+    return workdir / "last-known-good" / "data" / "inventory.db"
 
 
 def open_bridge(database: Path) -> tuple[InventoryStore, InventoryBridge]:
@@ -117,8 +122,10 @@ def test_the_fixture_covers_every_record_kind_the_upgrade_must_keep(inventory):
     assert settings == {
         "schema_version": "1",
         "last_operator": "J. Okafor",
-        "desktop_theme": "dark",
     }
+    # The original application remembered only the operator; the theme arrived with the
+    # desktop frontend, so the historical data must not already contain it.
+    assert "desktop_theme" not in settings
 
 
 def test_the_fixture_schema_is_exactly_what_the_application_creates_today(inventory):
@@ -148,7 +155,8 @@ def test_opening_the_copied_inventory_changes_nothing_and_reads_everything(inven
     before = rehearsal.snapshot(inventory)
     store, bridge = open_bridge(inventory)
     try:
-        assert bridge.preferences()["data"] == {"operator": "J. Okafor", "theme": "dark"}
+        # No theme was ever stored by the original application, so the replacement defaults it.
+        assert bridge.preferences()["data"] == {"operator": "J. Okafor", "theme": "light"}
         part = bridge.part_detail("UPG-BOLT")["data"]
         assert part["quantity"] == 36
         assert {
@@ -400,8 +408,8 @@ def tamper(database: Path, statement: str) -> None:
             "settings row schema_version changed",
         ),
         (
-            "DELETE FROM settings WHERE key = 'desktop_theme'",
-            "settings row desktop_theme is missing",
+            "DELETE FROM settings WHERE key = 'last_operator'",
+            "settings row last_operator is missing",
         ),
         ("ALTER TABLE parts ADD COLUMN extra TEXT", "The schema changed"),
         (
@@ -473,6 +481,7 @@ class StandInApplication(rehearsal.Launcher):
         try:
             store.receive("UPG-WIDGET", 2, "Stock", f"NEW-{self.launches}", "Desktop smoke")
             store.set_setting("last_operator", "Desktop smoke")
+            earlier_backups = set(context.backups.glob("*-manual*.db"))
             if self.misbehaviour != "no-manual-backup":
                 bridge.create_backup()
         finally:
@@ -486,6 +495,29 @@ class StandInApplication(rehearsal.Launcher):
                 tamper(database, "UPDATE shipment_components SET quantity = 1 WHERE id = 2")
             case "writes-to-the-default-location":
                 Path(env["INVSYS_HOME"]).mkdir(parents=True, exist_ok=True)
+            case "rewrites-a-record-an-earlier-launch-added" if self.launches == 2:
+                tamper(
+                    database,
+                    "UPDATE inventory_transactions SET reference = 'edited' WHERE lot_id = "
+                    "(SELECT id FROM lots WHERE lot_number = 'NEW-1')",
+                )
+            case "renames-a-lot-an-earlier-launch-added" if self.launches == 2:
+                tamper(
+                    database, "UPDATE lots SET lot_number = 'RENAMED' WHERE lot_number = 'NEW-1'"
+                )
+            case "rewrites-a-record-the-older-release-added" if self.launches == 4:
+                tamper(
+                    database,
+                    "UPDATE inventory_transactions SET operator = 'someone else' "
+                    "WHERE operator = 'Last known-good' AND tx_type = 'SHIP'",
+                )
+            case "hides-a-rewrite-only-in-the-manual-backup" if self.launches == 2:
+                (backup,) = set(context.backups.glob("*-manual*.db")) - earlier_backups
+                tamper(
+                    backup,
+                    "UPDATE inventory_transactions SET notes = 'edited' WHERE lot_id = "
+                    "(SELECT id FROM lots WHERE lot_number = 'NEW-1')",
+                )
         return {
             "arguments": [],
             "exit_code": 7 if self.misbehaviour == "crashes" else 0,
@@ -514,23 +546,22 @@ def test_the_rehearsal_upgrades_restarts_restores_and_reopens(tmp_path, display)
 
     assert passed
     assert record["result"] == "passed"
-    assert app.launches == 3
+    assert app.launches == 4
     assert [step["name"] for step in record["steps"]] == [
         "fixture-is-intact-before-upgrade",
         "upgrade-open-and-workflows",
         "restart-and-workflows",
         "closed-app-restore-of-the-pre-upgrade-backup",
         "reopen-after-restore-and-workflows",
+        "rollback-to-the-last-known-good-release-on-the-upgraded-inventory",
+        "roll-forward-after-rollback-and-workflows",
         "nothing-written-outside-the-selected-inventory",
         "restore-refusals-and-file-failures-leave-the-database-untouched",
     ]
     assert all(step["passed"] for step in record["steps"])
     assert record["fixture"]["snapshot_digest"] == FIXTURE_DIGEST
     assert record["fixture"]["counts"] == FIXTURE_COUNTS
-    assert record["fixture"]["preferences"] == {
-        "last_operator": "J. Okafor",
-        "desktop_theme": "dark",
-    }
+    assert record["fixture"]["preferences"] == {"last_operator": "J. Okafor"}
     assert sorted(record["fixture"]["component_snapshots"]) == [
         BOM_SHIPMENT,
         MULTI_LOT_BOM_SHIPMENT,
@@ -539,10 +570,10 @@ def test_the_rehearsal_upgrades_restarts_restores_and_reopens(tmp_path, display)
     assert restore["reconciliation_required"]["ledger_entries"] > 0
     assert restore["reconciliation_required"]["by_type"] == {"RECEIVE": 2}
     assert not (tmp_path / "work" / "unexpected-home").exists()
-    # The disposable copy was rolled back to the pre-upgrade inventory.
-    final = rehearsal.snapshot(tmp_path / "work" / "inventory" / "inventory.db")
-    assert any(row[2] == "NEW-3" for row in final["tables"]["lots"]["rows"].values())
-    assert not any(row[2] == "NEW-1" for row in final["tables"]["lots"]["rows"].values())
+    # The restore returned the pre-upgrade inventory; the launches after it are all that is new.
+    final = rehearsal.snapshot(release_database(tmp_path / "work"))
+    assert any(row[2] == "NEW-4" for row in final["tables"]["lots"]["rows"].values())
+    assert not any(row[2] in ("NEW-1", "NEW-2") for row in final["tables"]["lots"]["rows"].values())
 
 
 @pytest.mark.parametrize(
@@ -555,6 +586,16 @@ def test_the_rehearsal_upgrades_restarts_restores_and_reopens(tmp_path, display)
         ("no-manual-backup", "created no manual backup"),
         ("crashes", "The launch failed (exit 7)"),
         ("writes-to-the-default-location", "was created"),
+        (
+            "rewrites-a-record-an-earlier-launch-added",
+            "Earlier record: inventory_transactions row",
+        ),
+        ("renames-a-lot-an-earlier-launch-added", "Earlier record: lots row"),
+        (
+            "rewrites-a-record-the-older-release-added",
+            "Earlier record: inventory_transactions row",
+        ),
+        ("hides-a-rewrite-only-in-the-manual-backup", "-manual"),
     ],
 )
 def test_the_rehearsal_fails_when_the_application_loses_or_misplaces_anything(
@@ -632,19 +673,268 @@ def test_source_rehearsals_cannot_ask_for_network_isolation(capsys, tmp_path):
     assert "--bundle rehearsals only" in capsys.readouterr().err
 
 
+def test_a_failed_step_prints_even_when_the_console_cannot_encode_its_text(monkeypatch):
+    """A Windows cp1252 console must not turn a failed launch into a traceback."""
+    import io
+
+    raw = io.BytesIO()
+    console = io.TextIOWrapper(raw, encoding="cp1252", write_through=True)
+    monkeypatch.setattr(sys, "stdout", console)
+    monkeypatch.setattr(sys, "stderr", console)
+    with pytest.raises(SystemExit):
+        rehearsal.main(["rehearse"])  # argparse's usage error goes to the same console
+    rehearsal.step({"steps": []}, "launch", ["smoke said \ufffd"])
+
+    assert "smoke said ?" in raw.getvalue().decode("cp1252")
+    console.detach()
+
+
 def test_a_rehearsal_needs_a_target(tmp_path):
     with pytest.raises(SystemExit):
         rehearsal.main(["rehearse", "--workdir", str(tmp_path), "--evidence", str(tmp_path / "e")])
 
 
 def test_the_committed_fixture_text_is_what_the_generator_writes(tmp_path, monkeypatch):
-    """Regeneration is reproducible apart from the provenance line naming the commit."""
+    """The pinned older release, not the current store, writes exactly the committed text."""
     regenerated = tmp_path / "fixture.sql"
     rehearsal.write_fixture(regenerated)
     committed = rehearsal.FIXTURE.read_text(encoding="utf-8").splitlines()
-    assert regenerated.read_text(encoding="utf-8").splitlines()[2:] == committed[2:]
+    assert regenerated.read_text(encoding="utf-8").splitlines() == committed
     assert committed[0] == rehearsal.FIXTURE_HEADER
-    assert committed[1].startswith("-- Written by the application at commit ")
+    assert committed[1].endswith(f"at commit {last_known_good.COMMIT}.")
+
+
+# ------------------------------------------------- the last known-good release (rollback)
+
+
+def test_the_pinned_release_is_the_original_application_before_the_desktop_frontend(tmp_path):
+    info = last_known_good.extract(tmp_path / "release")
+
+    assert info["commit"] == last_known_good.COMMIT
+    assert info["tree"] == last_known_good.tree_hash()
+    release = tmp_path / "release"
+    assert (release / "inventory_visualizer.py").is_file()
+    assert (release / "inventory_control" / "ui" / "main_window.py").is_file()
+    # The release predates the desktop frontend, its bridge and its packaging.
+    assert not (release / "inventory_desktop.py").exists()
+    assert not (release / "inventory_control" / "desktop.py").exists()
+    assert not list(release.rglob("__pycache__"))
+    # Its inventory is not here until an operator's data (or the fixture) is put there.
+    assert not (release / "data").exists()
+    assert info["files"] == sum(1 for path in release.rglob("*") if path.is_file())
+
+
+def test_an_unreadable_history_is_reported_with_how_to_fix_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(last_known_good, "ROOT", tmp_path)
+    with pytest.raises(rehearsal.RehearsalError, match="full history"):
+        rehearsal.extract_release(tmp_path / "release")
+
+
+def test_the_pinned_release_writes_the_same_schema_the_application_creates_today(tmp_path):
+    """The older release and today's store agree on every table, column and index."""
+    release = tmp_path / "release"
+    last_known_good.extract(release)
+    old = tmp_path / "old.db"
+    rehearsal.build_fixture_database(old, release)
+    new = tmp_path / "new.db"
+    InventoryStore(new, seed=False).engine.dispose()
+
+    assert rehearsal.snapshot(old)["schema"] == rehearsal.snapshot(new)["schema"]
+
+
+def test_the_older_release_opens_the_inventory_and_keeps_its_own_backups(tmp_path):
+    workdir = tmp_path / "work"
+    tree = workdir / "last-known-good"
+    last_known_good.extract(tree)
+    database = last_known_good.release_database(tree)
+    rehearsal.install_fixture(database)
+    before = rehearsal.snapshot(database)
+
+    run = last_known_good.run_release("rollback-probe", tree)
+    report = json.loads(run.stdout.splitlines()[-1])
+    after = rehearsal.snapshot(database)
+
+    assert run.returncode == 0, run.stderr
+    assert report["exit_code"] == 0
+    assert report["windows_shown"] == 1
+    assert Path(report["release"]).resolve() == tree.resolve()
+    # What the release itself reads: every record and each BOM shipment's per-Lot snapshot.
+    assert report["read_before_work"] == {
+        "parts": 8,
+        "transactions": 28,
+        "shipments": 4,
+        "component_snapshots": rehearsal.component_trace(before),
+    }
+    # Its startup backup is the inventory as it was, kept in the release's own folder.
+    backups = sorted(last_known_good.release_backups(tree).glob("inventory-*.db"))
+    startup = next(path for path in backups if path.name.endswith("-startup.db"))
+    assert rehearsal.compare(before, rehearsal.snapshot(startup), identical=True) == []
+    assert [path.name for path in backups if "-manual" in path.name] == [report["manual_backup"]]
+    assert not (database.parent / "backups").exists()
+    assert rehearsal.compare(before, after, identical=False, stock_moved=True) == []
+    assert rehearsal.reconcile(after) == []
+    assert report["bom_shipment"] in rehearsal.component_trace(after)
+
+
+def run_with_release_fault(tmp_path: Path, monkeypatch, fault: str) -> list[str]:
+    """Rehearse with a last known-good release that misbehaves after its real run."""
+    real = last_known_good.run_release
+
+    def faulty(command: str, tree: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+        if command != "rollback-probe":
+            return real(command, tree, *arguments)
+        result = real(command, tree, *arguments)
+        database = last_known_good.release_database(tree)
+        match fault:
+            case "crashes":
+                return subprocess.CompletedProcess(result.args, 3, "", "boom")
+            case "no-report":
+                return subprocess.CompletedProcess(result.args, 0, "not json\n", "")
+            case "loses-a-ledger-row":
+                tamper(database, "DELETE FROM inventory_transactions WHERE id = 3")
+            case "rewrites-a-snapshot":
+                tamper(database, "UPDATE shipment_components SET quantity = 1 WHERE id = 2")
+            case "alters-the-schema":
+                tamper(database, "ALTER TABLE lots ADD COLUMN surprise TEXT")
+            case "reads-less-than-the-inventory":
+                report = json.loads(result.stdout.splitlines()[-1])
+                report["read_before_work"]["transactions"] -= 1
+                return subprocess.CompletedProcess(result.args, 0, json.dumps(report), "")
+            case "runs-other-code":
+                report = json.loads(result.stdout.splitlines()[-1])
+                report["release"] = str(tree.parent)
+                return subprocess.CompletedProcess(result.args, 0, json.dumps(report), "")
+            case "reports-no-window-count" | "reports-nonsense-reads" | "reports-no-snapshots":
+                report = json.loads(result.stdout.splitlines()[-1])
+                match fault:
+                    case "reports-no-window-count":
+                        del report["windows_shown"]
+                    case "reports-nonsense-reads":
+                        report["read_before_work"] = "everything"
+                    case _:
+                        del report["read_before_work"]["component_snapshots"]
+                return subprocess.CompletedProcess(result.args, 0, json.dumps(report), "")
+            case "times-out":
+                return subprocess.CompletedProcess(
+                    result.args, -1, "partial output\n", "Timed out after 300 s."
+                )
+            case "damages-the-live-inventory":
+                database.write_bytes(b"not a database")
+            case "damages-its-startup-backup":
+                for backup in last_known_good.release_backups(tree).glob("*-startup.db"):
+                    backup.write_bytes(b"not a database")
+        return result
+
+    monkeypatch.setattr(last_known_good, "run_release", faulty)
+    passed, record, _ = run_rehearsal(tmp_path)
+    assert not passed
+    assert record["result"] == "failed"
+    step = next(s for s in record["steps"] if s["name"].startswith("rollback-to-the-last"))
+    assert not step["passed"]
+    return step["problems"]
+
+
+@pytest.mark.parametrize(
+    "fault,expected",
+    [
+        ("crashes", "The release failed (exit 3)"),
+        ("no-report", "The release failed"),
+        ("loses-a-ledger-row", "inventory_transactions row 3 is missing"),
+        ("rewrites-a-snapshot", "shipment_components row 2 changed"),
+        ("alters-the-schema", "The schema changed"),
+        ("reads-less-than-the-inventory", "The release read transactions"),
+        ("runs-other-code", "The release ran code from"),
+        ("reports-no-window-count", "no usable windows_shown"),
+        ("reports-nonsense-reads", "no usable read_before_work"),
+        ("reports-no-snapshots", "no usable read_before_work.component_snapshots"),
+        ("times-out", "Timed out after 300 s"),
+        ("damages-its-startup-backup", "could not be read"),
+        ("damages-the-live-inventory", "Selected inventory"),
+    ],
+)
+def test_the_rollback_fails_when_the_older_release_loses_or_misreads_anything(
+    tmp_path, display, monkeypatch, fault, expected
+):
+    problems = run_with_release_fault(tmp_path, monkeypatch, fault)
+    assert any(expected in problem for problem in problems), problems
+
+
+def test_a_hung_release_is_a_failed_step_that_keeps_what_it_printed(tmp_path, display, monkeypatch):
+    run_with_release_fault(tmp_path, monkeypatch, "times-out")
+    record = json.loads((tmp_path / "evidence" / "upgrade.json").read_text(encoding="utf-8"))
+    step = next(s for s in record["steps"] if s["name"].startswith("rollback-to-the-last"))
+
+    assert step["exit_code"] == -1
+    assert step["stdout"] == ["partial output"]
+    assert step["stderr"] == ["Timed out after 300 s."]
+    # The rehearsal went on: the inventory was snapshotted and the other steps recorded.
+    assert step["inventory_counts"]["parts"] > 0
+    assert record["steps"][-1]["name"].startswith("restore-refusals")
+
+
+def probe_only(monkeypatch, failure: Exception) -> None:
+    """Make launching the release fail; git (extraction) keeps working."""
+    real = subprocess.run
+
+    def run(command, *args, **kwargs):
+        if "rollback-probe" in command:
+            raise failure
+        return real(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+
+def test_a_release_that_times_out_comes_back_as_a_failed_process(tmp_path, monkeypatch):
+    timeout = subprocess.TimeoutExpired("probe", 300, output=b"half a line", stderr=None)
+    probe_only(monkeypatch, timeout)
+
+    result = last_known_good.run_release("rollback-probe", tmp_path)
+
+    assert result.returncode == -1
+    assert result.stdout == "half a line"
+    assert "Timed out after 300 s." in result.stderr
+
+
+def test_a_release_that_cannot_be_started_comes_back_as_a_failed_process(tmp_path, monkeypatch):
+    probe_only(monkeypatch, PermissionError("denied"))
+
+    result = last_known_good.run_release("rollback-probe", tmp_path)
+
+    assert result.returncode == -1
+    assert "Could not start: denied" in result.stderr
+
+
+def test_the_rehearsal_records_a_release_that_cannot_start(tmp_path, display, monkeypatch):
+    probe_only(monkeypatch, FileNotFoundError("no interpreter"))
+    passed, record, _ = run_rehearsal(tmp_path)
+
+    step = next(s for s in record["steps"] if s["name"].startswith("rollback-to-the-last"))
+    assert not passed
+    assert not step["passed"]
+    assert any("Could not start: no interpreter" in p for p in step["problems"])
+    assert step["exit_code"] == -1
+
+
+def test_the_rehearsal_records_the_release_it_rolled_back_to(tmp_path, display):
+    _, record, _ = run_rehearsal(tmp_path)
+
+    assert record["last_known_good"]["commit"] == last_known_good.COMMIT
+    assert record["last_known_good"]["tree"] == last_known_good.tree_hash()
+    assert record["last_known_good"]["inventory"] == "data/inventory.db"
+    rollback = next(s for s in record["steps"] if s["name"].startswith("rollback-to-the-last"))
+    assert rollback["release"]["windows_shown"] == 1
+    assert rollback["release"]["read_before_work"]["shipments"] == 4
+    assert rollback["release_backup_folder"] == "backups"
+    assert len(rollback["startup_backups"]) == 1
+    assert len(rollback["manual_backups"]) == 1
+    # The roll-forward launch reads the inventory the older release wrote to.
+    forward = next(s for s in record["steps"] if s["name"].startswith("roll-forward"))
+    assert forward["passed"]
+    assert rollback["inventory_counts"]["shipments"] == 6  # the release shipped two more
+    assert (
+        forward["inventory_counts"]["inventory_transactions"]
+        > rollback["inventory_counts"]["inventory_transactions"]
+    )
 
 
 # ------------------------------------------------------- restore cleanup and rollback
@@ -1087,3 +1377,29 @@ def test_restore_refuses_a_backup_missing_any_table_the_inspection_needs(invento
     tamper(broken, "DROP TABLE bom_components")
     with pytest.raises(rehearsal.RestoreRefused, match="bom_components"):
         rehearsal.restore_from_backup(inventory, broken, inventory.parent / "restore-aside")
+
+
+@pytest.mark.parametrize("target", ["live", "startup", "manual"])
+def test_damaged_launch_files_produce_failed_evidence(tmp_path, display, target):
+    class Damaging(StandInApplication):
+        def run(self, database, cwd, env):
+            result = super().run(database, cwd, env)
+            if self.launches == 1:
+                if target == "live":
+                    paths = [database]
+                else:
+                    paths = list(database.parent.joinpath("backups").glob(f"*-{target}*.db"))
+                    assert paths
+                for path in paths:
+                    path.write_bytes(b"not a database")
+            return result
+
+    evidence = tmp_path / "evidence.json"
+    assert not rehearsal.rehearse(Damaging(), tmp_path / "work", evidence)
+    record = json.loads(evidence.read_text(encoding="utf-8"))
+    assert record["result"] == "failed"
+    launch = next(s for s in record["steps"] if s["name"] == "upgrade-open-and-workflows")
+    assert not launch["passed"]
+    assert any("could not be read" in p for p in launch["problems"])
+    assert "stdout" in launch
+    assert "stderr" in launch
