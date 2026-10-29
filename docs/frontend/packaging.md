@@ -573,12 +573,45 @@ ticket 18 gates.
 
 ## Recorded copied-data upgrade and restore evidence
 
-> **Status.** The records below are those retained by PR #79. They predate the pinned
-> last known-good release: their fixture was written by the current store, the inventory sat
-> in a separate `inventory/` folder, there were three launches and no rollback to an older
-> release. They remain accurate for what they say; they are not evidence for the
-> rollback and are not tied to the current candidate. Records of the current candidate
-> (PR #84) are **pending**; this section is updated when they are retained.
+Current candidate: PR #84 head `73b6d0f7b2a8ff3394359440a17fdb3461b02d49`,
+[CI run 40632134242](https://github.com/theozex4ever/InvSys/actions/runs/40632134242),
+all checks green, each job on its first attempt. The bundles name GitHub integration
+commit `6f951c857ca45107e6eada79f4b99ae9839c92a4`; its tree
+`d3933016232a480b09ddb589235ab37f31296253` equals the PR head's tree.
+The records below are copied unchanged from that run's `package-evidence-*` artifacts.
+[Checksums](evidence/upgrade-2026-10-28.SHA256SUMS) cover the retained records and
+include the original archive checksums. This retention commit changes docs/evidence only;
+its own CI must also pass before acceptance.
+
+| Platform | Record | Four packaged launches (seconds) | Rehearsal |
+| --- | --- | --- | --- |
+| `ubuntu-24.04` | [upgrade-linux-package-2026-10-28.json](evidence/upgrade-linux-package-2026-10-28.json) | 72.8 / 74.1 / 72.9 / 74.0 | passed |
+| `windows-2025` | [upgrade-windows-package-2026-10-28.json](evidence/upgrade-windows-package-2026-10-28.json) | 121.9 / 125.4 / 123.7 / 121.5 | passed |
+| `macos-15` | [upgrade-macos-package-2026-10-28.json](evidence/upgrade-macos-package-2026-10-28.json) | 118.1 / 124.8 / 122.8 / 123.6 | passed |
+
+Each record passes all nine steps: fixture, upgrade, restart, closed-app restore,
+reopen, rollback to the pinned original application's source tree, roll forward,
+selected-path confinement and restore failure probes. Fixture text SHA-256
+`3dac3ae7e53c9f38a525ae89c828bbc433ab38d9fb905a727763a455ec188a9d`, snapshot digest
+`fff068e27dd5a60e68923eb2563fa6b65df6bcd5a2e2d8795fa80b27809e9e75`.
+The old release is `a03c887dd76056695f81e55d0ff1cac4315ee444`, tree
+`a3de881048372fd21fb66a2ea3a73848bb52ffc7`. It runs on current dependencies with
+offscreen Qt outside bundle network isolation; its window is created, not driven.
+These are scripted historical-code fixtures, not an operator's historical inventory.
+Operator-run restore, older packaged-release rollback and operator sign-off remain open.
+There is no retained current-candidate source-launch rehearsal; the earlier local record
+below must not be used as current evidence. Source default/explicit paths remain covered
+by public-API/launcher tests in CI.
+
+Earlier Windows runs failed in native Parts drawer waits, including run 40631265460
+before the upgrade rehearsal started. Those intermittent failures are not root-caused;
+the green run does not establish that they are fixed.
+
+### Earlier PR #79 evidence
+
+The records below predate the pinned original release and rollback probe. Their fixture
+was written by the current store and their three launches cover upgrade/restart/restore
+only. They remain historical evidence for that candidate.
 
 Ticket #56. The rehearsal ([`scripts/upgrade_rehearsal.py`](../../scripts/upgrade_rehearsal.py),
 procedure in [cutover.md](cutover.md)) installs the committed pre-migration fixture
