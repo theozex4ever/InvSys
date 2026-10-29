@@ -1,0 +1,188 @@
+{
+  "recorded_at": "2026-10-29T02:56:06+00:00",
+  "machine": {
+    "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "kernel": "7.0.0-1017-azure",
+    "libc": "glibc 2.39",
+    "logical_cpus": 4,
+    "display": ":99",
+    "ci_image": "ubuntu24 20261026.354.1",
+    "os": "Ubuntu 24.04.5 LTS",
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "memory": "16367524 kB"
+  },
+  "bundle": {
+    "directory": "invsys-desktop",
+    "file_count": 3063,
+    "size_bytes": 634333771,
+    "executable_sha256": "aeb07bed54a25485927927b391a8ba299ef066a241e7def3dfe33e5e8616abd7",
+    "manifest": {
+      "app": "invsys-desktop",
+      "source": {
+        "commit": "ec8bc4f20d0d433e695849090287f23426419833",
+        "uncommitted_changes": false
+      },
+      "python": "3.12.15",
+      "platform": "linux-x86_64",
+      "packages": {
+        "pyinstaller": "6.22.3",
+        "pyinstaller-hooks-contrib": "2026.8",
+        "PySide6": "6.11.2",
+        "pywebview": "6.2.1",
+        "QtPy": "2.4.3"
+      },
+      "assets": {
+        "app.js": "e3e58ed7634575f4bbe3c84e140d07dbd93cab59391c6cc3617ad31e03eee00f",
+        "index.html": "9311ff079756f70d629845d224fdbb60d4b01d3cdfb4020a123628123f57ea2c",
+        "style.css": "34176552257111586b6fa5a00ffa948de30c238a03b5305a50bc95628f1e6b2c"
+      }
+    }
+  },
+  "assets_verified": {
+    "app.js": "e3e58ed7634575f4bbe3c84e140d07dbd93cab59391c6cc3617ad31e03eee00f",
+    "index.html": "9311ff079756f70d629845d224fdbb60d4b01d3cdfb4020a123628123f57ea2c",
+    "style.css": "34176552257111586b6fa5a00ffa948de30c238a03b5305a50bc95628f1e6b2c"
+  },
+  "network_isolated": true,
+  "runs": [
+    {
+      "run": 1,
+      "exit_code": 0,
+      "seconds": 76.1,
+      "stdout": [
+        "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
+        "Desktop smoke: five real CSV files, Lot/audit/component trace, destination, duplicate clicks, navigation and export failures passed.",
+        "Desktop smoke: native reduced-motion preference passed.",
+        "Desktop smoke: dialog last-action margin below the viewport, min 25 px over 32 checks.",
+        "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
+        "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
+        "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
+        "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 2470 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: catalog paging with real keys keeps pager focus and announces each page.",
+        "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
+        "Desktop smoke: restart persistence and backup content passed; no HTTP server."
+      ],
+      "stderr": [
+        "Failed to create Vulkan instance: -9",
+        "Failed to create platform Vulkan instance",
+        "[10275:7:1029/025612.140098:ERROR:../../../qtwebengine/src/3rdparty/chromium/gpu/ipc/client/command_buffer_proxy_impl.cc:127] ContextResult::kTransientFailure: Failed to send GpuControl.CreateCommandBuffer."
+      ],
+      "startup_backups": [],
+      "startup_backup_transactions": null,
+      "database": {
+        "integrity_check": "ok",
+        "parts": 123,
+        "inventory_transactions": 42,
+        "shipments": 6
+      },
+      "passed": true
+    },
+    {
+      "run": 2,
+      "exit_code": 0,
+      "seconds": 74.2,
+      "stdout": [
+        "Desktop smoke: manual backup with duplicate click, lost and unsent responses, failed and unlisted recovery reads and explicit decision, latest-backup status and folder access passed.",
+        "Desktop smoke: five real CSV files, Lot/audit/component trace, destination, duplicate clicks, navigation and export failures passed.",
+        "Desktop smoke: native reduced-motion preference passed.",
+        "Desktop smoke: dialog last-action margin below the viewport, min 25 px over 32 checks.",
+        "Desktop smoke: both themes, ten pages at four sizes, labels/reachable actions, native export Enter/Tab/Shift+Tab, dialog Escape and focus restoration passed.",
+        "Desktop smoke: native import selection/cancellation, row issues, stale file, confirmation, duplicate clicks and lost-response recovery passed.",
+        "Desktop smoke: native receipt import selection/cancellation, Lot errors, operator attribution, stale file, duplicate clicks, lost-response recovery and refreshed Stock/History passed.",
+        "Desktop smoke: native BOM import selection/cancellation, row and cycle errors, warnings, stale file, duplicate clicks, lost-response recovery, refreshed definitions and review invalidation passed.",
+        "Desktop smoke: Ctrl+1\u20139/Ctrl+K destinations with primary focus, dialog guard, contextual Move/catalog/History state, Python History search/sort and rendered contrast/name audit of 3416 elements on ten pages in both themes passed (unmeasured gradient/image backgrounds: none).",
+        "Desktop smoke: catalog paging with real keys keeps pager focus and announces each page.",
+        "Desktop smoke: built file assets, real bridge, operator save, catalog and drawer passed.",
+        "Desktop smoke: restart persistence and backup content passed; no HTTP server."
+      ],
+      "stderr": [
+        "Failed to create Vulkan instance: -9",
+        "Failed to create platform Vulkan instance"
+      ],
+      "startup_backups": [
+        "inventory-20261029-025725-startup.db"
+      ],
+      "startup_backup_transactions": 42,
+      "database": {
+        "integrity_check": "ok",
+        "parts": 242,
+        "inventory_transactions": 82,
+        "shipments": 12
+      },
+      "passed": true
+    }
+  ],
+  "network_isolation": {
+    "enabled": true,
+    "mechanism": "linux-empty-network-namespace"
+  },
+  "failure_checks": [
+    {
+      "name": "no-database-argument",
+      "expected_exit_code": 2,
+      "exit_code": 2,
+      "stderr": [
+        "usage: invsys-desktop [-h] [--database DATABASE] [--assets ASSETS]",
+        "                      [--smoke-check] [--perf-check {launch,workflow}]",
+        "                      [--perf-output PERF_OUTPUT]",
+        "invsys-desktop: error: Packaged launch requires --database to choose the intended inventory file explicitly."
+      ],
+      "passed": true
+    },
+    {
+      "name": "missing-bundled-assets",
+      "expected_exit_code": 2,
+      "exit_code": 2,
+      "stderr": [
+        "usage: invsys-desktop [-h] [--database DATABASE] [--assets ASSETS]",
+        "                      [--smoke-check] [--perf-check {launch,workflow}]",
+        "                      [--perf-output PERF_OUTPUT]",
+        "invsys-desktop: error: This bundle is incomplete: the frontend assets are missing from /home/runner/work/_temp/invsys-package-smoke/incomplete-bundle/invsys-desktop/_internal/frontend/dist. Extract the bundle again from its archive."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-folder-is-a-file",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database /home/runner/work/_temp/invsys-package-smoke/not-a-folder/inventory.db: Not a directory",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-path-is-a-directory",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database /home/runner/work/_temp/invsys-package-smoke/directory/inventory.db: Is a directory",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "database-is-not-sqlite",
+      "expected_exit_code": 1,
+      "exit_code": 1,
+      "stderr": [
+        "Cannot open the inventory database /home/runner/work/_temp/invsys-package-smoke/garbage/inventory.db: file is not a database",
+        "Check that --database names a readable, writable SQLite inventory (or a new file in a folder this account can write)."
+      ],
+      "passed": true
+    },
+    {
+      "name": "failed-launches-wrote-no-inventory",
+      "passed": true
+    }
+  ],
+  "restart_persistence": {
+    "passed": true
+  },
+  "no_writes_outside_selected_inventory": {
+    "passed": true
+  },
+  "result": "passed"
+}
