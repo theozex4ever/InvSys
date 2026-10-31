@@ -1,6 +1,6 @@
 # Semantic code scanning (SAST). Results appear under Security → Code scanning
-# and as PR annotations; a new high-severity alert on a PR fails the
-# "CodeQL" check via code-scanning merge protection (see docs/ci.md).
+# and as PR annotations. Not merge-blocking: the live rulesets have no
+# code-scanning rule yet (see docs/ci.md, "One required check").
 name: CodeQL
 
 on:

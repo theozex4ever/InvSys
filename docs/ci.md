@@ -21,7 +21,7 @@ pull_request / push main / merge_group / weekly
 │
 └─ CI gate ◄── needs all of the above; the only check branch protection requires
 
-CodeQL (separate workflow) ── python, JS/TS, actions · its own required check
+CodeQL (separate workflow) ── python, JS/TS, actions · reports alerts, not a required check
 ```
 
 Independent jobs run in parallel; the Windows test leg is the critical path.
@@ -127,10 +127,21 @@ satisfy it. The gate fails unless every upstream job succeeded; only
 re-matrixing a job therefore never silently drops it from merge requirements —
 the classic failure of listing matrix job names in branch protection.
 
-The proposed ruleset is in [`.github/rulesets/main.json`](../.github/rulesets/main.json):
-default branch only; pull requests with resolved threads; **CI gate** passing
-on an up-to-date branch; no new high-severity CodeQL alerts; no force-push or
-deletion. Apply or update it with:
+Two repository rulesets on the default branch currently enforce this:
+
+| Ruleset | Enforces |
+| --- | --- |
+| `BasicPRreq` | A pull request is required (0 approvals); no force-push; no deletion. |
+| `ProtectionRule` | **CI gate** must pass, from the GitHub Actions app. |
+
+[`.github/rulesets/main.json`](../.github/rulesets/main.json) is the fuller
+target configuration and is **not fully applied**. The live rulesets differ from
+it in three ways: there is no `code_scanning` rule, so new CodeQL alerts are
+reported but do not block merging; review threads need not be resolved before
+merging; and `strict_required_status_checks_policy` is `false`, so a branch may
+merge without being up to date with the default branch. Adopt the rest by
+applying the file (this creates a third ruleset, so remove or fold in the two
+above first to avoid overlap):
 
 ```bash
 gh api repos/theozex4ever/InvSys/rulesets --method POST --input .github/rulesets/main.json
