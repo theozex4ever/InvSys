@@ -42,8 +42,9 @@ every pull request. Repository rulesets on the default branch require a pull
 request and a single required status check, **CI gate**, which fails if any
 upstream job fails. Force-pushes and branch deletion are blocked.
 
-This is a single-maintainer project, so no human approval is required to merge:
-the maintainer reviews their own pull requests. The compensating controls are
-the required CI gate, CodeQL scanning, and per-PR review. CodeQL findings are
-reported on each pull request but are not currently a merge-blocking rule; see
+This is a single-maintainer project, so no human approval is required to merge.
+What is enforced is the pull request itself and the required CI gate. Beyond
+that, the maintainer reviews their own pull requests (often with an independent
+automated review), but that is a practice, not a repository rule. CodeQL
+findings are reported on each pull request but do not block merging; see
 [docs/ci.md](docs/ci.md#one-required-check) for exactly what is enforced.

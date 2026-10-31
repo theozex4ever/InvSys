@@ -21,7 +21,7 @@ pull_request / push main / merge_group / weekly
 │
 └─ CI gate ◄── needs all of the above; the only check branch protection requires
 
-CodeQL (separate workflow) ── python, JS/TS, actions · its own required check
+CodeQL (separate workflow) ── python, JS/TS, actions · reports alerts, not a required check
 ```
 
 Independent jobs run in parallel; the Windows test leg is the critical path.
