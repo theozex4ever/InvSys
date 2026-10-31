@@ -32,23 +32,29 @@ from inventory_control.ui.store import STORE
 from inventory_control.ui.widgets import BaseView, Card, PartCombo, add_field, set_feedback
 
 
+def _numeric_sort_key(item: QTableWidgetItem) -> tuple[int, int, str]:
+    """Integers (including signed "+5"/"-3") first by value, then other text lexically."""
+    text = item.text()
+    try:
+        return (0, int(text), "")
+    except ValueError:
+        return (1, 0, text)
+
+
 class NumericTableWidgetItem(QTableWidgetItem):
-    """Sorts integer text numerically (including signed "+5"/"-3"); other text sorts as text."""
+    """Sorts integer text numerically; compares by key so plain items never recurse."""
 
     def __lt__(self, other) -> bool:
-        try:
-            return int(self.text()) < int(other.text())
-        except (TypeError, ValueError):
-            return self.text() < other.text()
+        return _numeric_sort_key(self) < _numeric_sort_key(other)
 
     def __gt__(self, other) -> bool:
-        return bool(other < self)
+        return _numeric_sort_key(self) > _numeric_sort_key(other)
 
     def __le__(self, other) -> bool:
-        return not other < self
+        return _numeric_sort_key(self) <= _numeric_sort_key(other)
 
     def __ge__(self, other) -> bool:
-        return not self < other
+        return _numeric_sort_key(self) >= _numeric_sort_key(other)
 
 
 class DashboardView(BaseView):

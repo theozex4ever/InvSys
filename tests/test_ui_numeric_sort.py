@@ -2,7 +2,7 @@
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QTableWidget
+from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
 
 from inventory_control.ui.views import NumericTableWidgetItem
 
@@ -35,7 +35,24 @@ def test_non_numeric_text_sorts_as_text_without_raising(qtbot):
     table = make_table(qtbot, ["n/a", "", "a"])
     assert sorted_column(table, Qt.AscendingOrder) == ["", "a", "n/a"]
     mixed = make_table(qtbot, ["10", "n/a", "9", ""])
-    assert sorted(sorted_column(mixed, Qt.AscendingOrder)) == ["", "10", "9", "n/a"]
+    assert sorted_column(mixed, Qt.AscendingOrder) == ["9", "10", "", "n/a"]
+
+
+def test_mixed_text_ordering_is_transitive(qtbot):
+    # Numeric-vs-lexical fallback used to give "2" < "10" < "1x" < "2".
+    for values in (["2", "10", "1x"], ["1x", "10", "2"], ["10", "1x", "2"]):
+        assert sorted_column(make_table(qtbot, values), Qt.AscendingOrder) == ["2", "10", "1x"]
+
+
+def test_comparisons_with_plain_items_do_not_recurse(qtbot):
+    numeric, plain = NumericTableWidgetItem("9"), QTableWidgetItem("10")
+    assert (numeric < plain, numeric <= plain, numeric > plain, numeric >= plain) == (
+        True,
+        True,
+        False,
+        False,
+    )
+    assert plain > numeric
 
 
 @pytest.mark.parametrize("left,right", [("9", "10"), ("-3", "+0"), ("-12", "-3")])
