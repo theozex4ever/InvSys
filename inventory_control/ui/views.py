@@ -33,11 +33,22 @@ from inventory_control.ui.widgets import BaseView, Card, PartCombo, add_field, s
 
 
 class NumericTableWidgetItem(QTableWidgetItem):
+    """Sorts integer text numerically (including signed "+5"/"-3"); other text sorts as text."""
+
     def __lt__(self, other) -> bool:
         try:
             return int(self.text()) < int(other.text())
         except (TypeError, ValueError):
-            return super().__lt__(other)
+            return self.text() < other.text()
+
+    def __gt__(self, other) -> bool:
+        return bool(other < self)
+
+    def __le__(self, other) -> bool:
+        return not other < self
+
+    def __ge__(self, other) -> bool:
+        return not self < other
 
 
 class DashboardView(BaseView):

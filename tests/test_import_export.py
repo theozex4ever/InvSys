@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-import inventory_control.backup as backup_mod
 from inventory_control.backup import backup_database
 from inventory_control.import_export import ImportExportService
 from inventory_control.store import InventoryStore
@@ -420,7 +419,7 @@ def test_backup_filename_reason_suffixes_and_collision_safety(tmp_path, monkeypa
         def now(cls):
             return cls(2026, 6, 9, 12, 0, 0)
 
-    monkeypatch.setattr(backup_mod, "datetime", FixedDateTime)
+    monkeypatch.setattr("inventory_control.backup.datetime", FixedDateTime)
     first = backup_database(db_path, tmp_path / "backups", reason="manual")
     second = backup_database(db_path, tmp_path / "backups", reason="pre-import")
     third = backup_database(db_path, tmp_path / "backups", reason="manual")

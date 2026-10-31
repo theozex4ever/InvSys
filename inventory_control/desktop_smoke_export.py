@@ -6,7 +6,8 @@ from typing import Any, Protocol
 
 
 class _Wait(Protocol):
-    def __call__(self, script: str, *, timeout: float = 20) -> None: ...
+    def __call__(self, script: str, *, timeout: float = 20) -> None:
+        """Wait until the script evaluates truthy or the timeout expires."""
 
 
 def check_exports(window: Any, wait: _Wait) -> list[Path]:
