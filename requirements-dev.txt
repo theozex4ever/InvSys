@@ -4,7 +4,7 @@
 # either input, regenerate it with `scripts/lock.sh` (needs uv).
 #
 -r requirements-desktop.txt
-pytest>=8.0
+pytest>=9.0.3
 pytest-qt>=4.4
 pytest-cov>=6.0
 pytest-randomly>=3.15

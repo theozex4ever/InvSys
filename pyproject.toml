@@ -2,7 +2,7 @@
 # Every gate CI enforces is configured here so local runs and CI cannot drift.
 
 [tool.pytest.ini_options]
-minversion = "8.0"
+minversion = "9.0"
 testpaths = ["tests"]
 # -ra: summarize every non-pass at the end. Strict flags turn typos in markers or
 # config into errors instead of silently ignored settings.
