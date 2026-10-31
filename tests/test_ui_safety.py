@@ -3,9 +3,6 @@
 import pytest
 from PySide6.QtWidgets import QLabel, QMessageBox, QScrollArea, QTabWidget
 
-import inventory_control.ui.main_window as main_window_module
-import inventory_control.ui.views as views_module
-import inventory_control.ui.widgets as widgets_module
 from inventory_control.store import InventoryStore
 from inventory_control.ui.bom_flowchart import BOMFlowchart, capacity_level
 from inventory_control.ui.main_window import MainWindow
@@ -18,7 +15,7 @@ from inventory_control.ui.views import (
     ReceiveView,
     ShipView,
 )
-from inventory_control.ui.widgets import BaseView, PartCombo
+from inventory_control.ui.widgets import BaseView, PartCombo, bind_required_field
 
 
 @pytest.mark.parametrize("notify_deactivation", [False, True])
@@ -28,8 +25,8 @@ def test_blocked_bom_draft_does_not_fail_receipt(qtbot, tmp_path, monkeypatch, n
     store.add_part("KIT", "Kit")
     store.add_bom_component("KIT", "P", 1)
     store.receive("P", 2, "Stock", "L1", "setup")
-    monkeypatch.setattr(widgets_module, "STORE", store)
-    monkeypatch.setattr(views_module, "STORE", store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", store)
     shipment = ShipView(lambda *_: None, lambda: "alice")
     qtbot.addWidget(shipment)
     shipment.part.setCurrentIndex(shipment.part.findData("KIT"))
@@ -74,7 +71,7 @@ def test_blocked_bom_draft_does_not_fail_receipt(qtbot, tmp_path, monkeypatch, n
 
 def test_part_combo_starts_visibly_and_logically_unselected(qtbot, blank_store, monkeypatch):
     blank_store.add_part("ABC-1", "Widget")
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
 
     combo = PartCombo()
     qtbot.addWidget(combo)
@@ -86,7 +83,7 @@ def test_part_combo_starts_visibly_and_logically_unselected(qtbot, blank_store, 
 
 def test_part_combo_never_returns_stale_item_for_unmatched_text(qtbot, blank_store, monkeypatch):
     blank_store.add_part("ABC-1", "Widget")
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
     combo = PartCombo()
     qtbot.addWidget(combo)
 
@@ -103,7 +100,7 @@ def test_part_combo_hides_inactive_parts(qtbot, blank_store, monkeypatch):
     blank_store.add_part("ACTIVE-1", "Active")
     blank_store.add_part("OLD-1", "Inactive")
     blank_store.set_part_active("OLD-1", False)
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
 
     combo = PartCombo()
     qtbot.addWidget(combo)
@@ -126,8 +123,8 @@ def test_bom_shipping_auto_allocates_across_multiple_lots(qtbot, blank_store, mo
     blank_store.add_bom_component("KIT-1", "COMP-1", 5)
     blank_store.receive("COMP-1", 2, "Stock", "LOT-A", "setup")
     blank_store.receive("COMP-1", 3, "Stock", "LOT-B", "setup")
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
 
     view = ShipView(lambda *_: None, lambda: "alice")
     qtbot.addWidget(view)
@@ -149,8 +146,8 @@ def test_bom_shipping_requires_new_review_when_lots_change_during_confirmation(
     blank_store.add_part("COMP-1", "Component")
     blank_store.add_bom_component("KIT-1", "COMP-1", 5)
     blank_store.receive("COMP-1", 5, "Stock", "LOT-B", "setup")
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     view = ShipView(lambda *_: None, lambda: "alice")
     qtbot.addWidget(view)
     view.part.setCurrentIndex(view.part.findData("KIT-1"))
@@ -161,7 +158,7 @@ def test_bom_shipping_requires_new_review_when_lots_change_during_confirmation(
         blank_store.receive("COMP-1", 1, "Stock", "LOT-A", "setup")
         return QMessageBox.Yes
 
-    monkeypatch.setattr(views_module.QMessageBox, "question", stock_changes_before_confirmation)
+    monkeypatch.setattr(QMessageBox, "question", stock_changes_before_confirmation)
     view.ship()
 
     assert blank_store.shipments == []
@@ -171,8 +168,8 @@ def test_bom_shipping_requires_new_review_when_lots_change_during_confirmation(
 
 def test_receive_uses_selected_parts_default_location(qtbot, blank_store, monkeypatch):
     blank_store.add_part("ABC-1", "Widget", location="Receiving")
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     view = ReceiveView(lambda *_: None, lambda: "alice")
     qtbot.addWidget(view)
 
@@ -187,8 +184,8 @@ def test_receive_uses_selected_parts_default_location(qtbot, blank_store, monkey
 
 
 def test_move_and_adjust_are_separate_task_tabs(qtbot, blank_store, monkeypatch):
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     view = MoveAdjustView(lambda *_: None, lambda: "alice")
     qtbot.addWidget(view)
 
@@ -203,8 +200,8 @@ def test_adjust_can_correct_a_fully_shipped_lot(qtbot, blank_store, monkeypatch)
     blank_store.add_part("ABC-1", "Widget")
     blank_store.receive("ABC-1", 5, "Stock", "LOT-1", "setup")
     blank_store.ship("ABC-1", 5, "Stock", "Acme", "alice", "LOT-1")
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     view = MoveAdjustView(lambda *_: None, lambda: "alice")
     qtbot.addWidget(view)
     view.tabs.setCurrentIndex(1)
@@ -252,7 +249,7 @@ def test_history_filters_across_operator_and_type(qtbot, blank_store, monkeypatc
     blank_store.add_part("ABC-1", "Widget")
     blank_store.receive("ABC-1", 5, "Stock", "LOT-1", "alice")
     blank_store.ship("ABC-1", 1, "Stock", "Acme", "bob", "LOT-1")
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     view = HistoryView()
     qtbot.addWidget(view)
 
@@ -269,7 +266,7 @@ def test_history_filters_across_operator_and_type(qtbot, blank_store, monkeypatc
 def test_dashboard_items_open_their_related_record(qtbot, blank_store, monkeypatch):
     blank_store.add_part("LOW-1", "Low stock", minimum_quantity=2)
     blank_store.receive("LOW-1", 1, "Stock", "LOT-1", "alice")
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     opened_parts = []
     opened_history = []
     view = DashboardView(lambda *_: None, opened_parts.append, opened_history.append)
@@ -284,9 +281,9 @@ def test_dashboard_items_open_their_related_record(qtbot, blank_store, monkeypat
 
 def test_global_search_navigates_to_filtered_parts(qtbot, blank_store, monkeypatch):
     blank_store.add_part("ABC-1", "Widget")
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
-    monkeypatch.setattr(views_module, "STORE", blank_store)
-    monkeypatch.setattr(main_window_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.main_window.STORE", blank_store)
     window = MainWindow()
     qtbot.addWidget(window)
 
@@ -300,9 +297,9 @@ def test_global_search_navigates_to_filtered_parts(qtbot, blank_store, monkeypat
 
 
 def test_sidebar_groups_related_views_without_losing_routes(qtbot, blank_store, monkeypatch):
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
-    monkeypatch.setattr(views_module, "STORE", blank_store)
-    monkeypatch.setattr(main_window_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.main_window.STORE", blank_store)
     window = MainWindow()
     qtbot.addWidget(window)
 
@@ -336,8 +333,8 @@ def test_bom_row_selection_enters_explicit_update_mode(qtbot, blank_store, monke
     blank_store.add_part("KIT-1", "Kit")
     blank_store.add_part("COMP-1", "Component")
     blank_store.add_bom_component("KIT-1", "COMP-1", 2)
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     view = BOMView(lambda *_: None)
     qtbot.addWidget(view)
     view.parent_part.setCurrentIndex(view.parent_part.findData("KIT-1"))
@@ -356,8 +353,8 @@ def test_bom_flowchart_uses_final_build_alert_thresholds(qtbot, blank_store, mon
     blank_store.add_part("SCREW", "Screw")
     blank_store.add_bom_component("KIT", "SCREW", 2)
     blank_store.receive("SCREW", 200, "Stock", "LOT-1", "setup")
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     view = BOMView(lambda *_: None)
     qtbot.addWidget(view)
     view.visual_part.setCurrentIndex(view.visual_part.findData("KIT"))
@@ -385,7 +382,7 @@ def test_capacity_level_boundaries():
 
 
 def test_part_create_action_requires_required_fields(qtbot, blank_store, monkeypatch):
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     view = PartsView(lambda *_: None)
     qtbot.addWidget(view)
 
@@ -397,7 +394,7 @@ def test_part_create_action_requires_required_fields(qtbot, blank_store, monkeyp
 
 
 def test_required_highlight_clears_and_returns_with_field_value(qtbot, blank_store, monkeypatch):
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     view = PartsView(lambda *_: None)
     qtbot.addWidget(view)
     label = next(
@@ -422,11 +419,11 @@ def test_required_part_selector_clears_highlight_only_for_valid_part(
     qtbot, blank_store, monkeypatch
 ):
     blank_store.add_part("ABC-1", "Widget")
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
     combo = PartCombo()
     qtbot.addWidget(combo)
     label = QLabel("Part")
-    widgets_module.bind_required_field(combo, label)
+    bind_required_field(combo, label)
 
     assert combo.property("missing") is True
     combo.setEditText("NOT-A-PART")
@@ -443,8 +440,8 @@ def test_required_part_selector_clears_highlight_only_for_valid_part(
 def test_standard_shipping_hides_bom_allocation_table(qtbot, blank_store, monkeypatch):
     blank_store.add_part("ABC-1", "Widget")
     blank_store.receive("ABC-1", 2, "Stock", "LOT-1", "setup")
-    monkeypatch.setattr(widgets_module, "STORE", blank_store)
-    monkeypatch.setattr(views_module, "STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.widgets.STORE", blank_store)
+    monkeypatch.setattr("inventory_control.ui.views.STORE", blank_store)
     view = ShipView(lambda *_: None, lambda: "alice")
     qtbot.addWidget(view)
 
