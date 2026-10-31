@@ -305,4 +305,4 @@ since the backup before resuming work; see `docs/frontend/desktop.md` for the fu
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
