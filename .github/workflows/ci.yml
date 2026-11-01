@@ -163,6 +163,7 @@ jobs:
           persist-credentials: false
           # The upgrade rehearsal unpacks the pinned last known-good release from history.
           fetch-depth: 0
+          filter: blob:none
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -368,19 +369,106 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-  package-smoke:
-    name: Package smoke (${{ matrix.os }})
+  package-build:
+    name: Package build (${{ matrix.os }})
     needs: frontend
     runs-on: ${{ matrix.os }}
-    # Includes building the large performance fixture (100,000 ledger rows) and the
-    # measured launches and scenarios of the performance step.
-    timeout-minutes: 75
+    timeout-minutes: 20
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        # `bundle` is what the build delivers: a folder, or an .app on macOS.
+        include:
+          - os: ubuntu-24.04
+          # Apple silicon; the bundle targets the runner's architecture only.
+          - os: macos-15
+          - os: windows-2025
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-package.lock.txt
+
+      # PyInstaller's Qt hooks inspect shared-library dependencies while bundling.
+      - name: Install Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          # shellcheck disable=SC2086 # word-splitting the package list is intended
+          sudo apt-get install --no-install-recommends -y -qq $QT_APT_PACKAGES
+
+      - name: Install packaging dependencies (hash-locked)
+        run: python -m pip install --require-hashes -r requirements-package.lock.txt
+
+      # The exact bytes the frontend job built and tested, not a rebuild.
+      - name: Download built assets
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: Build standalone bundle
+        run: >-
+          python scripts/package_bundle.py build
+          --assets frontend/dist
+          --dist "$RUNNER_TEMP/bundle-dist"
+          --work "$RUNNER_TEMP/bundle-work"
+          2>&1 | tee "$RUNNER_TEMP/package-build.log"
+
+      - name: Build left the checkout untouched
+        run: |
+          leaked="$(git status --porcelain --ignored --untracked-files=all \
+            | grep -vE '^(!!|\?\?) frontend/dist/' || true)"
+          if [ -n "$leaked" ]; then
+            echo "::error::The package build wrote into the checkout: $(echo "$leaked" | tr '\n' ' ')"
+            exit 1
+          fi
+
+      - name: Upload standalone archive for validation
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-archive-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/bundle-dist/*.tar.gz
+            ${{ runner.temp }}/bundle-dist/*.zip
+          # Already compressed; this is same-run transport, not a release.
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-build-log-${{ matrix.os }}
+          path: ${{ runner.temp }}/package-build.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  package-smoke:
+    name: Package ${{ matrix.check }} (${{ matrix.os }})
+    needs: [frontend, package-build]
+    # One OS's failed build must not skip the other OSes' checks. Its own legs fail
+    # at the archive download, and CI gate fails on the build result regardless.
+    if: ${{ !cancelled() && needs.frontend.result == 'success' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        check: [smoke, upgrade, performance]
+        # Includes augment every check on the matching OS.
         include:
           - os: ubuntu-24.04
             bundle: invsys-desktop
@@ -397,7 +485,8 @@ jobs:
         with:
           persist-credentials: false
           # The upgrade rehearsal unpacks the pinned last known-good release from history.
-          fetch-depth: 0
+          fetch-depth: ${{ matrix.check == 'upgrade' && '0' || '1' }}
+          filter: ${{ matrix.check == 'upgrade' && 'blob:none' || '' }}
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -426,13 +515,11 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
-      - name: Build standalone bundle
-        run: >-
-          python scripts/package_bundle.py build
-          --assets frontend/dist
-          --dist "$RUNNER_TEMP/bundle-dist"
-          --work "$RUNNER_TEMP/bundle-work"
-          2>&1 | tee "$RUNNER_TEMP/package-build.log"
+      - name: Download standalone archive
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package-archive-${{ matrix.os }}
+          path: ${{ runner.temp }}/bundle-dist
 
       # Smoke the installed archive, including its symlinks and executable modes,
       # rather than only the directory PyInstaller left behind.
@@ -458,20 +545,22 @@ jobs:
           (dist / 'SHA256SUMS').write_text(''.join(lines), encoding='utf-8')
           PY
 
-      - name: Build left the checkout untouched
+      # Extract the zip as operators do; native probes use the interactive desktop.
+      - name: Install the archive as an operator would
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          leaked="$(git status --porcelain --ignored --untracked-files=all \
-            | grep -vE '^(!!|\?\?) frontend/dist/' || true)"
-          if [ -n "$leaked" ]; then
-            echo "::error::The package build wrote into the checkout: $(echo "$leaked" | tr '\n' ' ')"
-            exit 1
-          fi
+          $archive = Get-ChildItem "$env:RUNNER_TEMP/bundle-dist" -Filter 'invsys-desktop-*.zip' | Select-Object -First 1
+          if (-not $archive) { throw 'The build produced no zip archive.' }
+          Expand-Archive -Path $archive.FullName -DestinationPath "$env:RUNNER_TEMP/bundle-installed"
+          $digest = (Get-FileHash -Algorithm SHA256 $archive.FullName).Hash.ToLowerInvariant()
+          "$digest  $($archive.Name)" | Set-Content -Encoding utf8 "$env:RUNNER_TEMP/bundle-dist/SHA256SUMS"
 
       # Failure behaviour, then two native runs of the frozen bundle against one
       # disposable inventory (second run: restart persistence and startup backup),
       # inside an empty network namespace so any network use fails outright.
       - name: Package smoke
-        if: runner.os == 'Linux'
+        if: matrix.check == 'smoke' && runner.os == 'Linux'
         run: >-
           xvfb-run -a -s "-screen 0 1920x1080x24"
           python scripts/package_bundle.py smoke
@@ -486,7 +575,7 @@ jobs:
       # network namespace, so offline rests on the smoke's file:// and
       # no-HTTP-server checks there (see docs/frontend/packaging.md).
       - name: Package smoke (macOS)
-        if: runner.os == 'macOS'
+        if: matrix.check == 'smoke' && runner.os == 'macOS'
         env:
           BUNDLE: ${{ matrix.bundle }}
         run: >-
@@ -497,22 +586,8 @@ jobs:
           --evidence "$RUNNER_TEMP/package-evidence.json"
           2>&1 | tee "$RUNNER_TEMP/package-smoke.log"
 
-      # Operators install a Windows bundle by extracting the zip, so the smoke
-      # runs on the extracted archive. The runner session is an interactive
-      # desktop, so no virtual display is needed; the smoke blocks outbound
-      # traffic of every bundled program with temporary Windows Firewall rules.
-      - name: Install the archive as an operator would
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $archive = Get-ChildItem "$env:RUNNER_TEMP/bundle-dist" -Filter 'invsys-desktop-*.zip' | Select-Object -First 1
-          if (-not $archive) { throw 'The build produced no zip archive.' }
-          Expand-Archive -Path $archive.FullName -DestinationPath "$env:RUNNER_TEMP/bundle-installed"
-          $digest = (Get-FileHash -Algorithm SHA256 $archive.FullName).Hash.ToLowerInvariant()
-          "$digest  $($archive.Name)" | Set-Content -Encoding utf8 "$env:RUNNER_TEMP/bundle-dist/SHA256SUMS"
-
       - name: Package smoke
-        if: runner.os == 'Windows'
+        if: matrix.check == 'smoke' && runner.os == 'Windows'
         run: >-
           python scripts/package_bundle.py smoke
           --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
@@ -526,7 +601,7 @@ jobs:
       # bundle against a disposable copy of the pre-migration fixture
       # (docs/frontend/cutover.md). Never touches operational data.
       - name: Upgrade and restore rehearsal
-        if: runner.os == 'Linux'
+        if: matrix.check == 'upgrade' && runner.os == 'Linux'
         run: >-
           xvfb-run -a -s "-screen 0 1920x1080x24"
           python scripts/upgrade_rehearsal.py rehearse
@@ -538,7 +613,7 @@ jobs:
           2>&1 | tee "$RUNNER_TEMP/upgrade-rehearsal.log"
 
       - name: Upgrade and restore rehearsal (macOS)
-        if: runner.os == 'macOS'
+        if: matrix.check == 'upgrade' && runner.os == 'macOS'
         env:
           BUNDLE: ${{ matrix.bundle }}
         run: >-
@@ -550,7 +625,7 @@ jobs:
           2>&1 | tee "$RUNNER_TEMP/upgrade-rehearsal.log"
 
       - name: Upgrade and restore rehearsal (Windows)
-        if: runner.os == 'Windows'
+        if: matrix.check == 'upgrade' && runner.os == 'Windows'
         run: >-
           python scripts/upgrade_rehearsal.py rehearse
           --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
@@ -564,7 +639,7 @@ jobs:
       # the frozen bundle against a freshly built 10,000-Part / 100,000-transaction /
       # 1,000-node-BOM inventory. A measured repeat over its limit fails the job.
       - name: Package performance
-        if: runner.os == 'Linux'
+        if: matrix.check == 'performance' && runner.os == 'Linux'
         run: >-
           xvfb-run -a -s "-screen 0 1920x1080x24"
           python scripts/package_perf.py run
@@ -574,7 +649,7 @@ jobs:
           2>&1 | tee "$RUNNER_TEMP/package-perf.log"
 
       - name: Package performance (macOS)
-        if: runner.os == 'macOS'
+        if: matrix.check == 'performance' && runner.os == 'macOS'
         env:
           BUNDLE: ${{ matrix.bundle }}
         run: >-
@@ -585,7 +660,7 @@ jobs:
           2>&1 | tee "$RUNNER_TEMP/package-perf.log"
 
       - name: Package performance (Windows)
-        if: runner.os == 'Windows'
+        if: matrix.check == 'performance' && runner.os == 'Windows'
         run: >-
           python scripts/package_perf.py run
           --bundle "$RUNNER_TEMP/bundle-installed/invsys-desktop"
@@ -609,10 +684,9 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: package-evidence-${{ matrix.os }}
+          name: package-evidence-${{ matrix.os }}-${{ matrix.check }}
           path: |
             ${{ runner.temp }}/package-evidence.json
-            ${{ runner.temp }}/package-build.log
             ${{ runner.temp }}/package-smoke.log
             ${{ runner.temp }}/upgrade-evidence.json
             ${{ runner.temp }}/upgrade-rehearsal.log
@@ -621,8 +695,8 @@ jobs:
             ${{ runner.temp }}/perf-evidence.json
             ${{ runner.temp }}/package-perf.log
             ${{ runner.temp }}/bundle-dist/SHA256SUMS
-            ${{ runner.temp }}/bundle-dist/invsys-desktop/bundle-manifest.json
-            ${{ runner.temp }}/bundle-dist/invsys-desktop.app/Contents/Resources/bundle-manifest.json
+            ${{ runner.temp }}/bundle-installed/invsys-desktop/bundle-manifest.json
+            ${{ runner.temp }}/bundle-installed/invsys-desktop.app/Contents/Resources/bundle-manifest.json
             ${{ runner.temp }}/invsys-package-smoke/inventory/smoke-captures/
             ${{ runner.temp }}/invsys-package-smoke/inventory/logs/
           retention-days: 90
@@ -631,7 +705,7 @@ jobs:
       # A CI artifact for native-panel acceptance, not a published release.
       # Keep the tar intact: uploading the .app directly would lose its symlinks/modes.
       - name: Upload macOS acceptance bundle
-        if: runner.os == 'macOS'
+        if: matrix.check == 'smoke' && runner.os == 'macOS'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos-standalone-bundle
@@ -707,6 +781,7 @@ jobs:
       - python-tests
       - frontend
       - desktop-e2e
+      - package-build
       - package-smoke
       - dependency-audit
       - dependency-review

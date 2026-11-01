@@ -341,28 +341,32 @@ parity acceptance is ticket 18 and is not claimed here.
 
 ## CI
 
-The `package-smoke` job (runners `ubuntu-24.04`, `windows-2025` and `macos-15`)
-runs after the `frontend` job: it installs the package lock, downloads the exact
-`frontend-dist` artifact the other jobs tested, builds and extracts the archive
-into a fresh installation directory, checks the checkout stayed clean and runs the
-extracted package smoke twice. Linux uses Xvfb in an empty network namespace;
-Windows uses the runner's interactive desktop behind outbound firewall rules;
-macOS uses the runner's logged-in session and verifies the application seal.
-It uploads `package-evidence.json`, the manifest, build/smoke output, captures,
-application logs and archive checksums for 90 days, including failed-step output.
-A passing macOS job also uploads the intact archive and `SHA256SUMS` as
-`macos-standalone-bundle` for seven days so native-panel acceptance can use the
-exact tested bundle. This is a CI artifact, not a release publication. Linux and
-Windows archives are not uploaded. The same job then runs `scripts/package_perf.py` on the extracted bundle against a freshly built large inventory and uploads `perf-evidence.json` (see [performance.md](performance.md)). All three legs are part of **CI gate**.
+The `package-build` matrix (`ubuntu-24.04`, `windows-2025`, `macos-15`)
+downloads the exact `frontend-dist` artifact, installs the hash-locked packaging
+tools, builds one archive per OS and verifies the checkout stayed clean. It
+uploads archives as `package-archive-<os>` for one day, and build logs as
+`package-build-log-<os>` for 14 days.
 
-After the package smoke, each leg runs `scripts/upgrade_rehearsal.py` against the same
-extracted bundle (copied-data upgrade, restart, closed-app restore and reopen, then rollback to and forward
-from the pinned last known-good release on a disposable copy of a
-pre-migration fixture written by that release; see [cutover.md](cutover.md)) and uploads
-`upgrade-evidence.json` and its log with the package evidence. It adds four more native
-launches per leg. The pinned release is unpacked from git history, so the job (and the
-test legs, which run the same rehearsal against a stand-in application) check out full
-history.
+The `package-smoke` matrix downloads and extracts each OS archive on three
+separate runners for smoke, upgrade/restore and performance checks. Every check
+uses the same built bytes. Linux smoke/upgrade uses Xvfb and empty network
+namespaces; Windows uses an interactive desktop and outbound firewall rules;
+macOS uses the logged-in session and verifies the application seal. Performance
+runs in isolation from the other probes. All builds and all nine checks feed
+**CI gate**.
+
+Validation records, logs, captures and archive checksums remain in
+`package-evidence-<os>-<check>` for 90 days, including failed-step output. The
+macOS smoke leg also uploads the intact archive and `SHA256SUMS` as
+`macos-standalone-bundle` for seven days for native-panel acceptance. It appears
+once smoke passes, before upgrade and performance finish, so use it only from a run
+whose **CI gate** passed. These are CI artifacts, not release publications.
+
+Upgrade/restore still exercises copied-data upgrade, restart, closed-app restore,
+reopen, rollback and roll-forward using the pinned release and disposable data
+(see [cutover.md](cutover.md)). Upgrade and pytest runners check out full commit
+history with blobless fetching so the pinned release can be extracted on demand.
+See [CI design](../ci.md) for measurements and the improvement plan.
 
 ## Extending packaging
 

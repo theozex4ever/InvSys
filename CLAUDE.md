@@ -25,7 +25,7 @@ debugging commands.
 
 The standalone Linux, Windows and macOS bundles are built and smoke-tested with
 `scripts/package_bundle.py` (locked `requirements-package.lock.txt`); see
-`docs/frontend/packaging.md`. CI runs it as `package-smoke`.
+`docs/frontend/packaging.md`. CI runs it as `package-build` and `package-smoke`.
 
 Copied-data upgrade, closed-app restore and rollback are documented in
 `docs/frontend/cutover.md` and rehearsed on disposable copies of a pre-migration

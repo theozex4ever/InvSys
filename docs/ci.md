@@ -15,7 +15,7 @@ pull_request / push main / merge_group / weekly
 ├─ Python static analysis ── ruff lint, ruff format, mypy --strict, lock freshness
 ├─ Tests ×5 ──────────────── Ubuntu 3.12 · 3.13 · 3.14 (+coverage), Windows 3.12, macOS 3.12
 ├─ Frontend build ─────────► dist artifact ─┬─► Desktop E2E (native smoke, Xvfb)
-│                                          └─► Package smoke ×3 (Linux, Windows, macOS: frozen bundle, twice)
+│                                          └─► Package build ×3 ─► smoke / upgrade / performance ×3 (separate runners)
 ├─ Dependency audit ──────── pip-audit (hash-locked set), npm audit
 ├─ Dependency review ─────── PR-only: blocks newly introduced vulnerable deps
 │
@@ -24,20 +24,74 @@ pull_request / push main / merge_group / weekly
 CodeQL (separate workflow) ── python, JS/TS, actions · reports alerts, not a required check
 ```
 
-Independent jobs run in parallel; the Windows test leg is the critical path.
-Pytest step times, before and after coverage moved to the Ubuntu 3.14 leg only
-(runs 38837840486 and 39145405683):
+Independent checks run in parallel. Each OS builds one standalone archive; three
+validation jobs download and extract that same archive, then independently run
+smoke, upgrade/restore or performance. Performance has its own runner, so the
+other native checks do not contend for its CPU, memory or desktop session.
+**CI gate** requires both the build matrix and all nine validation legs; none may
+skip. A failed build fails that OS's legs while the other OSes still validate. The
+full test matrix, coverage floor, native scenarios, network isolation, security
+checks and performance limits remain enforced on every change.
 
-| Leg | Every leg traced | One leg traced |
-| --- | --- | --- |
-| Ubuntu 3.12 | 6.3 min | 3.3 min |
-| Ubuntu 3.13 | 5.5 min | 2.2 min |
-| Ubuntu 3.14 (coverage) | 3.0 min | 3.3 min |
-| macOS 3.12 | 4.7 min | 2.3 min |
-| Windows 3.12 | 9.1 min | 5.6 min |
-| Whole run | about 10 min | 6.7 min |
+Archives expire after a day and **Re-run failed jobs** does not rebuild them, so a
+validation leg re-run later fails at its download; use **Re-run all jobs** then.
 
-Desktop E2E takes about 3 minutes, package smoke about 5 on Linux and 6.5 on Windows.
+## Free CI speed improvements
+
+The approach follows [Owen Gretzinger's CI article](https://x.com/owengretzinger/status/2116291924219060319):
+measure actual job/step durations, fix the critical path, then remeasure. This
+repository is public; [standard GitHub-hosted runners are free](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
+No larger runners, external providers, paid cache services or account settings
+are required. Transport archives expire after one day and use no extra zip
+compression because their payloads are already compressed. Build logs remain for
+14 days; validation evidence remains for 90 days. The macOS acceptance archive
+still remains for seven days.
+
+Baseline: [successful run 41209837250](https://github.com/theozex4ever/InvSys/actions/runs/41209837250),
+before this change. These are observed step seconds, excluding queues and setup,
+not promises of future speed:
+
+| OS | Build | Smoke | Upgrade/restore | Performance |
+| --- | ---: | ---: | ---: | ---: |
+| Ubuntu | 124 | 165 | 318 | 217 |
+| macOS | 146 | 275 | 498 | 120 |
+| Windows | 120 | 257 | 487 | 246 |
+
+Previously each row ran sequentially. The implemented change overlaps its three
+validation steps after building once, paying extra runner setup and archive
+transfer time. GitHub queue delays and the slowest build can still affect the
+result. Compare complete successful runs, not just the fastest individual steps.
+
+History-dependent pytest and upgrade jobs use `fetch-depth: 0` with
+`filter: blob:none`: commit history remains available, while historical file
+contents are fetched only when the pinned-release rehearsal needs them. Other
+jobs retain shallow checkouts. Dependency download caches already run on both
+main and PRs, so main seeds caches usable by new PRs; clean, hash-verified
+installs remain mandatory.
+
+### Further steps, in priority order
+
+1. Compare several successful runs after merging, including queue, setup,
+   archive transfer and execution times. Retrieve job/step records with
+   `gh run view RUN_ID --json jobs`; verify cache hit messages in setup logs.
+2. Profile upgrade/restore launches, now the longest validation. Preserve every
+   restart, rollback, backup and offline assertion while looking for repeated
+   setup work; benchmark any change before adopting it.
+3. Consider conservative affected-job selection, beginning with documentation
+   changes. First add tests for renames, shared files, unknown paths, workflow
+   changes, missing diffs and intentional hidden changes. Keep the gate always
+   running and run full validation on main/schedules. This is deferred because
+   an incorrect skip can silently remove release protection.
+4. If pytest becomes the critical path, profile individual tests and worker
+   startup before sharding. Match workers to standard-runner cores and keep Qt
+   and database state isolated. More shards are not automatically faster.
+5. Revisit caches and faster typecheckers only when timings justify them.
+   Ruff is already fast and TypeScript already uses version 7; frontend/static
+   checks are short. Changing tools or caching `node_modules` adds little here.
+
+Paid runner changes are outside scope. Vitest worker settings do not apply to
+pytest. Mandatory pre-push hooks would conflict with the repository's optional
+local-check workflow, so no hooks are installed.
 
 ## The gates and what each one catches
 
@@ -59,7 +113,7 @@ Desktop E2E takes about 3 minutes, package smoke about 5 on Linux and 6.5 on Win
 | **check-dist** | missing/empty assets, any network URL, gzipped size over budget, module scripts | The desktop shell loads `file://` with no server: a CDN link or `type="module"` would break offline use. |
 | **Reproducible build** | two builds of one commit differ | Cheap proof the artifact depends only on the source and lockfile. |
 | **Desktop E2E** | any step of the native smoke | Real pywebview + Qt WebEngine against the *exact* bytes the frontend job built: receipts, shipments, BOM review, reconciliation after lost responses, both themes, four viewports, keyboard focus, restart persistence, a startup backup on the second launch. Screenshots are uploaded. |
-| **Package smoke** (Ubuntu 24.04, Windows 2025, macOS 15) | the frozen bundle differs from the built assets, a startup failure is unreadable, either native run fails, the second run takes no startup backup, a run touches a default data path or (Linux/Windows) the network, the macOS application's seal is broken | The bundle is what operators install, so it is built from the hash-locked `requirements-package.lock.txt` and the exact `frontend-dist` bytes, then run twice: under Xvfb in an empty network namespace on Linux, from the extracted zip behind outbound firewall rules on Windows, in the runner's desktop session as an ad-hoc-signed `.app` on macOS. Evidence is uploaded. The job then measures the approved performance envelope on the same bundle (a measured repeat over 2 s / 5 s / 10 s fails it; hosted VMs are noisy, so read `perf-evidence.json` before blaming a change). See [packaging](frontend/packaging.md) and [performance](frontend/performance.md). |
+| **Package smoke** (Ubuntu 24.04, Windows 2025, macOS 15) | the frozen bundle differs from the built assets, a startup failure is unreadable, either native run fails, the second run takes no startup backup, a run touches a default data path or (Linux/Windows) the network, the macOS application's seal is broken | The bundle is what operators install, so it is built from the hash-locked `requirements-package.lock.txt` and the exact `frontend-dist` bytes, then run twice: under Xvfb in an empty network namespace on Linux, from the extracted zip behind outbound firewall rules on Windows, in the runner's desktop session as an ad-hoc-signed `.app` on macOS. Evidence is uploaded. Separate legs rehearse the upgrade and measure the approved performance envelope on the same archive (a measured repeat over 2 s / 5 s / 10 s fails it; hosted VMs are noisy, so read `perf-evidence.json` before blaming a change). See [packaging](frontend/packaging.md) and [performance](frontend/performance.md). |
 | **pip-audit / npm audit** | a known vulnerability anywhere in the locked trees | Full-tree view, also on the weekly schedule. |
 | **Dependency review** | a PR *adds* a vulnerable dependency | Diff view with OpenSSF Scorecard data for new packages. |
 | **actionlint** | invalid workflow syntax, expressions, shell bugs | Workflows are code. |
