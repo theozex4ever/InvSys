@@ -456,6 +456,9 @@ jobs:
   package-smoke:
     name: Package ${{ matrix.check }} (${{ matrix.os }})
     needs: [frontend, package-build]
+    # One OS's failed build must not skip the other OSes' checks. Its own legs fail
+    # at the archive download, and CI gate fails on the build result regardless.
+    if: ${{ !cancelled() && needs.frontend.result == 'success' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
@@ -692,8 +695,8 @@ jobs:
             ${{ runner.temp }}/perf-evidence.json
             ${{ runner.temp }}/package-perf.log
             ${{ runner.temp }}/bundle-dist/SHA256SUMS
-            ${{ runner.temp }}/bundle-dist/invsys-desktop/bundle-manifest.json
-            ${{ runner.temp }}/bundle-dist/invsys-desktop.app/Contents/Resources/bundle-manifest.json
+            ${{ runner.temp }}/bundle-installed/invsys-desktop/bundle-manifest.json
+            ${{ runner.temp }}/bundle-installed/invsys-desktop.app/Contents/Resources/bundle-manifest.json
             ${{ runner.temp }}/invsys-package-smoke/inventory/smoke-captures/
             ${{ runner.temp }}/invsys-package-smoke/inventory/logs/
           retention-days: 90

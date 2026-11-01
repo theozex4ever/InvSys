@@ -358,8 +358,9 @@ runs in isolation from the other probes. All builds and all nine checks feed
 Validation records, logs, captures and archive checksums remain in
 `package-evidence-<os>-<check>` for 90 days, including failed-step output. The
 macOS smoke leg also uploads the intact archive and `SHA256SUMS` as
-`macos-standalone-bundle` for seven days for native-panel acceptance. These are
-CI artifacts, not release publications.
+`macos-standalone-bundle` for seven days for native-panel acceptance. It appears
+once smoke passes, before upgrade and performance finish, so use it only from a run
+whose **CI gate** passed. These are CI artifacts, not release publications.
 
 Upgrade/restore still exercises copied-data upgrade, restart, closed-app restore,
 reopen, rollback and roll-forward using the pinned release and disposable data

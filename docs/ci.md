@@ -29,8 +29,12 @@ validation jobs download and extract that same archive, then independently run
 smoke, upgrade/restore or performance. Performance has its own runner, so the
 other native checks do not contend for its CPU, memory or desktop session.
 **CI gate** requires both the build matrix and all nine validation legs; none may
-skip. The full test matrix, coverage floor, native scenarios, network isolation,
-security checks and performance limits remain enforced on every change.
+skip. A failed build fails that OS's legs while the other OSes still validate. The
+full test matrix, coverage floor, native scenarios, network isolation, security
+checks and performance limits remain enforced on every change.
+
+Archives expire after a day and **Re-run failed jobs** does not rebuild them, so a
+validation leg re-run later fails at its download; use **Re-run all jobs** then.
 
 ## Free CI speed improvements
 
@@ -109,7 +113,7 @@ local-check workflow, so no hooks are installed.
 | **check-dist** | missing/empty assets, any network URL, gzipped size over budget, module scripts | The desktop shell loads `file://` with no server: a CDN link or `type="module"` would break offline use. |
 | **Reproducible build** | two builds of one commit differ | Cheap proof the artifact depends only on the source and lockfile. |
 | **Desktop E2E** | any step of the native smoke | Real pywebview + Qt WebEngine against the *exact* bytes the frontend job built: receipts, shipments, BOM review, reconciliation after lost responses, both themes, four viewports, keyboard focus, restart persistence, a startup backup on the second launch. Screenshots are uploaded. |
-| **Package smoke** (Ubuntu 24.04, Windows 2025, macOS 15) | the frozen bundle differs from the built assets, a startup failure is unreadable, either native run fails, the second run takes no startup backup, a run touches a default data path or (Linux/Windows) the network, the macOS application's seal is broken | The bundle is what operators install, so it is built from the hash-locked `requirements-package.lock.txt` and the exact `frontend-dist` bytes, then run twice: under Xvfb in an empty network namespace on Linux, from the extracted zip behind outbound firewall rules on Windows, in the runner's desktop session as an ad-hoc-signed `.app` on macOS. Evidence is uploaded. The job then measures the approved performance envelope on the same bundle (a measured repeat over 2 s / 5 s / 10 s fails it; hosted VMs are noisy, so read `perf-evidence.json` before blaming a change). See [packaging](frontend/packaging.md) and [performance](frontend/performance.md). |
+| **Package smoke** (Ubuntu 24.04, Windows 2025, macOS 15) | the frozen bundle differs from the built assets, a startup failure is unreadable, either native run fails, the second run takes no startup backup, a run touches a default data path or (Linux/Windows) the network, the macOS application's seal is broken | The bundle is what operators install, so it is built from the hash-locked `requirements-package.lock.txt` and the exact `frontend-dist` bytes, then run twice: under Xvfb in an empty network namespace on Linux, from the extracted zip behind outbound firewall rules on Windows, in the runner's desktop session as an ad-hoc-signed `.app` on macOS. Evidence is uploaded. Separate legs rehearse the upgrade and measure the approved performance envelope on the same archive (a measured repeat over 2 s / 5 s / 10 s fails it; hosted VMs are noisy, so read `perf-evidence.json` before blaming a change). See [packaging](frontend/packaging.md) and [performance](frontend/performance.md). |
 | **pip-audit / npm audit** | a known vulnerability anywhere in the locked trees | Full-tree view, also on the weekly schedule. |
 | **Dependency review** | a PR *adds* a vulnerable dependency | Diff view with OpenSSF Scorecard data for new packages. |
 | **actionlint** | invalid workflow syntax, expressions, shell bugs | Workflows are code. |
