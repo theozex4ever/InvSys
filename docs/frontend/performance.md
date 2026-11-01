@@ -101,7 +101,8 @@ keeps the window open after the result is written so a DevTools client can trace
 ## CI
 
 The `package-smoke` job (`ubuntu-24.04`, `windows-2025`, `macos-15`) runs the
-performance step after the smoke, on the same extracted bundle, and fails if any
+performance check on a separate runner, using the same archive as smoke and
+upgrade validation, and fails if any
 measured repeat is over its limit. These are **shared virtual machines**: timings are
 noisy, and a red run is evidence to read (`perf-evidence.json`), not automatically a
 regression. The limits are never relaxed to turn it green.
@@ -162,7 +163,8 @@ and no warm-up over its limit. The unmodified JSON records and their
 [Windows hosted](evidence/performance-windows-hosted-2026-10-26.json),
 [macOS hosted](evidence/performance-macos-hosted-2026-10-26.json) and
 [Linux local](evidence/performance-linux-local-2026-10-26.json). The hosted records are
-also in each job's `package-evidence-<os>` artifact for 90 days.
+also in that run's `package-evidence-<os>` artifacts for 90 days. New runs use
+`package-evidence-<os>-performance`.
 
 ### Hosted runners (CI)
 
