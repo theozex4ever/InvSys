@@ -140,9 +140,12 @@ the data is):
 * Choosing a Part on Receive or Ship no longer reloads the Part list; opening the page
   or Refresh availability does. A Part created elsewhere appears after that.
 
-The JavaScript size budget (34,000 B gzip) was not changed: the frontend is now
-34,000 B, **exactly at it, with no headroom**, so any further frontend change needs an
-explicit size decision (see [desktop.md](desktop.md)).
+This work did not change the JavaScript size budget (then 34,000 B gzip): the frontend
+was 34,000 B, **exactly at it, with no headroom**. Issue #91 has since raised the
+`app.js` budget to 35,000 B as an explicit, **temporary** decision, for the operator-name
+fixes in Adjust and Receive and for migrating to one Mutation recovery module. It is
+lowered to the measured size plus a small margin at that issue's checkpoint (see
+[desktop.md](desktop.md)).
 
 Not changed, and why it matters: opening Ship still reads and builds a 10,000-option
 list for the Part (about 1.2 s locally, 0.9 s of it Python's answer and transfer). It

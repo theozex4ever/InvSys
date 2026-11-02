@@ -107,8 +107,12 @@ added explicit Part creation and backup recovery decisions; about 0.4 KB of
 headroom remains; further increases need another explicit decision. The performance
 work of ticket #55 (paged Parts, explorer text level of detail, Ship review folding) fits
 in the same budget: 34,000 B, **exactly at the budget with no headroom** (pager focus
-and announcement were the last bytes), so the next frontend change needs its own size
-decision.
+and announcement were the last bytes), so the next frontend change needed its own size
+decision. That decision (issue #91) is an explicit, **temporary** raise of the
+`app.js` budget to 35,000 B (CSS and HTML unchanged). The room is for the operator-name
+fixes in Adjust and Receive and for migrating the stock workflows to one Mutation
+recovery module; at that issue's checkpoint the budget is lowered to the measured size
+plus a small margin.
 
 ## Standalone bundle
 
