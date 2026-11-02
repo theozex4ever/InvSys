@@ -588,6 +588,49 @@ class DesktopSmoke:
             "one receipt/shipment per double click",
         )
 
+        # An operator change during the pre-submit read sends nothing and keeps the draft.
+        run("""
+            document.querySelector('[data-page=receive]').click();
+            window.smokeOpBefore = null;
+            window.smokeAPI.stock_context('DESKTOP-SMOKE').then(r => { window.smokeOpBefore = r.data.transactions.length; });
+        """)
+        wait("!document.querySelector('#receive-submit').disabled && window.smokeOpBefore !== null")
+        run("""
+            document.querySelector('#receive-quantity').value='1';
+            document.querySelector('#receive-lot_number').value='SMOKE-OPERATOR';
+            document.querySelector('#receive-reference').value='OPERATOR-SWAP';
+            document.querySelector('#receive-notes').value='Operator swap draft';
+            window.smokeOpReceive = window.smokeAPI.receive; window.smokeOpCalls = 0;
+            window.smokeAPI.receive = async fields => { window.smokeOpCalls++; return await window.smokeOpReceive(fields); };
+            window.smokeOpContext = window.smokeAPI.stock_context; window.smokeOpRelease = null;
+            window.smokeAPI.stock_context = async part => {
+                const result = await window.smokeOpContext(part);
+                return await new Promise(resolve => { window.smokeOpRelease = () => resolve(result); });
+            };
+            document.querySelector('#receive-form').requestSubmit();
+        """)
+        wait("typeof window.smokeOpRelease === 'function'")
+        run("""
+            document.querySelector('#operator').value='Desktop smoke edited';
+            document.querySelector('#operator').dispatchEvent(new Event('input'));
+            window.smokeOpRelease(); window.smokeAPI.stock_context = window.smokeOpContext;
+        """)
+        wait(
+            "document.querySelector('#receive-error').textContent.includes('Operator changed') && !document.querySelector('#receive-submit').disabled"
+        )
+        run("""
+            window.smokeAPI.receive = window.smokeOpReceive;
+            document.querySelector('#operator').value='Desktop smoke';
+            document.querySelector('#operator').dispatchEvent(new Event('input'));
+            window.smokeOpAfter = null;
+            window.smokeAPI.stock_context('DESKTOP-SMOKE').then(r => { window.smokeOpAfter = r.data.transactions.length; });
+        """)
+        wait("window.smokeOpAfter !== null")
+        require(
+            "window.smokeOpCalls === 0 && window.smokeOpAfter === window.smokeOpBefore && document.querySelector('#receive-quantity').value === '1' && document.querySelector('#receive-lot_number').value === 'SMOKE-OPERATOR' && document.querySelector('#receive-notes').value === 'Operator swap draft' && document.querySelector('#receive-recovery').hidden",
+            "operator change during the receipt read sends nothing and keeps the draft",
+        )
+
         # Lose a transport response after a real receipt has committed.
         run("""
             window.smokeReceive = window.smokeAPI.receive;

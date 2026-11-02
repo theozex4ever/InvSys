@@ -193,6 +193,7 @@ export function stockWorkflows(getAPI: () => API, operator: () => string, change
         feedback(mode, 'Current shipment review is ready. Confirm or cancel.'); dialog().showModal();
       } else {
         const before = await read(getAPI().stock_context(fields.part_number));
+        if (operator().trim() !== fields.operator.trim()) { feedback(mode, 'Operator changed. Check the entry and submit again.', true); return; }
         state.before = before.transactions.length; state.submitted = { ...fields };
         mutationStarted = true;
         const context = await read(getAPI().receive(fields as Receipt)); state.context = context;
