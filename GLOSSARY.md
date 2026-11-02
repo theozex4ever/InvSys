@@ -42,3 +42,10 @@ The store's automatic assignment of required leaf materials to positive-stock Lo
 
 **Shipment review**:
 A point-in-time assessment of stock availability and expected consumption for a requested quantity of a Part at a Location. For a Part with a BOM, it includes the required leaf materials and their BOM lot allocations.
+
+**Uncertain outcome**:
+A submitted change whose completion is unknown, because the response was lost or the failure was unexpected. A rejection is not an uncertain outcome, because a rejection means nothing was written.
+_Avoid_: Ambiguous outcome
+
+**Reconciliation**:
+Reading authoritative records after an uncertain outcome, then having the operator decide what happened. Reconciliation never resubmits the change automatically.
