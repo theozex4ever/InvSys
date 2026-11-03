@@ -16,8 +16,11 @@ const DIST = new URL('../dist/', import.meta.url);
 // distinct Adjust icon for the icon-only narrow sidebar) needed 34 KB after shared
 // helpers replaced per-module copies; review-driven Part creation and backup
 // recovery decisions leave about 0.4 KB of headroom.
+// The 35 KB app.js figure is a temporary decision (issue #91): it covers the
+// operator-name fixes and one shared Mutation recovery module, and is lowered
+// to the measured size plus a small margin at that issue's checkpoint.
 // Further increases require a reviewed scope or asset-size decision.
-const BUDGETS = { 'app.js': 34_000, 'style.css': 8_000, 'index.html': 1_000 };
+const BUDGETS = { 'app.js': 35_000, 'style.css': 8_000, 'index.html': 1_000 };
 
 // XML namespace identifiers are inert strings, not fetches.
 const ALLOWED_URLS = new Set(['http://www.w3.org/2000/svg']);

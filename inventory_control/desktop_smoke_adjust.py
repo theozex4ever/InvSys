@@ -89,6 +89,47 @@ def check_adjust(window: Any, wait: Any, part: str) -> dict[str, Any]:
         "one correction per double submit",
     )
 
+    # An operator change during the pre-submit read sends nothing and keeps the draft.
+    select("lot_number", "ADJ-ZERO")
+    enter(5, "Operator swap")
+    wait(
+        "document.querySelector('#adjust-review').textContent.includes('Increase') && !document.querySelector('#adjust-review').textContent.includes('Reading')"
+    )
+    run("""
+        window.smokeAdjustSwap = window.smokeAPI.adjust_count; window.smokeAdjustSwapCalls = 0;
+        window.smokeAPI.adjust_count = async fields => { window.smokeAdjustSwapCalls++; return await window.smokeAdjustSwap(fields); };
+        window.smokeAdjustPreview = window.smokeAPI.preview_count; window.smokeAdjustRelease = null;
+        window.smokeAPI.preview_count = async request => {
+            const result = await window.smokeAdjustPreview(request);
+            return await new Promise(resolve => { window.smokeAdjustRelease = () => resolve(result); });
+        };
+        document.querySelector('#adjust-form').requestSubmit();
+    """)
+    wait("typeof window.smokeAdjustRelease === 'function'")
+    run("""
+        document.querySelector('#operator').value='Desktop smoke edited';
+        document.querySelector('#operator').dispatchEvent(new Event('input'));
+        window.smokeAdjustRelease(); window.smokeAPI.preview_count = window.smokeAdjustPreview;
+    """)
+    wait(
+        "document.querySelector('#adjust-error').textContent.includes('Operator changed') && !document.querySelector('#adjust-submit').disabled"
+    )
+    run("""
+        window.smokeAPI.adjust_count = window.smokeAdjustSwap;
+        document.querySelector('#operator').value='Desktop smoke';
+        document.querySelector('#operator').dispatchEvent(new Event('input'));
+    """)
+    require(
+        "window.smokeAdjustSwapCalls === 0 && document.querySelector('#adjust-counted').value === '5' && document.querySelector('#adjust-reason').value === 'Operator swap' && !document.querySelector('#adjust-confirmation').open && document.querySelector('#adjust-recovery').hidden",
+        "operator change during the count read sends nothing and keeps the draft",
+    )
+    if balances() != '{"ADJ-A":25,"ADJ-ZERO":4}':
+        raise RuntimeError("Desktop adjust smoke failed: operator change wrote a correction")
+    require(
+        "window.smokeAdjustContext.transactions.filter(tx => tx.reference === 'Operator swap').length === 0",
+        "operator change leaves no audit record",
+    )
+
     # A large correction requires confirmation; cancelling records nothing.
     select("lot_number", "ADJ-A")
     enter(5, "Damaged stock")

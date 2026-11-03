@@ -99,16 +99,20 @@ file URI avoids pywebview automatically starting a server for a bare local path
 ([pywebview usage](https://pywebview.flowrl.com/guide/usage.html)). The build uses
 relative local assets ([Vite build documentation](https://vite.dev/guide/build.html)).
 There is no Vite process, HTTP server, CDN, or network inventory service required.
-The complete frontend uses about 33.6 KB gzipped JavaScript (33,609 bytes). Ticket
-#51 raised the JavaScript budget from 33 KB to 34 KB as an explicit decision for
+At ticket #51 the complete frontend used about 33.6 KB gzipped JavaScript (33,609
+bytes). That ticket raised the JavaScript budget from 33 KB to 34 KB as an explicit decision for
 numbered destinations, History search/sort and a distinct Adjust icon, after
 shared helpers replaced per-module copies (CSS 8 KB, HTML 1 KB unchanged). Review
-added explicit Part creation and backup recovery decisions; about 0.4 KB of
-headroom remains; further increases need another explicit decision. The performance
+added explicit Part creation and backup recovery decisions, leaving about 0.4 KB of
+headroom then; further increases need another explicit decision. The performance
 work of ticket #55 (paged Parts, explorer text level of detail, Ship review folding) fits
 in the same budget: 34,000 B, **exactly at the budget with no headroom** (pager focus
-and announcement were the last bytes), so the next frontend change needs its own size
-decision.
+and announcement were the last bytes), so the next frontend change needed its own size
+decision. That decision (issue #91) is an explicit, **temporary** raise of the
+`app.js` budget to 35,000 B (CSS and HTML unchanged). The room is for the operator-name
+fixes in Adjust and Receive and for migrating the stock workflows to one Mutation
+recovery module; at that issue's checkpoint the budget is lowered to the measured size
+plus a small margin.
 
 ## Standalone bundle
 

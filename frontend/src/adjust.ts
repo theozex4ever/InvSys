@@ -141,6 +141,7 @@ export function adjustWorkflow(getAPI: () => API, operator: () => string, change
       state.context = fresh.context; renderLots();
       const shown = review; review = fresh; renderReview();
       if (!shown || shown.expected !== fresh.expected || shown.counted !== fresh.counted) { feedback('Expected count refreshed. Check the review below, then submit again.', true); return; }
+      if (operator().trim() !== name) { feedback('Operator changed. Review the count again.', true); return; }
       next = { ...requested, expected: fresh.expected, operator: name, reason, confirmed: false };
       if (fresh.requires_confirmation) {
         proposal = next; next = null;
