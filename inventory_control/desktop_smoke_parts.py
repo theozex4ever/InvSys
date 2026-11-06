@@ -342,6 +342,7 @@ def check_part_creation_recovery(window: Any, wait: Any) -> str:
     run = window.evaluate_js
     suffix = time.time_ns()
     created, unsent = f"DESKTOP-CREATE-{suffix}", f"DESKTOP-UNSENT-{suffix}"
+    fields = "[...document.querySelectorAll('#new-part input, #new-part select')]"
 
     def require(script: str, label: str) -> None:
         if not run(script):
@@ -361,8 +362,8 @@ def check_part_creation_recovery(window: Any, wait: Any) -> str:
         """)
         wait("document.querySelector('#create-error').textContent.includes('preserved and locked')")
         require(
-            f"document.querySelector('#create-submit').disabled && document.querySelector('#number').value === '{number}'",
-            "lost response locks one submission and preserves the form",
+            f"document.querySelector('#create-submit').disabled && document.querySelector('#number').value === '{number}' && {fields}.every(f => f.disabled)",
+            "lost response locks one submission and the entries, and preserves the form",
         )
         # A failed recovery read keeps the lock and offers no decision.
         run("""
@@ -375,7 +376,7 @@ def check_part_creation_recovery(window: Any, wait: Any) -> str:
         run("document.querySelector('#add-part').click()")
         wait("document.querySelector('#create-dialog').open")
         require(
-            f"document.querySelector('#create-submit').disabled && !document.querySelector('[data-create-decision]') && document.querySelector('#number').value === '{number}'",
+            f"document.querySelector('#create-submit').disabled && !document.querySelector('[data-create-decision]') && document.querySelector('#number').value === '{number}' && {fields}.every(f => f.disabled)",
             "failed recovery read keeps the creation lock",
         )
         run("""
@@ -388,7 +389,7 @@ def check_part_creation_recovery(window: Any, wait: Any) -> str:
         run("document.querySelector('#add-part').click()")
         wait("document.querySelector('#create-dialog').open")
         require(
-            f"document.querySelector('#create-submit').disabled && document.querySelector('[data-create-decision={'created' if committed else 'absent'}]')",
+            f"document.querySelector('#create-submit').disabled && {fields}.every(f => f.disabled) && document.querySelector('[data-create-decision={'created' if committed else 'absent'}]')",
             "authoritative read offers only the matching decision while locked",
         )
 
@@ -407,8 +408,8 @@ def check_part_creation_recovery(window: Any, wait: Any) -> str:
     submit_lost(unsent, committed=False)
     run("document.querySelector('[data-create-decision=absent]').click()")
     require(
-        f"!document.querySelector('#create-submit').disabled && document.querySelector('#number').value === '{unsent}'",
-        "explicit absence decision unlocks the preserved form",
+        f"!document.querySelector('#create-submit').disabled && document.querySelector('#number').value === '{unsent}' && {fields}.every(f => !f.disabled)",
+        "explicit absence decision unlocks the preserved form and its entries",
     )
     run("document.querySelector('#new-part').requestSubmit()")
     wait(f"document.querySelector('#drawer-data').textContent.includes('{unsent}')")

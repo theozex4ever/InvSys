@@ -171,6 +171,10 @@ async function loadParts(strict = false) {
     catalog = parts; partsPage = Math.min(partsPage, pageCount() - 1); renderParts();
   } catch (error) { if (version === searchVersion) $('#parts-data').innerHTML = status(message(error), true); if (strict) throw error; }
 }
+// Entries stay disabled during a submission and, if its outcome is uncertain, until the operator decides.
+function lockCreateFields(locked: boolean) {
+  $<HTMLFormElement>('#new-part').querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach(field => { field.disabled = locked; });
+}
 // Reads the submitted Part, then waits for the operator's explicit decision.
 // A failed read withdraws any earlier decision and keeps the form locked.
 async function reconcileCreation() {
@@ -186,7 +190,7 @@ async function reconcileCreation() {
 $('#create-error').onclick = event => {
   const decision = (event.target as HTMLElement).closest<HTMLElement>('[data-create-decision]')?.dataset.createDecision;
   if (!decision) return;
-  uncertain = false; $('#create-error').textContent = ''; $<HTMLButtonElement>('#create-submit').disabled = false;
+  uncertain = false; $('#create-error').textContent = ''; $<HTMLButtonElement>('#create-submit').disabled = false; lockCreateFields(false);
   if (decision === 'absent') { $('#number').focus(); return; }
   $<HTMLFormElement>('#new-part').reset(); $<HTMLDialogElement>('#create-dialog').close();
   void openPart(submittedNumber, $('#add-part'));
@@ -332,7 +336,7 @@ $('#new-part').addEventListener('submit', async event => {
   const form = $<HTMLFormElement>('#new-part');
   const fields = new FormData(form);
   submittedNumber = String(fields.get('part_number'));
-  form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach(field => { field.disabled = true; });
+  lockCreateFields(true);
   try {
     const part = await read(api.create_part({ part_number: String(fields.get('part_number')), description: String(fields.get('description')), minimum_quantity: Number(fields.get('minimum_quantity')), location: String(fields.get('location')) }));
     form.reset(); $<HTMLDialogElement>('#create-dialog').close();
@@ -344,7 +348,7 @@ $('#new-part').addEventListener('submit', async event => {
     uncertain = error instanceof RequestError && ['TRANSPORT', 'INTERNAL'].includes(error.code);
     $('#create-error').innerHTML = status(message(error) + (uncertain ? ' Completion is uncertain. Close this form and refresh the catalog to read the current part. Your entries are preserved and locked.' : ''), true);
   } finally {
-    form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach(field => { field.disabled = false; });
+    lockCreateFields(uncertain);
     creating = false; $<HTMLButtonElement>('#create-submit').disabled = uncertain;
     $<HTMLButtonElement>('#close-create').disabled = false;
   }
