@@ -261,5 +261,7 @@ Not established:
   Windows, Intel Macs, other Linux distributions or Windows 10/11 desktop editions.
 * Catalogs or histories larger than the frozen fixture, or BOMs that are deeper than
   depth 3 (the large tree measures breadth).
-* Human or operator judgement of responsiveness, screen-reader behaviour, and any
-  sign-off (#57). Scripted timing is not operator acceptance.
+* Human or operator judgement of responsiveness and screen-reader behaviour: no
+  observation is recorded. The repository owner's blanket sign-off of #57 (2026-11-05,
+  [signoff.md](signoff.md)) accepts that gap without an observation. Scripted timing is
+  not operator acceptance.

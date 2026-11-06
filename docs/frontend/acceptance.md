@@ -15,8 +15,15 @@ Numbers identify parent user stories. Equivalent means delivered behavior preser
 required operation; Improved means it adds useful inspection or protection;
 Intentionally changed means an explicit interaction/delivery decision;
 Missing means required replacement or acceptance evidence remains absent.
-Mixed rows identify their missing portions explicitly. All Missing portions block
-retirement. API regression coverage does not establish operator/package acceptance.
+Mixed rows identify their missing portions explicitly. Missing portions block
+retirement, with one exception: evidence gaps the repository owner accepted on
+2026-11-05 through the blanket sign-off of #57 ([signoff.md](signoff.md#operator-sign-off-record))
+keep their class here and are **owner-accepted without a recorded observation**;
+they do not by themselves block #58 for behavior unchanged since candidate
+`ec8bc4f`. Still outstanding are #58's own obligations: renewed sign-off for
+observable changes after `ec8bc4f` (PR #93, upcoming #91), the post-removal
+re-checks, and row 50. API regression coverage does not establish operator/package
+acceptance.
 
 | Stories | Original capability / required outcome | Classification at freeze | Replacement evidence / outstanding work |
 | --- | --- | --- | --- |
@@ -56,20 +63,20 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 34 | Explicit confirmation, commit validation, pre-write backup | Improved | All three kinds delivered with unchanged service transaction boundaries (BOM links write in one transaction), digest and current-state revalidation (cycles, inactive Parts) and a verified backup taken before writes |
 | 35 | Import outcome and refreshed screens | Equivalent | All three kinds: counts/backup path, refreshed catalog/dashboard/details/History/latest backup and locked recovery; BOM, BOM explorer and Ship re-read definitions when opened and a shipment review made before an incompatible import is rejected |
 | 36 | Startup/manual backups, latest metadata, retention | Equivalent | Settings Create backup and latest/count status; startup backup and retention 20 retained; `test_bridge_utilities.py`, native smoke |
-| 37 | Open selected-database export/backup folders | Mixed | Settings folder buttons through the launch-selected context and native opener; failures reported; Windows visible Explorer navigation to both selected-inventory folders passed in each frozen run ([2026-10-22 evidence](packaging.md#integrated-candidate-2026-10-22)); macOS Cocoa-panel and Finder: the owner accepted them in a #54 comment (2026-10-29T03:01:31Z) on an unidentified build, with no per-action record; mapping to candidate `ec8bc4f` is **not established** and is an outstanding gate ([signoff.md](signoff.md#dependencies-what-each-closed-issue-establishes)); Linux/macOS smoke records requests |
-| 38 | Closed-app restore and rollback | Intentionally changed | Procedure below and in [cutover.md](cutover.md); no in-app restore. Rehearsal automated (#56): closed-app restore, ledger-reconciliation listing, ten restore failure probes, then the original application at pinned commit `a03c887` (a source tree) started on the restored inventory and the replacement launched again on its result. Retained results: all three CI platforms passed upgrade/restart/restore and source-tree rollback/roll-forward at `73b6d0f` ([packaging.md](packaging.md#recorded-copied-data-upgrade-and-restore-evidence)). **Missing:** operator-run restore through a file manager, rollback to a *packaged* release (none exists), operator sign-off |
+| 37 | Open selected-database export/backup folders | Mixed | Settings folder buttons through the launch-selected context and native opener; failures reported; Windows visible Explorer navigation to both selected-inventory folders passed in each frozen run ([2026-10-22 evidence](packaging.md#integrated-candidate-2026-10-22)); macOS Cocoa-panel and Finder: the owner accepted them in a #54 comment (2026-10-29T03:01:31Z) on an unidentified build, with no per-action record; mapping to candidate `ec8bc4f` is **not established by evidence**; covered by the owner's blanket #57 sign-off of 2026-11-05, owner-accepted without a recorded observation or confirmation of applicability ([signoff.md](signoff.md#dependencies-what-each-closed-issue-establishes)); Linux/macOS smoke records requests |
+| 38 | Closed-app restore and rollback | Intentionally changed | Procedure below and in [cutover.md](cutover.md); no in-app restore. Rehearsal automated (#56): closed-app restore, ledger-reconciliation listing, ten restore failure probes, then the original application at pinned commit `a03c887` (a source tree) started on the restored inventory and the replacement launched again on its result. Retained results: all three CI platforms passed upgrade/restart/restore and source-tree rollback/roll-forward at `73b6d0f` ([packaging.md](packaging.md#recorded-copied-data-upgrade-and-restore-evidence)). **Missing** (operator-run restore through a file manager and operator sign-off: owner-accepted by the blanket #57 sign-off of 2026-11-05 without a recorded observation; rollback to a *packaged* release: none exists) |
 | 39 | Remember operator and theme | Improved | Bridge preferences/restart; original remembers operator only |
 | 40 | Keyboard destinations, focus, themes, small windows | Improved | Ctrl/Cmd+1–9 in original order with primary-input focus and Ctrl+K (#51); visible sidebar hints and `aria-keyshortcuts`. Native Qt key smoke; both themes, ten pages at four sizes and 640×480 reachability |
 | 41 | Preserve drafts during navigation and recoverable failure | Improved | Native smoke covers Receive, Ship, Move, Adjust, Part edit/create, BOM authoring and imports, including shortcut navigation (#51) |
 | 42 | Duplicate-click prevention; lock uncertain submissions | Improved | Native double-click and lost-response checks for every mutation: receipt, standard/BOM shipment, Move, Adjust, Part create/edit/active state, BOM authoring, three imports, exports and manual backup (create/backup added in #51); exports report uncertainty without a lock |
 | 43 | Authoritative recovery; failed reads retain lock | Improved | Native failed recovery reads keep the lock for receipt, BOM shipment, Move, Adjust, Part create/edit, BOM authoring, imports and manual backup; reconciliation shows authoritative Stock/audit/Part/backup records, needs an explicit operator decision and never retries (Part creation and backup decisions added in #51) |
 | 44 | Readable validation/stale/file/database errors | Equivalent | Bridge returns readable `VALIDATION`/`STALE`/`PLAN_CHANGED`/`FILE_ERROR` messages and logs safe `INTERNAL` failures (`test_bridge*.py`, utilities/export/import real-file tests); native smoke shows file, stale and failed-read errors without fabricated success |
-| 45 | Offline standalone Windows/Linux/macOS bundles | Mixed | Linux delivered (ticket #52): repeatable build, twice-run package smoke, CI job and recorded evidence in [packaging.md](packaging.md); Windows automated package evidence retained (#53, [record](packaging.md#recorded-windows-evidence)); macOS automated package evidence retained (#54, [record](packaging.md#recorded-macos-evidence)); native Cocoa-panel/Finder accepted by the owner on an unidentified earlier build, mapping to the candidate **not established** (outstanding). All three platforms pass the twice-run package smoke on candidate `ec8bc4f` ([signoff.md](signoff.md#candidate-results-per-platform)); verified targets only (Windows 10/11 desktop editions, other macOS versions and Intel Macs untested) |
+| 45 | Offline standalone Windows/Linux/macOS bundles | Mixed | Linux delivered (ticket #52): repeatable build, twice-run package smoke, CI job and recorded evidence in [packaging.md](packaging.md); Windows automated package evidence retained (#53, [record](packaging.md#recorded-windows-evidence)); macOS automated package evidence retained (#54, [record](packaging.md#recorded-macos-evidence)); native Cocoa-panel/Finder accepted by the owner on an unidentified earlier build, mapping to the candidate **not established by evidence**, owner-accepted by the blanket #57 sign-off of 2026-11-05 without a recorded observation. All three platforms pass the twice-run package smoke on candidate `ec8bc4f` ([signoff.md](signoff.md#candidate-results-per-platform)); verified targets only (Windows 10/11 desktop editions, other macOS versions and Intel Macs untested) |
 | 46 | Explicit packaged database; source defaults preserved | Equivalent | `test_desktop_launcher.py` and the Linux/Windows/macOS package smokes (explicit database, readable missing-asset/inaccessible-path failures); Windows includes an unmapped-drive failure |
-| 47 | Approved workloads meet response limits | Partial | Measured on the frozen bundles of the hosted Linux/Windows/macOS runners and one local Linux machine, every measured repeat within its limit: [performance.md](performance.md). Not measured on operator-designated workstations; operator judgement of responsiveness is Missing; candidate `ec8bc4f` measured on all three hosted runners, every repeat within its limit ([signoff.md](signoff.md#candidate-performance)) |
-| 48 | Copied-data upgrade and restart | Mixed | Rehearsal automated (#56): a pre-migration fixture written by the original application at pinned commit `a03c887` (the last commit before the desktop frontend) copied, opened by the replacement, restarted and reopened after restore with every pre-existing record, component snapshot and the schema unchanged. Retained results: all three CI platforms passed at `73b6d0f` with the historical-code fixture ([packaging.md](packaging.md#recorded-copied-data-upgrade-and-restore-evidence)). **Missing:** a database copied from an operator's real historical inventory (none is in the repository) |
+| 47 | Approved workloads meet response limits | Partial | Measured on the frozen bundles of the hosted Linux/Windows/macOS runners and one local Linux machine, every measured repeat within its limit: [performance.md](performance.md). Not measured on operator-designated workstations; operator judgement of responsiveness is Missing, owner-accepted by the blanket #57 sign-off of 2026-11-05 without a recorded observation; candidate `ec8bc4f` measured on all three hosted runners, every repeat within its limit ([signoff.md](signoff.md#candidate-performance)) |
+| 48 | Copied-data upgrade and restart | Mixed | Rehearsal automated (#56): a pre-migration fixture written by the original application at pinned commit `a03c887` (the last commit before the desktop frontend) copied, opened by the replacement, restarted and reopened after restore with every pre-existing record, component snapshot and the schema unchanged. Retained results: all three CI platforms passed at `73b6d0f` with the historical-code fixture ([packaging.md](packaging.md#recorded-copied-data-upgrade-and-restore-evidence)). **Missing:** a database copied from an operator's real historical inventory (none is in the repository); owner-accepted by the blanket #57 sign-off of 2026-11-05 without a recorded observation |
 | 49 | Operator sign-off and all-platform acceptance | Missing; owner-accepted (2026-11-05) | Evidence record below and [signoff.md](signoff.md): candidate-specific package, upgrade and performance evidence retained for all three platforms. On 2026-11-05 the repository owner signed off on #57 ("on issue 57 I sign-off. Its ok. go ahead", given in an agent chat session, not a GitHub comment) as a blanket statement with no itemized observations, while `main` was at `9a3cf7a`, after changes since candidate `ec8bc4f`. The class is not changed to Equivalent: no human accessibility review or workstation observation is recorded. Carrying the sign-off over to those changes is #58 |
-| 50 | Remove old screens/launcher/tests/docs after acceptance | Missing | Blocked by every retirement gate |
+| 50 | Remove old screens/launcher/tests/docs after acceptance | Missing | Not owner-accepted by #57: retirement is #58's decision. Remains blocked by the retirement gates that #57 did not accept, i.e. renewed sign-off for observable changes after `ec8bc4f`, the post-removal re-checks and the retirement decision itself ([signoff.md](signoff.md#what-remains-before-retirement)) |
 
 ## Original interaction contract
 
@@ -295,7 +302,7 @@ machines are in [performance.md](performance.md).
 
 Recorded for #51 on 2026-10-15 (Linux, Qt WebEngine 6.11.2, source launch with
 production assets). This is a scripted and computed review, not the human
-screen-reader session or operator sign-off that retirement still requires.
+screen-reader session. Retirement's screen-reader gate is now covered only by the owner's blanket #57 sign-off of 2026-11-05, with no recorded session.
 
 | Check | Method | Result |
 | --- | --- | --- |
@@ -322,16 +329,16 @@ include operator identity/role, intended workstation, explicit acceptance/date,
 accessibility/contrast observations and unresolved objections. Scripted smoke is
 not human sign-off. No unchecked gate is waived by an Improved classification.
 
-Retirement requires all of (current status and the owner's 2026-11-05 blanket sign-off record: [signoff.md](signoff.md)):
+Retirement requires all of the following. The repository owner's blanket #57 sign-off of 2026-11-05 ([signoff.md](signoff.md)) accepts the evidence gaps in the items marked *owner-accepted* below, without a recorded observation, for behavior unchanged since candidate `ec8bc4f`. It does not accept retirement itself, observable changes after `ec8bc4f`, or the post-removal re-checks, which stay #58's.
 
-- No Missing required capabilities, with evidence for their actual replacements.
+- No Missing required capabilities, with evidence for their actual replacements (owner-accepted for the register rows listed in signoff.md; row 50 and anything changed after `ec8bc4f` are not).
 - Existing lint/format, strict mypy/TypeScript, randomized warning-clean tests and
   >=85% branch coverage; asset size/reproducibility, security/dependency and CI gates.
-- P01–P05 results on designated machines, not isolated store benchmarks.
-- Copied-data upgrade/restart, preserved immutable trace, backup/restore rehearsal.
+- P01–P05 results on designated machines, not isolated store benchmarks. Hosted-runner results exist for `ec8bc4f`; the designated-machine portion is owner-accepted without a recorded observation.
+- Copied-data upgrade/restart, preserved immutable trace, backup/restore rehearsal. Automated rehearsals exist; the operator-run restore and real historical database are owner-accepted without a recorded observation.
 - Windows, Linux and macOS actual standalone package acceptance, twice-run native
   smoke against their exact built assets, source and packaged path behavior.
-- User/designated-operator sign-off plus recorded screen-reader/contrast review.
+- User/designated-operator sign-off plus recorded screen-reader/contrast review: given by the repository owner on 2026-11-05 as a blanket statement; no screen-reader or contrast observation is recorded (owner-accepted). Renewed sign-off for observable changes after `ec8bc4f` is still required under #58.
 - After removing original UI, repeat relevant automation and package checks;
   remove only tests/dependencies that no remaining runtime behavior needs.
 
@@ -384,7 +391,7 @@ package reference machine):
 
 These source checks do not establish standalone Windows/macOS/Linux package
 acceptance, designated-machine timings, copied operational-data rehearsal, or
-human accessibility/operator sign-off. Those remain explicit retirement gates.
+human accessibility/operator sign-off. When this section was written these were explicit retirement gates; since 2026-11-05 the evidence gaps among them are owner-accepted by the blanket #57 sign-off without a recorded observation ([signoff.md](signoff.md#what-remains-before-retirement)).
 
 ### Ticket #47 source validation — 2026-10-13
 

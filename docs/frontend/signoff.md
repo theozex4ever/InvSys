@@ -45,8 +45,9 @@ names another commit, a dirty tree, a failed step, a single native run, a fixtur
 other than the one committed in the checkout, or if a retained file no longer matches
 `SHA256SUMS`.
 
-**This pull request must not change the candidate.** It adds documentation, evidence
-and one test that is not part of any bundle. The commands below must print nothing for any later commit offered as
+**Recording the candidate must not change it.** The earlier record (PR #85) added
+documentation, evidence and one test that is not part of any bundle, and this sign-off
+record adds documentation only. The commands below must print nothing for any later commit offered as
 the same candidate; if they print anything, the evidence belongs to an earlier
 candidate and the affected platform checks must be repeated:
 
@@ -182,8 +183,10 @@ must be read separately.
 ## Capability classes
 
 After this record the [register](acceptance.md#required-capability-register) has 50
-rows: 42 Equivalent (24) or Improved (18), and eight rows that block retirement or
-still carry a Missing portion:
+rows: 42 Equivalent (24) or Improved (18), and eight rows with a Missing, Partial or
+Mixed portion. Rows 1, 37, 38, 45, 47, 48 and 49 carry evidence gaps that the owner
+accepted on 2026-11-05 (below); row 50 is not accepted by #57 and stays blocked until
+#58:
 
 | Story | Class | What is missing |
 | --- | --- | --- |
@@ -201,9 +204,9 @@ turn a Missing, Partial or Mixed portion into Equivalent, so none is relabelled.
 owner accepted those rows by the blanket statement below (owner-accepted, not
 evidenced).
 
-Story 45 (standalone bundles) moves from Missing to Mixed in this change, and
-story 37 moves from Equivalent to Mixed because candidate-specific macOS acceptance
-remains open, on the basis in their rows.
+Story 45 (standalone bundles) moved from Missing to Mixed in the earlier record
+(PR #85), and story 37 moved from Equivalent to Mixed there because candidate-specific
+macOS acceptance was open, on the basis in their rows. The sign-off changes neither.
 The Windows and Linux portions of 37 and story 46 were already Equivalent.
 
 ## Accessibility
@@ -265,9 +268,13 @@ changed after `ec8bc4f` are #58.
 
 ## What remains before retirement
 
+### Accepted by the owner on 2026-11-05
+
 Gates that were human or external (not doable by an agent). As of 2026-11-05 the
-repository owner's blanket sign-off covers each; none is backed by a recorded
-observation:
+repository owner's blanket sign-off covers each, for behavior unchanged since
+`ec8bc4f`; none is backed by a recorded observation. They no longer block #58 on their
+own, and the register and retirement checklist in
+[acceptance.md](acceptance.md#required-capability-register) say so:
 
 1. Operator sign-off on the intended workstation ([record](#operator-sign-off-record)):
    given as a blanket statement, no workstation named.
@@ -278,13 +285,18 @@ observation:
    `ec8bc4f` remains unestablished by evidence.
 4. Operator-run restore through a file manager on a copy; a copy of the real
    historical inventory for the upgrade rehearsal: covered by the blanket sign-off;
-   not performed.
+   not recorded.
 5. Operator judgement of responsiveness on designated physical workstations: covered
-   by the blanket sign-off; not measured.
+   by the blanket sign-off; no measurement recorded.
 
-Still open and separate: #58 (retirement), including renewed sign-off for any
-observable change since `ec8bc4f` (PR #93, upcoming #91) and the post-removal
-acceptance.
+### Still outstanding, owned by #58
+
+Not accepted by the #57 sign-off:
+
+- the retirement decision itself (register row 50);
+- renewed sign-off for any observable change since `ec8bc4f` (PR #93, the numeric-cell
+  sort fix, upcoming #91);
+- the post-removal repeat of automation and package checks.
 
 Not established by any record, and so out of this gate's claims: Windows 10/11
 desktop editions, macOS other than 15.7.9, Intel Macs, Linux distributions other than
@@ -299,6 +311,7 @@ focus checks; see
 is root-caused. The candidate run passed every job on its first attempt, which does not
 show those races are fixed.
 
-The retirement ticket (#58) can proceed on the owner's sign-off; this record needs a
-new candidate entry if any code, asset or package changed in between, which has
-already happened (see [candidate drift](#candidate-drift-since-ec8bc4f)).
+The retirement ticket (#58) can proceed on the owner's sign-off for behavior unchanged
+since `ec8bc4f`; this record needs a new candidate entry if any code, asset or package
+changed in between, which has already happened (see
+[candidate drift](#candidate-drift-since-ec8bc4f)).
