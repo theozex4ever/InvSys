@@ -82,6 +82,13 @@ Receive, Ship, Move, Adjust, History, Settings, import/export, backup, keyboard
 shortcuts, lot behavior, BOM allocation) as Equivalent, Improved, Intentionally
 changed, Not required, or Missing. Remove the old views, widgets, QSS, and launch
 code only when nothing required is Missing and packaging works.
+The one exception: evidence gaps the repository owner accepted on 2026-11-05
+through the blanket sign-off of #57 stay classed Missing (rows 1 and 49, and the
+Missing portions of rows 37, 38, 47 and 48) but do not by themselves block
+removal for behavior unchanged since candidate `ec8bc4f`. Renewed sign-off for
+later observable changes, the post-removal re-checks and the retirement decision
+itself remain required
+([acceptance.md](acceptance.md#required-capability-register)).
 
 ### 12. Hardening
 
