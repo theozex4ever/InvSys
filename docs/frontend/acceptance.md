@@ -68,7 +68,7 @@ retirement. API regression coverage does not establish operator/package acceptan
 | 46 | Explicit packaged database; source defaults preserved | Equivalent | `test_desktop_launcher.py` and the Linux/Windows/macOS package smokes (explicit database, readable missing-asset/inaccessible-path failures); Windows includes an unmapped-drive failure |
 | 47 | Approved workloads meet response limits | Partial | Measured on the frozen bundles of the hosted Linux/Windows/macOS runners and one local Linux machine, every measured repeat within its limit: [performance.md](performance.md). Not measured on operator-designated workstations; operator judgement of responsiveness is Missing; candidate `ec8bc4f` measured on all three hosted runners, every repeat within its limit ([signoff.md](signoff.md#candidate-performance)) |
 | 48 | Copied-data upgrade and restart | Mixed | Rehearsal automated (#56): a pre-migration fixture written by the original application at pinned commit `a03c887` (the last commit before the desktop frontend) copied, opened by the replacement, restarted and reopened after restore with every pre-existing record, component snapshot and the schema unchanged. Retained results: all three CI platforms passed at `73b6d0f` with the historical-code fixture ([packaging.md](packaging.md#recorded-copied-data-upgrade-and-restore-evidence)). **Missing:** a database copied from an operator's real historical inventory (none is in the repository) |
-| 49 | Operator sign-off and all-platform acceptance | Missing | Evidence record below and [signoff.md](signoff.md): candidate-specific package, upgrade and performance evidence retained for all three platforms; operator sign-off and human accessibility review not recorded, none inferred |
+| 49 | Operator sign-off and all-platform acceptance | Missing; owner-accepted (2026-11-05) | Evidence record below and [signoff.md](signoff.md): candidate-specific package, upgrade and performance evidence retained for all three platforms. On 2026-11-05 the repository owner signed off on #57 ("on issue 57 I sign-off. Its ok. go ahead", given in an agent chat session, not a GitHub comment) as a blanket statement with no itemized observations, while `main` was at `9a3cf7a`, after changes since candidate `ec8bc4f`. The class is not changed to Equivalent: no human accessibility review or workstation observation is recorded. Carrying the sign-off over to those changes is #58 |
 | 50 | Remove old screens/launcher/tests/docs after acceptance | Missing | Blocked by every retirement gate |
 
 ## Original interaction contract
@@ -308,7 +308,7 @@ screen-reader session or operator sign-off that retirement still requires.
 | Keyboard and focus | Real Qt keys: Ctrl+1–9/Ctrl+K with visible focus on the primary input, dialog Tab/Shift+Tab trap, Escape returns focus, graph keys, export Enter/Tab | Pass |
 | Reduced motion | `--force-prefers-reduced-motion`; transitions computed as 0 s | Pass |
 | Reachable critical actions | Ten pages and four dialogs at 640×480, 800×650, 1366×768 and 1920×1080 in both themes; last action scrolled into view | Pass |
-| Screen reader | Not performed: no screen reader (NVDA, JAWS, VoiceOver or Orca) is available in this environment | **Missing**: human session required with #57 sign-off |
+| Screen reader | Not performed: no screen reader (NVDA, JAWS, VoiceOver or Orca) is available in this environment | **Missing** as a recorded session; covered by the owner's blanket #57 sign-off of 2026-11-05, which gives no screen-reader observations ([signoff.md](signoff.md#accessibility)) |
 
 ## Evidence and retirement record
 
@@ -322,7 +322,7 @@ include operator identity/role, intended workstation, explicit acceptance/date,
 accessibility/contrast observations and unresolved objections. Scripted smoke is
 not human sign-off. No unchecked gate is waived by an Improved classification.
 
-Retirement requires all of (current status and the blank operator record: [signoff.md](signoff.md)):
+Retirement requires all of (current status and the owner's 2026-11-05 blanket sign-off record: [signoff.md](signoff.md)):
 
 - No Missing required capabilities, with evidence for their actual replacements.
 - Existing lint/format, strict mypy/TypeScript, randomized warning-clean tests and

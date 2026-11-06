@@ -1,14 +1,20 @@
 # Package acceptance and operator sign-off record
 
 Ticket #57 (parent #39, which this record does not edit or close). It consolidates
-the retained evidence for one named candidate and says exactly which human and
-external gates are still open. **No operator sign-off, human accessibility review or
-retirement approval is recorded here, and none is inferred.** A closed dependency
-issue is not sign-off for #57.
+the retained evidence for one named candidate and says what human and external
+gates were open. On 2026-11-05 the repository owner signed off on #57; that is
+recorded [below](#operator-sign-off-record) exactly as given. **No observation is
+recorded or inferred beyond the owner's words**, and a closed dependency issue is
+not sign-off for #57.
 
-> **Retirement status: blocked.** The original PySide6 application, its launcher and
-> its tests stay. Remaining gates are listed under
-> [what remains](#what-remains-before-retirement).
+> **Retirement status: #57's gate is signed off by the repository owner
+> (2026-11-05); retirement itself is not approved.** The sign-off is a blanket
+> statement without itemized observations and was given while `main` was at
+> `9a3cf7a`, after changes to the application since the recorded candidate (see
+> [candidate drift](#candidate-drift-since-ec8bc4f)). Carrying it over to those
+> changes, and the retirement decision, belong to #58. The original PySide6
+> application, its launcher and its tests stay until #58 decides otherwise. What
+> the sign-off covers is listed under [what remains](#what-remains-before-retirement).
 
 ## Candidate
 
@@ -59,6 +65,30 @@ editing this one. The evidence from earlier dated runs elsewhere in these docume
 (Windows 2026-10-22, macOS 2026-10-21, performance 2026-10-26, PR #79/#84 upgrade
 rehearsals) belongs to earlier commits and is **not** claimed for this candidate.
 
+### Candidate drift since `ec8bc4f`
+
+The drift command above was run on 2026-11-05 against `main` at
+`9a3cf7a7e77558bd895d5ae6724fae5d9babe850` and **printed 14 changed files** (335
+insertions, 153 deletions), so `main` is no longer the recorded candidate:
+
+- Application code: `frontend/src/adjust.ts`, `frontend/src/stock.ts`,
+  `inventory_control/ui/views.py`, `inventory_control/desktop_smoke.py`,
+  `inventory_control/desktop_smoke_adjust.py`, `inventory_control/desktop_smoke_export.py`
+  and `frontend/scripts/check-dist.mjs`. The observable change is PR #93 (Adjust and
+  Receive no longer send under a stale operator name when the header operator changes
+  during the pre-submit read; part of #91) and the numeric-cell sort fix.
+- Build and dependencies: `frontend/package.json`, `frontend/package-lock.json`,
+  `pyproject.toml`, `.github/workflows/*` (including the per-OS CI restructuring and
+  the #89/#90 dependency bumps).
+
+The automated package evidence retained here remains evidence for `ec8bc4f` only and is
+not re-labelled for any later commit. The owner's sign-off was given while `main` was at
+`9a3cf7a`; this record does not claim it was given on the `ec8bc4f` bytes. Under #58
+("Carry forward operator sign-off only for unchanged behavior; obtain renewed sign-off
+for any observable change") the changes after `ec8bc4f`, including #93 and the
+upcoming #91 Mutation recovery work, are to be handled in #58's post-removal
+acceptance.
+
 ## Dependencies: what each closed issue establishes
 
 | Issue | What the retained evidence shows | What it does not show |
@@ -71,11 +101,11 @@ rehearsals) belongs to earlier commits and is **not** claimed for this candidate
 
 | Criterion | Status | Basis |
 | --- | --- | --- |
-| Complete workflow/native smoke checklist on the exact candidate bundles on Windows, Linux and macOS, twice for restart and backup, including CSV/file/folder operations and safe failures | **Automated part met; human part open** | Both native runs on each frozen bundle passed, the second run's startup backup held exactly run 1's 42 ledger rows, five or six readable startup failures per platform, five CSV exports and three imports, backup and folder actions (Windows through real Explorer windows in both runs). macOS import dialogs use Qt's own dialog in the smoke; the Cocoa panel and Finder are covered only by the owner's earlier #54 acceptance, whose mapping to this candidate is not established (see above). The A01–A17 checklist has not been walked by a person on a workstation |
-| Consolidate capability classes, automated gates, platform results, performance, upgrade/restore and accessibility; no required capability Missing | **Not met** | Consolidated below. Rows 1, 37, 38 (portion), 45, 47 (portion), 48 (portion), 49 and 50 of the [register](acceptance.md#required-capability-register) remain Missing, Partial or Mixed; the human screen-reader review is absent |
-| Actual user or designated-operator sign-off on the intended workstation | **Not obtained** | [Record](#operator-sign-off-record) is blank |
-| Document unresolved failures honestly; evidence corresponds to the candidate | **Met for this record** | [What remains](#what-remains-before-retirement); candidate check above. The gate itself stays incomplete |
-| Record readiness to retire without closing or editing the parent; sign-off does not authorize release or production data changes | **Not recorded** | Nothing here states readiness: gates above are open. Readiness is the operator's statement in the blank record below, and still would not authorize release publication or production data changes |
+| Complete workflow/native smoke checklist on the exact candidate bundles on Windows, Linux and macOS, twice for restart and backup, including CSV/file/folder operations and safe failures | **Automated part met; human part covered by the owner's blanket sign-off (2026-11-05), no itemized walk recorded** | Both native runs on each frozen bundle passed, the second run's startup backup held exactly run 1's 42 ledger rows, five or six readable startup failures per platform, five CSV exports and three imports, backup and folder actions (Windows through real Explorer windows in both runs). macOS import dialogs use Qt's own dialog in the smoke; the Cocoa panel and Finder are covered only by the owner's earlier #54 acceptance, whose mapping to this candidate is not established (see above). No A01–A17 walk by a person on a workstation is recorded; the owner's sign-off is a blanket statement and does not itemize one |
+| Consolidate capability classes, automated gates, platform results, performance, upgrade/restore and accessibility; no required capability Missing | **Consolidated; owner-accepted** | Consolidated below. Rows 1, 37, 38 (portion), 45, 47 (portion), 48 (portion), 49 and 50 of the [register](acceptance.md#required-capability-register) keep their classes (nothing was observed that would change one) and are recorded as accepted by the owner's blanket sign-off; no human screen-reader review is recorded |
+| Actual user or designated-operator sign-off on the intended workstation | **Given by the repository owner, 2026-11-05, as a blanket statement** | [Record](#operator-sign-off-record). It names no workstation, OS or tested archive, so it is not a workstation-specific sign-off with observations; the owner accepted the gate as stated |
+| Document unresolved failures honestly; evidence corresponds to the candidate | **Met for this record** | [What remains](#what-remains-before-retirement); candidate check and [drift](#candidate-drift-since-ec8bc4f) above |
+| Record readiness to retire without closing or editing the parent; sign-off does not authorize release or production data changes | **Recorded as the owner's sign-off** | The owner wrote "on issue 57 I sign-off. Its ok. go ahead". This is not a retirement decision (that is #58) and does not authorize release publication or production data changes. Parent #39 is neither edited nor closed |
 
 ## Candidate results per platform
 
@@ -166,6 +196,11 @@ still carry a Missing portion:
 | 49 | Missing | Operator sign-off, human accessibility review |
 | 50 | Missing | Blocked by every retirement gate |
 
+The classes above are unchanged by the sign-off: nobody observed anything that would
+turn a Missing, Partial or Mixed portion into Equivalent, so none is relabelled. The
+owner accepted those rows by the blanket statement below (owner-accepted, not
+evidenced).
+
 Story 45 (standalone bundles) moves from Missing to Mixed in this change, and
 story 37 moves from Equivalent to Mixed because candidate-specific macOS acceptance
 remains open, on the basis in their rows.
@@ -177,63 +212,79 @@ Automated and computed review for #51 (contrast, names, focus, keyboard, reduced
 motion, reachability) is recorded in
 [acceptance.md](acceptance.md#accessibility-review-record) and the native smoke
 repeats its audit in every package run above. **No human screen-reader session
-(NVDA, JAWS, VoiceOver or Orca) has been performed;** no such tool was available to
-this work. Scripted checks do not replace it.
+(NVDA, JAWS, VoiceOver or Orca) is recorded;** no such tool was available to this
+work, and the owner's 2026-11-05 sign-off gives no screen-reader or contrast
+observations. The screen-reader/contrast review gate is covered by that blanket
+sign-off, not by a recorded session. Scripted checks do not replace one.
 
 ## Operator sign-off record
 
-**Not signed.** The fields below are intentionally blank. Only the user or a
-designated operator may complete them, on the intended workstation, with the exact
-candidate bundle for that workstation's platform. The agent must not fill, tick or
-paraphrase them into approval.
-
-Record by committing this section (or linking an issue comment of the same content)
-with the operator's own name and date. Scripted smoke does not substitute for any line.
+**Signed by the repository owner, 2026-11-05, as a blanket statement.**
 
 | Field | Entry |
 | --- | --- |
-| Operator name and role | _not recorded_ |
-| Workstation (platform, OS version, display) | _not recorded_ |
-| Candidate commit, archive file and SHA-256 tested | _not recorded_ |
-| Disposable database path (never the operational inventory) | _not recorded_ |
-| Date | _not recorded_ |
+| Who | The repository owner (GitHub `theozex4ever`) |
+| Date | 2026-11-05 |
+| Channel | Given in a T3 Code agent chat session with Claude, **not** as a GitHub comment. The owner had been told that #57's remaining items need real platform runs and human sign-off that an agent must not fake |
+| Statement, verbatim | "on issue 57 I sign-off. Its ok. go ahead" |
+| State of `main` when given | `9a3cf7a7e77558bd895d5ae6724fae5d9babe850` (see [candidate drift](#candidate-drift-since-ec8bc4f)) |
+| Recorded candidate and its automated evidence | `ec8bc4f20d0d433e695849090287f23426419833`; the package, upgrade and performance evidence stays tied to that commit |
 
-Walked checklist (each against the disposable inventory; reference the scenario in
-[acceptance.md](acceptance.md#repeatable-native-and-operator-scenarios)):
+Recorded as the owner's sign-off and acceptance of #57's readiness gate. It was given
+without itemized observations. The statement does **not** name or describe, and this
+record therefore does not claim:
 
-- [ ] A01–A05: dashboard and Parts, Receive, standard and BOM Ship, History and trace
-- [ ] A06–A09: Part edit/active state, Move, Adjust Count, BOM authoring and explorer
-- [ ] A10–A11: five exports, three imports, backup, manual folder opening
-- [ ] A12–A13: keyboard, themes, small window, duplicate and ambiguous submissions
-- [ ] A14: closed-app restore through the operator's file manager on a copy; reconcile
-- [ ] A15 and P05: launch with an explicit database on this workstation; responsiveness
-- [ ] Accessibility: screen reader used _(name and version)_; contrast; observations
-- [ ] Unresolved objections: _none recorded_
+- a workstation (platform, OS version, display) or an operator role;
+- a candidate archive or SHA-256 that was run, or a disposable database path;
+- a walk of the A01–A17 checklist or any result of one;
+- screen-reader or contrast observations;
+- whether the owner's earlier #54 Cocoa-panel/Finder acceptance applies to the
+  candidate;
+- an operator-run restore through a file manager, or a real historical inventory;
+- any unresolved objection (none was stated, none is invented).
 
-| Statement | Entry |
+| Open gate in this record | How it stands after 2026-11-05 |
 | --- | --- |
-| "I accept this candidate for the workflows above on this workstation." | _not recorded_ |
-| "The original application may be retired once the remaining gates pass." | _not recorded_ |
+| Operator sign-off record | Given by the owner as a blanket statement; the field-by-field walk was not recorded |
+| Screen-reader/contrast review | Covered by the owner's blanket sign-off, not by a recorded observation |
+| Operator-run restore through a file manager | Covered by the blanket sign-off, not by a recorded observation |
+| macOS Cocoa-panel/Finder applicability to `ec8bc4f` | Covered by the blanket sign-off, not by a recorded observation or an explicit confirmation of applicability |
+| Register rows 1, 37, 38, 45, 47, 48, 49, 50 (Missing, Partial or Mixed) | Owner-accepted by the blanket sign-off; classes unchanged, not changed to Equivalent |
+| Responsiveness on designated workstations; a real historical database | Covered by the blanket sign-off, not by a recorded observation |
 
-Even a completed record would not authorize publishing a release, installing over or
-touching operational inventory, or closing or editing #39.
+The earlier walked-checklist template is not filled in, because no item was observed
+and reported:
+
+- [ ] A01–A15, P05 and accessibility items: no itemized observation recorded
+- [ ] Unresolved objections: _none stated_
+
+The sign-off does not authorize publishing a release, installing over or touching
+operational inventory, or closing or editing #39, and it is not a decision to retire
+the original application. Retirement and carrying the sign-off forward to behavior
+changed after `ec8bc4f` are #58.
 
 ## What remains before retirement
 
-Human or external (not doable by an agent):
+Gates that were human or external (not doable by an agent). As of 2026-11-05 the
+repository owner's blanket sign-off covers each; none is backed by a recorded
+observation:
 
-1. Operator sign-off on the intended workstation ([record](#operator-sign-off-record)).
-2. A human screen-reader session and contrast observations.
-3. **Required:** macOS Cocoa-panel and Finder acceptance mapped to this candidate.
-   Either evidence on this candidate's archive (the #54 procedure's record: tester,
-   machine and OS, archive SHA-256, disposable path, result of each action), or the
-   owner's explicit confirmation that the earlier #54 acceptance remains applicable
-   after reviewing the changes between the tested build and `ec8bc4f`. The earlier
-   acceptance is respected; only its applicability to this candidate is unproven.
+1. Operator sign-off on the intended workstation ([record](#operator-sign-off-record)):
+   given as a blanket statement, no workstation named.
+2. A human screen-reader session and contrast observations: covered by the blanket
+   sign-off; none recorded.
+3. macOS Cocoa-panel and Finder acceptance mapped to this candidate: covered by the
+   blanket sign-off; the earlier #54 acceptance is respected and its applicability to
+   `ec8bc4f` remains unestablished by evidence.
 4. Operator-run restore through a file manager on a copy; a copy of the real
-   historical inventory for the upgrade rehearsal.
-5. Operator judgement of responsiveness on designated physical workstations, if the
-   owner wants more than the hosted-runner and earlier local Linux measurements.
+   historical inventory for the upgrade rehearsal: covered by the blanket sign-off;
+   not performed.
+5. Operator judgement of responsiveness on designated physical workstations: covered
+   by the blanket sign-off; not measured.
+
+Still open and separate: #58 (retirement), including renewed sign-off for any
+observable change since `ec8bc4f` (PR #93, upcoming #91) and the post-removal
+acceptance.
 
 Not established by any record, and so out of this gate's claims: Windows 10/11
 desktop editions, macOS other than 15.7.9, Intel Macs, Linux distributions other than
@@ -248,6 +299,6 @@ focus checks; see
 is root-caused. The candidate run passed every job on its first attempt, which does not
 show those races are fixed.
 
-When all of the above is resolved and recorded by their owners, the retirement ticket
-can proceed; this record then needs a new candidate entry if any code, asset or
-package changed in between.
+The retirement ticket (#58) can proceed on the owner's sign-off; this record needs a
+new candidate entry if any code, asset or package changed in between, which has
+already happened (see [candidate drift](#candidate-drift-since-ec8bc4f)).
