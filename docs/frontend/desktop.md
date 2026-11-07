@@ -534,9 +534,11 @@ location administration. Backup restoration requires closing the app as describe
 Global search is part search only.
 
 Not yet validated: installers on any platform (Linux/Windows/macOS automated package
-evidence: [packaging](packaging.md)), human screen-reader review, human operator
-acceptance, and performance/release hardening. macOS Cocoa-panel/Finder operations
-rest on the owner's #54 statement alone, on an unidentified build (see [sign-off](signoff.md)). The native smoke is
+evidence: [packaging](packaging.md)) and release hardening. No human screen-reader review,
+human operator observation or designated-workstation timing is recorded; the repository
+owner accepted that gap in the blanket #57 sign-off of 2026-11-05 ([sign-off](signoff.md)).
+macOS Cocoa-panel/Finder operations rest on the owner's #54 statement alone, on an
+unidentified build, and on that blanket sign-off. The native smoke is
 scripted desktop acceptance, including a rendered contrast/name audit, not an
 exhaustive accessibility review (see the [accessibility record](acceptance.md#accessibility-review-record)). Mutation
 reconciliation is operator-assisted, without durable request deduplication.

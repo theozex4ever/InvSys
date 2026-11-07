@@ -514,7 +514,8 @@ This establishes Windows package acceptance for ticket #53 on the recorded runne
 It does not establish Windows 10/11 desktop editions, physical/GPU hardware,
 non-English Windows, Explorer double-click startup, performance targets or human
 operator sign-off. macOS Cocoa-panel/Finder acceptance and the parent retirement
-gates remain separate. The evidence-retention commit changes documentation only;
+gates are separate (since 2026-11-05 the owner's blanket #57 sign-off covers the evidence
+gaps, see [signoff.md](signoff.md#operator-sign-off-record); retirement is #58). The evidence-retention commit changes documentation only;
 its own CI result must be checked on PR #78 before completion.
 
 ## Recorded macOS evidence
@@ -554,7 +555,7 @@ Visual preview approved by the user on 2026-10-22. The click-through review used
 the [passing run for head `a60af91`](https://github.com/theozex4ever/InvSys/actions/runs/39582271771),
 whose manifest identifies integration merge `96a4649fb981c5712d00bf4382311b7aafcc0941`.
 This records approval of the visual presentation; native Cocoa-panel/Finder
-acceptance below and full operational sign-off remain outstanding.
+acceptance below and full operational sign-off were outstanding when this was written; since 2026-11-05 they are covered by the owner's blanket #57 sign-off without a recorded observation ([signoff.md](signoff.md#operator-sign-off-record)).
 
 Offline checks used local assets and no HTTP server; the run was not network
 isolated. Cocoa panels and real Finder windows were not exercised by CI. Issue #54 required
@@ -578,13 +579,15 @@ through manual testing on a Mac. Issues Closed". That is the whole record: no te
 machine, archive SHA-256, disposable path or per-action result was written down, and it
 does not say which build was tested. The comment predates the later candidate's CI
 archive (artifact created 03:11:47Z the same day); whether the acceptance applies to it
-is not established and remains an outstanding gate. See
+is not established by evidence; since 2026-11-05 it is covered by the owner's blanket #57
+sign-off without a recorded observation. See
 [signoff.md](signoff.md#dependencies-what-each-closed-issue-establishes).
 
 Gatekeeper approval of a quarantined download remains separately unverified;
 unsigned-distribution instructions describe the expected restrictions, not an
-executed approval test. Full parity, performance and operator sign-off remain
-ticket 18 gates.
+executed approval test. Full parity, performance and operator sign-off were ticket 18
+gates; the evidence gaps among them are covered since 2026-11-05 by the owner's blanket
+#57 sign-off without a recorded observation ([signoff.md](signoff.md#operator-sign-off-record)).
 
 ## Recorded copied-data upgrade and restore evidence
 
@@ -613,7 +616,7 @@ The old release is `a03c887dd76056695f81e55d0ff1cac4315ee444`, tree
 `a3de881048372fd21fb66a2ea3a73848bb52ffc7`. It runs on current dependencies with
 offscreen Qt outside bundle network isolation; its window is created, not driven.
 These are scripted historical-code fixtures, not an operator's historical inventory.
-Operator-run restore, older packaged-release rollback and operator sign-off remain open.
+Operator-run restore, older packaged-release rollback and operator sign-off are not evidenced here; the owner's blanket #57 sign-off of 2026-11-05 covers the first and last without a recorded observation ([signoff.md](signoff.md#operator-sign-off-record)), and no packaged earlier release exists.
 There is no retained current-candidate source-launch rehearsal; the earlier local record
 below must not be used as current evidence. Source default/explicit paths remain covered
 by public-API/launcher tests in CI.
@@ -742,5 +745,7 @@ the CachyOS reference), Windows 10/11 desktop editions, macOS other than 15.7.9,
 upgrade between two *packaged releases* (no earlier packaged release exists; rollback to
 a last known-good artifact: PR #79 documented it without an executable swap; the current candidate's rehearsal swaps to the pinned original application, see the status note above),
 operator-run restore through the file manager, real disk-full or ACL failures,
-performance, and operator sign-off (#57). Native Cocoa-panel/Finder acceptance is
-the owner's #54 statement only, on an unidentified build.
+performance, and operator sign-off (#57: the owner's blanket sign-off of 2026-11-05 covers
+the last without a recorded observation, see [signoff.md](signoff.md#operator-sign-off-record)).
+Native Cocoa-panel/Finder acceptance is the owner's #54 statement only, on an
+unidentified build, plus that blanket sign-off.

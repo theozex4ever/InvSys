@@ -27,7 +27,7 @@ scenario, approved workload and retirement evidence gate from tickets #39/#40.
 | 9 | Ctrl+K Part search and original Ctrl+1–9 destinations delivered; command search deferred | In Progress |
 | 10 | Operator/theme, startup/manual backup, five CSV exports, folder access and Parts, Inventory receipt and BOM CSV imports delivered | In Progress |
 | 11 | PySide6 retirement | Not Started |
-| 12 | Scripted native navigation/safety/layout acceptance, rendered contrast/name audit and the packaged performance envelope on Windows, Linux and macOS ([performance.md](performance.md)) delivered; human screen-reader review, operator-designated workstation timings and release hardening remain. Candidate package evidence and the blank operator sign-off record: [signoff.md](signoff.md) | In Progress |
+| 12 | Scripted native navigation/safety/layout acceptance, rendered contrast/name audit and the packaged performance envelope on Windows, Linux and macOS ([performance.md](performance.md)) delivered; Candidate package evidence and the repository owner's blanket sign-off of #57 (2026-11-05, no itemized observations) are recorded in [signoff.md](signoff.md). The human screen-reader review and operator-designated workstation timings have no recorded observation and are owner-accepted by that sign-off for behavior unchanged since `ec8bc4f`; release hardening (installers, signing, publication) and #58 (retirement, renewed sign-off for changes after `ec8bc4f`, post-removal re-checks) remain | In Progress |
 
 The documented [cutover, restore and rollback](cutover.md) procedure and its copied-data
 upgrade/restore rehearsal (ticket #56) are retirement gates for phase 11; their evidence
@@ -82,10 +82,19 @@ Receive, Ship, Move, Adjust, History, Settings, import/export, backup, keyboard
 shortcuts, lot behavior, BOM allocation) as Equivalent, Improved, Intentionally
 changed, Not required, or Missing. Remove the old views, widgets, QSS, and launch
 code only when nothing required is Missing and packaging works.
+The one exception: evidence gaps the repository owner accepted on 2026-11-05
+through the blanket sign-off of #57 stay classed Missing (rows 1 and 49, and the
+Missing portions of rows 37, 38, 47 and 48) but do not by themselves block
+removal for behavior unchanged since candidate `ec8bc4f`. Renewed sign-off for
+later observable changes, the post-removal re-checks and the retirement decision
+itself remain required
+([acceptance.md](acceptance.md#required-capability-register)).
 
 ### 12. Hardening
 
 Performance with large catalogs, histories, and BOMs; screen-reader and contrast
 review; failure cases (database errors, missing files, failed imports, bridge
 errors, stale state); macOS native file-operation acceptance and installers; human operator
-acceptance.
+acceptance. The human review and acceptance items have no recorded observation; the owner
+accepted that gap in the blanket #57 sign-off of 2026-11-05 ([signoff.md](signoff.md)), and
+renewed acceptance for changes after `ec8bc4f` is #58's.
