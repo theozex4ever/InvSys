@@ -35,6 +35,14 @@ is recorded in [packaging.md](packaging.md#recorded-copied-data-upgrade-and-rest
 
 Update this table when a phase meaningfully changes.
 
+## Planned UI SDK integration
+
+A selective [UI SDK integration pilot](ui-sdk-integration.md) is planned for
+searchable Part and Lot selectors. It uses `vercel-labs/ui` Web Components with
+the existing TypeScript/CSS frontend. Broader adoption depends on packaged
+compatibility, bundle size, performance and workflow regression evidence; no
+SDK integration has been implemented yet.
+
 ## Migration rules
 
 - Migrate one workflow at a time, preserving tested behavior. Do not change
